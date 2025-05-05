@@ -11,7 +11,7 @@ export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
     async ({ context, payload }) => {
       await context.client.views.open({
         trigger_id: payload.trigger_id,
-        view: buildGrrModal(payload.channel_id),
+        view: buildGrrModal(payload.channel_id, payload.text),
       })
     },
   )
