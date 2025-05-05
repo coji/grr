@@ -4,7 +4,7 @@ import {
   type SlackAppLogLevel,
   type SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
-import { registerAppMentionHandler } from './handlers/app-mention'
+import { registerGrrHandlers } from './handlers/grr'
 
 export function createSlackApp() {
   const app = new SlackApp<SlackEdgeAppEnv>({
@@ -19,5 +19,5 @@ export function createSlackApp() {
 }
 
 function registerHandlers(app: SlackApp<SlackEdgeAppEnv>) {
-  registerAppMentionHandler(app)
+  registerGrrHandlers(app)
 }

@@ -11,6 +11,9 @@ importers:
       '@react-router/remix-routes-option-adapter':
         specifier: 7.5.3
         version: 7.5.3(@react-router/dev@7.5.3(@types/node@20.17.32)(jiti@2.4.2)(lightningcss@1.29.2)(react-router@7.5.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(typescript@5.8.3)(vite@6.3.4(@types/node@20.17.32)(jiti@2.4.2)(lightningcss@1.29.2))(wrangler@4.14.1(@cloudflare/workers-types@4.20250505.0)))(typescript@5.8.3)
+      dayjs:
+        specifier: 1.11.13
+        version: 1.11.13
       isbot:
         specifier: ^5.1.27
         version: 5.1.27
@@ -20,6 +23,9 @@ importers:
       kysely-d1:
         specifier: 0.4.0
         version: 0.4.0(kysely@0.28.2)
+      nanoid:
+        specifier: 5.1.5
+        version: 5.1.5
       neverthrow:
         specifier: 8.2.0
         version: 8.2.0
@@ -1181,6 +1187,9 @@ packages:
   data-uri-to-buffer@2.0.2:
     resolution: {integrity: sha512-ND9qDTLc6diwj+Xe5cdAgVTbLVdXbtxTJRXRhli8Mowuaan+0EJOtdqJ0QCHNSSPyoXGx9HX2/VMnKeC34AChA==}
 
+  dayjs@1.11.13:
+    resolution: {integrity: sha512-oaMBel6gjolK862uaPQOVTA7q3TZhuSvuMQAAglQDOWYO9A91IrAOUJEyKVlqJlHE0vq5p5UXxzdPfMH/x6xNg==}
+
   debug@4.4.0:
     resolution: {integrity: sha512-6WTZ/IxCY/T6BALoZHaE4ctp9xm+Z5kY/pzYaCHRFeyVhojxlrm+46y68HA6hr0TcwEssoxNiDEUJQjfPZ/RYA==}
     engines: {node: '>=6.0'}
@@ -1495,6 +1504,11 @@ packages:
   nanoid@3.3.11:
     resolution: {integrity: sha512-N8SpfPUnUp1bK+PMYW8qSWdl9U+wwNWI4QKxOYDy9JAro3WMX7p2OeVRF9v+347pnakNevPmiHhNmZ2HbFA76w==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
+  nanoid@5.1.5:
+    resolution: {integrity: sha512-Ir/+ZpE9fDsNH0hQ3C68uyThDXzYcim2EqcZ8zn8Chtt1iylPT9xXJB0kPCnqzgcEGikO9RxSrh63MsmVCU7Fw==}
+    engines: {node: ^18 || >=20}
     hasBin: true
 
   neverthrow@8.2.0:
@@ -2907,6 +2921,8 @@ snapshots:
 
   data-uri-to-buffer@2.0.2: {}
 
+  dayjs@1.11.13: {}
+
   debug@4.4.0:
     dependencies:
       ms: 2.1.3
@@ -3204,6 +3220,8 @@ snapshots:
   mustache@4.2.0: {}
 
   nanoid@3.3.11: {}
+
+  nanoid@5.1.5: {}
 
   neverthrow@8.2.0:
     optionalDependencies:

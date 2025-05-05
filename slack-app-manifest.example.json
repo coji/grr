@@ -1,16 +1,27 @@
 {
   "display_information": {
-    "name": "grr"
+    "name": "grr",
+    "description": "イラッとした瞬間をサクッと記録、仲間内でシェアする感情ログアプリ",
+    "background_color": "#9c7202",
+    "long_description": "Slashコマンド /grr やメッセージショートカットを使って、イラッとした瞬間を即座にメモできます。同じ内容は自動的にカウントされ、どんなことが日々あなたや仲間たちをイライラさせているのかが可視化されていきます。\r\n\r\n毎日・毎週、自分と仲間の「怒りランキング」がSlackのDMで届くので、\r\n・感情の整理\r\n・チームのストレスチェック\r\n・ちょっとしたネタ共有\r\n\r\nにも役立ちます。\r\n\r\nSlack上だけで完結するので、導入や運用もとても簡単です。\r\n仲間内の雑談文化に、少しだけ「怒り」というスパイスを加えてみませんか？"
   },
   "features": {
     "bot_user": {
       "display_name": "grr",
       "always_online": true
     },
+    "shortcuts": [
+      {
+        "name": "grr",
+        "type": "message",
+        "callback_id": "grr_shortcut",
+        "description": "イラッとした瞬間をサクッと記録、仲間内でシェアする"
+      }
+    ],
     "slash_commands": [
       {
         "command": "/grr",
-        "url": "https://your-app.example.com/webhook/slack",
+        "url": "https://example.com/webhook/slack",
         "description": "grr",
         "usage_hint": "grr",
         "should_escape": false
@@ -24,8 +35,12 @@
   },
   "settings": {
     "event_subscriptions": {
-      "request_url": "https://your-app.example.com/webhook/slack",
+      "request_url": "https://example.com/webhook/slack",
       "bot_events": ["app_mention"]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://example.com/webhook/slack"
     },
     "org_deploy_enabled": false,
     "socket_mode_enabled": false,
