@@ -35,6 +35,9 @@ importers:
       remix-flat-routes:
         specifier: 0.8.5
         version: 0.8.5
+      slack-cloudflare-workers:
+        specifier: 1.3.2
+        version: 1.3.2
       slack-edge:
         specifier: 1.3.8
         version: 1.3.8
@@ -48,9 +51,6 @@ importers:
       '@cloudflare/vite-plugin':
         specifier: ^1.0.12
         version: 1.1.0(rollup@4.40.1)(vite@6.3.4(@types/node@20.17.32)(jiti@2.4.2)(lightningcss@1.29.2))(workerd@1.20250428.0)(wrangler@4.14.1(@cloudflare/workers-types@4.20250505.0))
-      '@cloudflare/workers-types':
-        specifier: ^4.20250429.0
-        version: 4.20250505.0
       '@react-router/dev':
         specifier: ^7.5.3
         version: 7.5.3(@types/node@20.17.32)(jiti@2.4.2)(lightningcss@1.29.2)(react-router@7.5.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(typescript@5.8.3)(vite@6.3.4(@types/node@20.17.32)(jiti@2.4.2)(lightningcss@1.29.2))(wrangler@4.14.1(@cloudflare/workers-types@4.20250505.0))
@@ -1730,6 +1730,9 @@ packages:
   simple-swizzle@0.2.2:
     resolution: {integrity: sha512-JA//kQgZtbuY83m+xT+tXJkmJncGMTFT+C+g2h2R9uxkYIrE2yy9sgmcLhCnw57/WSD+Eh3J97FPEDFnbXnDUg==}
 
+  slack-cloudflare-workers@1.3.2:
+    resolution: {integrity: sha512-ycBmY16zT1VPw62xWS3gk7GPuXeIo3ilSZ730+QyIg4d4/E1shsTVEFLklzT77MnAKM8rP1XLZxdnk3C3I7waA==}
+
   slack-edge@1.3.8:
     resolution: {integrity: sha512-kNSwiDcgh5WVbNir9SOzsdlXQnFacDk56tuE7k/9uhBacE7GdVqEss3d4DbC89cvppbjP3psttg37EERH3GCPw==}
 
@@ -3390,6 +3393,11 @@ snapshots:
     dependencies:
       is-arrayish: 0.3.2
     optional: true
+
+  slack-cloudflare-workers@1.3.2:
+    dependencies:
+      '@cloudflare/workers-types': 4.20250505.0
+      slack-edge: 1.3.8
 
   slack-edge@1.3.8:
     dependencies:
