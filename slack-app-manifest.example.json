@@ -1,0 +1,34 @@
+{
+  "display_information": {
+    "name": "grr"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "grr",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/grr",
+        "url": "https://your-app.example.com/webhook/slack",
+        "description": "grr",
+        "usage_hint": "grr",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["app_mentions:read", "commands", "users:read", "chat:write"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://your-app.example.com/webhook/slack",
+      "bot_events": ["app_mention"]
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}
