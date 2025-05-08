@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
+import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
-import dayjs from '~/utils/dayjs'
 import { buildGrrModal } from './views/grr-modal'
 
 export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
