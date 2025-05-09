@@ -58,7 +58,7 @@ export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
 
       await context.client.chat.postMessage({
         channel: channelId ?? user.id,
-        text: `😤 ${user.name} さんがイライラ "${text}"を記録しました (イラ度: ${score})`,
+        text: `😇 ${user.name} さんがイライラ "${text}"を記録しました (イラ度: ${score})`,
       })
     },
   )
