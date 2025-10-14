@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
@@ -20,6 +21,9 @@ const sanitizeText = (text: string | undefined) =>
 
 const pickRandom = <T>(list: readonly T[]): T =>
   list[Math.floor(Math.random() * list.length)]
+
+const truncate = (value: string, length: number) =>
+  value.length > length ? `${value.slice(0, length - 1)}…` : value
 
 export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   app.event('reaction_added', async ({ payload, context }) => {
@@ -160,30 +164,120 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
 
   app.event('app_mention', async ({ payload, context }) => {
     const event = payload
+    if (!event.user) return
     const cleaned = sanitizeText(event.text)
-    const friendlyOpening = cleaned
-      ? `「${cleaned}」って書いてくれてありがとう。`
-      : '呼んでくれてありがとう。'
+    const insertedAt = dayjs().utc().toISOString()
+    const entryDate = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
+    const mention = `<@${event.user}> さん`
 
-    const moodWord = pickRandom([
-      'きょうも一日、おつかれさま。',
-      'その気持ち、ちゃんとここで光にしておくね。',
-      '深呼吸して、少し肩の力を抜こう。',
-    ])
-    const suggestion = pickRandom([
-      '少しでも心がほぐれることをしてみようね。',
-      '温かい飲みものをいっしょに飲む気分でゆっくりしよう。',
-      'ここではどんな気持ちも大歓迎だよ。',
-    ])
+    let entry =
+      'thread_ts' in event && event.thread_ts
+        ? await db
+            .selectFrom('diaryEntries')
+            .selectAll()
+            .where('messageTs', '=', event.thread_ts)
+            .executeTakeFirst()
+        : await db
+            .selectFrom('diaryEntries')
+            .selectAll()
+            .where('messageTs', '=', event.ts)
+            .executeTakeFirst()
 
-    const nowTokyo = dayjs().tz(TOKYO_TZ).format('M月D日(ddd) HH:mm')
-    const mention = event.user ? `<@${event.user}> さん` : ''
-    const message = `やっほー、${DIARY_PERSONA_NAME}だよ。${mention}\n${friendlyOpening}\n${moodWord}\n${suggestion}\n\n${nowTokyo}のほたるより。`
+    if (!('thread_ts' in event) || !event.thread_ts) {
+      if (!entry) {
+        const detailRecordedAt = cleaned ? insertedAt : null
+        const baseEntry = {
+          id: nanoid(),
+          userId: event.user,
+          channelId: event.channel,
+          messageTs: event.ts,
+          entryDate,
+          moodEmoji: null,
+          moodValue: null,
+          moodLabel: null,
+          detail: cleaned || null,
+          reminderSentAt: insertedAt,
+          moodRecordedAt: null,
+          detailRecordedAt,
+          createdAt: insertedAt,
+          updatedAt: insertedAt,
+        }
+
+        await db.insertInto('diaryEntries').values(baseEntry).execute()
+        entry = baseEntry
+      } else if (cleaned && !entry.detail) {
+        await db
+          .updateTable('diaryEntries')
+          .set({
+            detail: cleaned,
+            detailRecordedAt: insertedAt,
+            updatedAt: insertedAt,
+          })
+          .where('id', '=', entry.id)
+          .execute()
+        entry = {
+          ...entry,
+          detail: cleaned,
+          detailRecordedAt: insertedAt,
+          updatedAt: insertedAt,
+        }
+      }
+    } else if (entry && cleaned) {
+      const combined = entry.detail
+        ? `${entry.detail}\n\n---\n${cleaned}`
+        : cleaned
+      await db
+        .updateTable('diaryEntries')
+        .set({
+          detail: combined,
+          detailRecordedAt: insertedAt,
+          updatedAt: insertedAt,
+        })
+        .where('id', '=', entry.id)
+        .execute()
+      entry = {
+        ...entry,
+        detail: combined,
+        detailRecordedAt: insertedAt,
+        updatedAt: insertedAt,
+      }
+    }
+
+    const summaryBits: string[] = []
+    if (entry?.moodLabel) {
+      summaryBits.push(`最近のきもち: ${entry.moodLabel}`)
+    }
+    if (entry?.detail) {
+      const segments = entry.detail.split('\n\n---\n')
+      const latestDetail = segments[segments.length - 1]
+      summaryBits.push(`きろく: 「${truncate(latestDetail, 40)}」`)
+    } else if (cleaned) {
+      summaryBits.push(`きろく: 「${truncate(cleaned, 40)}」`)
+    }
+    const summaryLine =
+      summaryBits.length > 0
+        ? summaryBits.join(' / ')
+        : '話してくれてありがとう。ここでいつでも受け止めるよ。'
+    const closingLine = '無理せず、続きを書きたくなったらまた呼んでね。'
+    const message = `やっほー、${DIARY_PERSONA_NAME}だよ。${mention}\n${summaryLine}\n${closingLine}`
 
     await context.client.chat.postMessage({
       channel: event.channel,
       thread_ts: event.thread_ts ?? event.ts,
       text: message,
     })
+
+    const reactionName = pickRandom(SUPPORTIVE_REACTIONS)
+    await context.client.reactions
+      .add({
+        channel: event.channel,
+        timestamp: event.ts,
+        name: reactionName,
+      })
+      .catch((error) => {
+        if (error instanceof SlackAPIError && error.error === 'already_reacted')
+          return
+        console.error('Failed to add supportive reaction', error)
+      })
   })
 }
