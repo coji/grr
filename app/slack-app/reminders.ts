@@ -1,6 +1,8 @@
 import { nanoid } from 'nanoid'
 import { SlackAPIClient, SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
+import type { DiaryReminderMoodOption } from '~/services/ai'
+import { generateDiaryReminder } from '~/services/ai'
 import { db } from '~/services/db'
 import {
   DIARY_MOOD_CHOICES,
@@ -8,6 +10,12 @@ import {
 } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
+
+const REMINDER_MOOD_OPTIONS: ReadonlyArray<DiaryReminderMoodOption> =
+  DIARY_MOOD_CHOICES.map(({ emoji, label }) => ({
+    emoji,
+    label,
+  }))
 
 type SlackUser = {
   id?: string
@@ -27,19 +35,6 @@ const isHuman = (user: SlackUser, botUserId: string | undefined) => {
   if (user.is_bot || user.is_app_user) return false
   if (user.deleted) return false
   return true
-}
-
-const buildReminderText = (userId: string) => {
-  const options = DIARY_MOOD_CHOICES.map(
-    (choice) => `${choice.emoji} ${choice.label}`,
-  ).join(' / ')
-  return [
-    `こんばんは <@${userId}> さん。日記灯の${DIARY_PERSONA_NAME}だよ。`,
-    '今日のきもちを、下の顔文字リアクションや好きな絵文字でそっと教えてね。',
-    `おすすめ: ${options}`,
-    '詳しく書きたくなったら、このメッセージにスレッドで日記を残してくれたら嬉しいな。',
-    `もしお話し相手がほしくなったら ${DIARY_PERSONA_NAME} をメンションしてね。`,
-  ].join('\n')
 }
 
 const fetchAllWorkspaceUsers = async (client: SlackAPIClient) => {
@@ -91,7 +86,12 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         continue
       }
 
-      const reminderText = buildReminderText(userId)
+      const reminderText = await generateDiaryReminder({
+        env,
+        personaName: DIARY_PERSONA_NAME,
+        userId,
+        moodOptions: REMINDER_MOOD_OPTIONS,
+      })
       const message = await client.chat.postMessage({
         channel: conversation.channel.id,
         text: reminderText,
