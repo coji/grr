@@ -102,24 +102,6 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         continue
       }
 
-      for (const choice of DIARY_MOOD_CHOICES) {
-        try {
-          await client.reactions.add({
-            channel: conversation.channel.id,
-            timestamp: message.ts,
-            name: choice.reaction,
-          })
-        } catch (error) {
-          if (
-            error instanceof SlackAPIError &&
-            error.error === 'already_reacted'
-          ) {
-            continue
-          }
-          console.error('Failed to add preset reaction', error)
-        }
-      }
-
       const insertedAt = dayjs().utc().toISOString()
 
       await db
@@ -141,6 +123,24 @@ export const sendDailyDiaryReminders = async (env: Env) => {
           updatedAt: insertedAt,
         })
         .execute()
+
+      for (const choice of DIARY_MOOD_CHOICES) {
+        try {
+          await client.reactions.add({
+            channel: conversation.channel.id,
+            timestamp: message.ts,
+            name: choice.reaction,
+          })
+        } catch (error) {
+          if (
+            error instanceof SlackAPIError &&
+            error.error === 'already_reacted'
+          ) {
+            continue
+          }
+          console.error('Failed to add preset reaction', error)
+        }
+      }
     } catch (error) {
       console.error(
         'Failed to process diary reminder for user',
