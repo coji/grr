@@ -1,5 +1,5 @@
-import { SlackAPIError } from 'slack-edge'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
+import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
 import {
@@ -11,9 +11,15 @@ import {
 const TOKYO_TZ = 'Asia/Tokyo'
 
 const sanitizeText = (text: string | undefined) =>
-  text?.replace(/<@[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim() ?? ''
+  text
+    ?.replace(/<@[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim() ?? ''
 
-const pickRandom = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)]
+const pickRandom = <T>(list: readonly T[]): T =>
+  list[Math.floor(Math.random() * list.length)]
 
 export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   app.event('reaction_added', async ({ payload, context }) => {
@@ -32,7 +38,9 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
     if (!entry) return
     if (entry.userId !== event.user) return
 
-    const choice = DIARY_MOOD_CHOICES.find((item) => item.reaction === event.reaction)
+    const choice = DIARY_MOOD_CHOICES.find(
+      (item) => item.reaction === event.reaction,
+    )
     const now = dayjs().utc().toISOString()
     const moodEmoji = choice?.emoji ?? `:${event.reaction}:`
     const moodLabel = choice?.label ?? 'custom'
@@ -78,7 +86,8 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
     if (entry.userId !== event.user) return
 
     const normalized =
-      DIARY_MOOD_CHOICES.find((item) => item.reaction === event.reaction)?.emoji ?? `:${event.reaction}:`
+      DIARY_MOOD_CHOICES.find((item) => item.reaction === event.reaction)
+        ?.emoji ?? `:${event.reaction}:`
 
     if (entry.moodEmoji !== normalized) return
 
@@ -99,7 +108,12 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
 
   app.event('message', async ({ payload, context }) => {
     const event = payload
-    if ('subtype' in event && event.subtype && event.subtype !== 'thread_broadcast') return
+    if (
+      'subtype' in event &&
+      event.subtype &&
+      event.subtype !== 'thread_broadcast'
+    )
+      return
     if (!('thread_ts' in event) || !event.thread_ts) return
     if (!event.user) return
 
@@ -133,7 +147,10 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
       await context.client.reactions
         .add({ channel: entry.channelId, timestamp: event.ts, name: reaction })
         .catch((error) => {
-          if (error instanceof SlackAPIError && error.error === 'already_reacted') {
+          if (
+            error instanceof SlackAPIError &&
+            error.error === 'already_reacted'
+          ) {
             return
           }
           console.error('Failed to add supportive reaction', error)

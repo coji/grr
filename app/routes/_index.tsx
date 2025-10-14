@@ -31,13 +31,19 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       <h1 className="text-3xl font-bold">ほたる日記</h1>
       <div className="mt-4 space-y-4 rounded-md border border-dashed p-4 text-sm text-gray-600">
         <p>
-          ここには具体的な日記の内容は表示されません。ほたるとの会話や気分の記録は、Slack 上での本人とほたるだけの内緒話として保護されます。
+          ここには具体的な日記の内容は表示されません。ほたるとの会話や気分の記録は、Slack
+          上での本人とほたるだけの内緒話として保護されます。
         </p>
         <p>いままでに灯った日記の数: {data.totalEntries.toLocaleString()} 件</p>
         {data.latestEntryDate ? (
-          <p>直近の灯り: {dayjs(data.latestEntryDate).format('YYYY年M月D日(ddd)')}</p>
+          <p>
+            直近の灯り:{' '}
+            {dayjs(data.latestEntryDate).format('YYYY年M月D日(ddd)')}
+          </p>
         ) : (
-          <p>まだ日記は灯っていません。今夜の21時にほたるが声をかけにいきます。</p>
+          <p>
+            まだ日記は灯っていません。今夜の21時にほたるが声をかけにいきます。
+          </p>
         )}
       </div>
     </div>

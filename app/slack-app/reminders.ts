@@ -1,8 +1,11 @@
-import { SlackAPIClient, SlackAPIError } from 'slack-edge'
 import { nanoid } from 'nanoid'
+import { SlackAPIClient, SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
-import { DIARY_MOOD_CHOICES, DIARY_PERSONA_NAME } from './handlers/diary-constants'
+import {
+  DIARY_MOOD_CHOICES,
+  DIARY_PERSONA_NAME,
+} from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -27,7 +30,9 @@ const isHuman = (user: SlackUser, botUserId: string | undefined) => {
 }
 
 const buildReminderText = (userId: string) => {
-  const options = DIARY_MOOD_CHOICES.map((choice) => `${choice.emoji} ${choice.label}`).join(' / ')
+  const options = DIARY_MOOD_CHOICES.map(
+    (choice) => `${choice.emoji} ${choice.label}`,
+  ).join(' / ')
   return [
     `こんばんは <@${userId}> さん。日記灯の${DIARY_PERSONA_NAME}だよ。`,
     '今日のきもちを、下の顔文字リアクションや好きな絵文字でそっと教えてね。',
@@ -68,7 +73,8 @@ export const sendDailyDiaryReminders = async (env: Env) => {
   for (const member of allUsers) {
     try {
       if (!isHuman(member, botUserId)) continue
-      const userId = member.id!
+      if (!member.id) continue
+      const userId = member.id
 
       const existing = await db
         .selectFrom('diaryEntries')
@@ -104,7 +110,10 @@ export const sendDailyDiaryReminders = async (env: Env) => {
             name: choice.reaction,
           })
         } catch (error) {
-          if (error instanceof SlackAPIError && error.error === 'already_reacted') {
+          if (
+            error instanceof SlackAPIError &&
+            error.error === 'already_reacted'
+          ) {
             continue
           }
           console.error('Failed to add preset reaction', error)
@@ -133,7 +142,11 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         })
         .execute()
     } catch (error) {
-      console.error('Failed to process diary reminder for user', member.id, error)
+      console.error(
+        'Failed to process diary reminder for user',
+        member.id,
+        error,
+      )
     }
   }
 }

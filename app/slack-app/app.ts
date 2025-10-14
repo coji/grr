@@ -9,7 +9,8 @@ import { registerGrrHandlers } from './handlers/grr'
 export function createSlackApp(bindings: Env) {
   const appEnv: SlackEdgeAppEnv = {
     ...bindings,
-    SLACK_LOGGING_LEVEL: (bindings.SLACK_LOGGING_LEVEL as SlackAppLogLevel | undefined) ?? 'INFO',
+    SLACK_LOGGING_LEVEL:
+      (bindings.SLACK_LOGGING_LEVEL as SlackAppLogLevel | undefined) ?? 'INFO',
   }
 
   const app = new SlackApp<SlackEdgeAppEnv>({

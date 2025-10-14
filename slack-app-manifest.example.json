@@ -45,7 +45,12 @@
   "settings": {
     "event_subscriptions": {
       "request_url": "https://example.com/webhook/slack",
-      "bot_events": ["app_mention", "reaction_added", "reaction_removed", "message.im"]
+      "bot_events": [
+        "app_mention",
+        "reaction_added",
+        "reaction_removed",
+        "message.im"
+      ]
     },
     "interactivity": {
       "is_enabled": true,
