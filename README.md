@@ -83,6 +83,7 @@
      SLACK_SIGNING_SECRET="YOUR_SLACK_SIGNING_SECRET"
      SLACK_BOT_TOKEN="xoxb-YOUR_SLACK_BOT_TOKEN"
      SLACK_LOGGING_LEVEL="INFO" # 必要に応じて DEBUG, WARN, ERROR に変更
+     GEMINI_API_KEY="YOUR_GOOGLE_AI_STUDIO_KEY" # Gemini Flash 2.5 latest 用
 
      # Cloudflare D1 Binding (wrangler.jsonc で設定済みの場合は不要なことが多い)
      # DB= # D1 バインディングは wrangler.toml/.dev.vars で直接設定される

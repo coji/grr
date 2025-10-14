@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
+import { generateDiaryReply } from '~/services/ai'
 import { db } from '~/services/db'
 import {
   DIARY_MOOD_CHOICES,
@@ -21,9 +22,6 @@ const sanitizeText = (text: string | undefined) =>
 
 const pickRandom = <T>(list: readonly T[]): T =>
   list[Math.floor(Math.random() * list.length)]
-
-const truncate = (value: string, length: number) =>
-  value.length > length ? `${value.slice(0, length - 1)}…` : value
 
 export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   app.event('reaction_added', async ({ payload, context }) => {
@@ -243,23 +241,20 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
       }
     }
 
-    const summaryBits: string[] = []
-    if (entry?.moodLabel) {
-      summaryBits.push(`最近のきもち: ${entry.moodLabel}`)
-    }
-    if (entry?.detail) {
-      const segments = entry.detail.split('\n\n---\n')
-      const latestDetail = segments[segments.length - 1]
-      summaryBits.push(`きろく: 「${truncate(latestDetail, 40)}」`)
-    } else if (cleaned) {
-      summaryBits.push(`きろく: 「${truncate(cleaned, 40)}」`)
-    }
-    const summaryLine =
-      summaryBits.length > 0
-        ? summaryBits.join(' / ')
-        : '話してくれてありがとう。ここでいつでも受け止めるよ。'
-    const closingLine = '無理せず、続きを書きたくなったらまた呼んでね。'
-    const message = `やっほー、${DIARY_PERSONA_NAME}だよ。${mention}\n${summaryLine}\n${closingLine}`
+    const latestDetail = entry?.detail
+      ? (entry.detail.split('\n\n---\n').at(-1) ?? null)
+      : cleaned || null
+
+    const aiReply = await generateDiaryReply({
+      env: app.env as Env,
+      personaName: DIARY_PERSONA_NAME,
+      userId: event.user,
+      moodLabel: entry?.moodLabel ?? null,
+      latestEntry: latestDetail,
+      mentionMessage: cleaned || null,
+    })
+
+    const message = `${mention} ${aiReply}`.trim()
 
     await context.client.chat.postMessage({
       channel: event.channel,
