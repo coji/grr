@@ -7,7 +7,7 @@ import { buildGrrModal } from './views/grr-modal'
 export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   app.command(
     '/grr',
-    async (req) => {},
+    async () => {},
     async ({ context, payload }) => {
       await context.client.views.open({
         trigger_id: payload.trigger_id,
@@ -17,7 +17,7 @@ export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   )
   app.shortcut(
     'grr_shortcut',
-    async (req) => {},
+    async () => {},
     async ({ context, payload }) => {
       const message =
         payload.type === 'message_action' ? payload.message.text : undefined
@@ -29,10 +29,10 @@ export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   )
   app.view(
     'grr_modal',
-    async (req) => {
+    async () => {
       return // ack only
     },
-    async ({ context, payload: { view, user }, body }) => {
+    async ({ context, payload: { view, user } }) => {
       const level = view.state.values.level_block.level.selected_option?.value
       const text = view.state.values.text_block.text.value
       const meta = JSON.parse(view.private_metadata ?? '{}')
@@ -41,7 +41,7 @@ export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
       const score = Number(level ?? '3') // fallback = 3
 
       // ここに保存ロジック (D1 INSERT / UPSERT など)
-      const ret = await db
+      await db
         .insertInto('irritations')
         .values({
           id: nanoid(),

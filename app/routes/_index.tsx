@@ -1,42 +1,50 @@
-import { HStack } from '~/components/ui'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
 import type { Route } from './+types/_index'
 
+type LoaderData = {
+  totalEntries: number
+  latestEntryDate: string | null
+}
+
 export const loader = async () => {
-  const irritations = await db
-    .selectFrom('irritations')
-    .selectAll()
-    .orderBy('createdAt', 'desc')
-    .limit(100)
-    .execute()
-  return {
-    irritations,
+  const result = await db
+    .selectFrom('diaryEntries')
+    .select((eb) => [
+      eb.fn.countAll<number>().as('totalEntries'),
+      eb.fn.max('entryDate').as('latestEntryDate'),
+    ])
+    .executeTakeFirst()
+
+  const data: LoaderData = {
+    totalEntries: Number(result?.totalEntries ?? 0),
+    latestEntryDate: result?.latestEntryDate ?? null,
   }
+
+  return data
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+  const data = loaderData as LoaderData
   return (
     <div className="p-4">
-      <h1 className="text-3xl font-bold">Irritations</h1>
-      <div className="mt-4">
-        {loaderData.irritations.map((irritation) => (
-          <div key={irritation.id} className="mb-4 rounded-md border p-4">
-            <p className="text-sm text-gray-500">
-              {dayjs(irritation.createdAt).format('YYYY年M月D日(ddd) HH:mm')}
-            </p>
-            <h2 className="text-xl">{irritation.rawText}</h2>
-            <div className="flex flex-row gap-2">
-              イラ度: <p>{irritation.score}</p>
-            </div>
-
-            <HStack>
-              <p>ユーザ: {irritation.userId}</p>
-              <div className="flex-1" />
-              <p>チャンネル: {irritation.channelId}</p>
-            </HStack>
-          </div>
-        ))}
+      <h1 className="text-3xl font-bold">ほたる日記</h1>
+      <div className="mt-4 space-y-4 rounded-md border border-dashed p-4 text-sm text-gray-600">
+        <p>
+          ここには具体的な日記の内容は表示されません。ほたるとの会話や気分の記録は、Slack
+          上での本人とほたるだけの内緒話として保護されます。
+        </p>
+        <p>いままでに灯った日記の数: {data.totalEntries.toLocaleString()} 件</p>
+        {data.latestEntryDate ? (
+          <p>
+            直近の灯り:{' '}
+            {dayjs(data.latestEntryDate).format('YYYY年M月D日(ddd)')}
+          </p>
+        ) : (
+          <p>
+            まだ日記は灯っていません。今夜の21時にほたるが声をかけにいきます。
+          </p>
+        )}
       </div>
     </div>
   )

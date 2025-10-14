@@ -1,42 +1,56 @@
 {
   "display_information": {
-    "name": "grr",
-    "description": "イラッとした瞬間をサクッと記録、仲間内でシェアする感情ログアプリ",
-    "background_color": "#9c7202",
-    "long_description": "Slashコマンド /grr やメッセージショートカットを使って、イラッとした瞬間を即座にメモできます。同じ内容は自動的にカウントされ、どんなことが日々あなたや仲間たちをイライラさせているのかが可視化されていきます。\r\n\r\n毎日・毎週、自分と仲間の「怒りランキング」がSlackのDMで届くので、\r\n・感情の整理\r\n・チームのストレスチェック\r\n・ちょっとしたネタ共有\r\n\r\nにも役立ちます。\r\n\r\nSlack上だけで完結するので、導入や運用もとても簡単です。\r\n仲間内の雑談文化に、少しだけ「怒り」というスパイスを加えてみませんか？"
+    "name": "ほたる日記",
+    "description": "21時に灯るほたると一緒に、その日の気分をそっと記録できる日記アプリ",
+    "background_color": "#fbbf24",
+    "long_description": "Slackで21時になると日記灯の妖精・ほたるがそっと現れて、きょうの気分を顔文字リアクションで残すお手伝いをしてくれます。スレッドに日記の詳細を書けば、たまに絵文字で寄り添い、メンションすれば優しく応えてくれる心の相棒です。"
   },
   "features": {
     "bot_user": {
-      "display_name": "grr",
+      "display_name": "ほたる",
       "always_online": true
     },
     "shortcuts": [
       {
-        "name": "grr",
+        "name": "日記をつける",
         "type": "message",
         "callback_id": "grr_shortcut",
-        "description": "イラッとした瞬間をサクッと記録、仲間内でシェアする"
+        "description": "メッセージから今日の気分日記を残す"
       }
     ],
     "slash_commands": [
       {
         "command": "/grr",
         "url": "https://example.com/webhook/slack",
-        "description": "grr",
-        "usage_hint": "grr",
+        "description": "日記を開く",
+        "usage_hint": "今日のきもち",
         "should_escape": false
       }
     ]
   },
   "oauth_config": {
     "scopes": {
-      "bot": ["app_mentions:read", "commands", "users:read", "chat:write"]
+      "bot": [
+        "app_mentions:read",
+        "commands",
+        "users:read",
+        "chat:write",
+        "reactions:read",
+        "reactions:write",
+        "im:write",
+        "im:history"
+      ]
     }
   },
   "settings": {
     "event_subscriptions": {
       "request_url": "https://example.com/webhook/slack",
-      "bot_events": ["app_mention"]
+      "bot_events": [
+        "app_mention",
+        "reaction_added",
+        "reaction_removed",
+        "message.im"
+      ]
     },
     "interactivity": {
       "is_enabled": true,
