@@ -128,6 +128,17 @@ pnpm deploy
 
 デプロイが成功すると、Worker の URL が表示されます。この URL を Slack アプリの設定 (Request URL, Interactivity Request URL など) に反映させてください。マイグレーションを手動で実行したい場合は `wrangler d1 migrations apply grr-db --remote` を使用できます。
 
+### GitHub Actions での自動デプロイ
+
+GitHub の `main` ブランチにプルリクエストをマージすると、自動的にビルド・マイグレーション・デプロイが実行されます。初回セットアップ時に GitHub リポジトリの Secrets に以下を登録してください。
+
+| Secret 名 | 用途 |
+| --- | --- |
+| `CLOUDFLARE_ACCOUNT_ID` | Wrangler がデプロイ先のアカウントを認識するための ID |
+| `CLOUDFLARE_API_TOKEN` | D1 のマイグレーションと Worker のデプロイを行うためのトークン (D1 Edit 権限を含める) |
+
+必要に応じて `workflow_dispatch` から手動実行することもできます。CI 上では `pnpm deploy` スクリプトが呼び出されるため、ローカルと同じ手順でマイグレーション後にデプロイされます。
+
 ## リンティングとフォーマット
 
 [Biome](https://biomejs.dev/) を使用してコードのチェックとフォーマットを行います。
