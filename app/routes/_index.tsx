@@ -1,57 +1,44 @@
-import { HStack } from '~/components/ui'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
 import type { Route } from './+types/_index'
 
+type LoaderData = {
+  totalEntries: number
+  latestEntryDate: string | null
+}
+
 export const loader = async () => {
-  const diaryEntries = await db
+  const result = await db
     .selectFrom('diaryEntries')
-    .selectAll()
-    .orderBy('reminderSentAt', 'desc')
-    .limit(100)
-    .execute()
-  return {
-    diaryEntries,
+    .select((eb) => [
+      eb.fn.countAll<number>().as('totalEntries'),
+      eb.fn.max('entryDate').as('latestEntryDate'),
+    ])
+    .executeTakeFirst()
+
+  const data: LoaderData = {
+    totalEntries: Number(result?.totalEntries ?? 0),
+    latestEntryDate: result?.latestEntryDate ?? null,
   }
+
+  return data
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+  const data = loaderData as LoaderData
   return (
     <div className="p-4">
-      <h1 className="text-3xl font-bold">ほたる日記ログ</h1>
-      <div className="mt-4">
-        {loaderData.diaryEntries.map((entry) => (
-          <div key={entry.id} className="mb-4 rounded-md border p-4">
-            <p className="text-sm text-gray-500">
-              {dayjs(entry.entryDate).format('YYYY年M月D日(ddd)')} に灯した記録
-            </p>
-            <h2 className="text-xl">
-              {entry.moodEmoji ? `${entry.moodEmoji} ` : ''}
-              {entry.moodLabel ?? '気分未登録'}
-            </h2>
-            <p className="text-xs text-gray-500">
-              {entry.moodRecordedAt
-                ? `リアクション: ${dayjs(entry.moodRecordedAt).format('YYYY/MM/DD HH:mm')}`
-                : 'まだリアクションはありません'}
-            </p>
-            {entry.detail ? (
-              <p className="mt-2 whitespace-pre-wrap text-base">{entry.detail}</p>
-            ) : (
-              <p className="mt-2 text-sm text-gray-500">まだ日記の本文はありません。</p>
-            )}
-            {entry.detailRecordedAt ? (
-              <p className="mt-1 text-xs text-gray-500">
-                日記更新: {dayjs(entry.detailRecordedAt).format('YYYY/MM/DD HH:mm')}
-              </p>
-            ) : null}
-
-            <HStack>
-              <p>ユーザ: {entry.userId}</p>
-              <div className="flex-1" />
-              <p>チャンネル: {entry.channelId}</p>
-            </HStack>
-          </div>
-        ))}
+      <h1 className="text-3xl font-bold">ほたる日記</h1>
+      <div className="mt-4 space-y-4 rounded-md border border-dashed p-4 text-sm text-gray-600">
+        <p>
+          ここには具体的な日記の内容は表示されません。ほたるとの会話や気分の記録は、Slack 上での本人とほたるだけの内緒話として保護されます。
+        </p>
+        <p>いままでに灯った日記の数: {data.totalEntries.toLocaleString()} 件</p>
+        {data.latestEntryDate ? (
+          <p>直近の灯り: {dayjs(data.latestEntryDate).format('YYYY年M月D日(ddd)')}</p>
+        ) : (
+          <p>まだ日記は灯っていません。今夜の21時にほたるが声をかけにいきます。</p>
+        )}
       </div>
     </div>
   )
