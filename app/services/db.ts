@@ -21,6 +21,23 @@ export interface Database {
     createdAt: string // レコード作成日時 (ISO8601)
     updatedAt: string // 更新日時 (ISO8601)
   }
+
+  diaryEntries: {
+    id: string
+    userId: string
+    channelId: string
+    messageTs: string
+    entryDate: string
+    moodEmoji: string | null
+    moodValue: number | null
+    moodLabel: string | null
+    detail: string | null
+    reminderSentAt: string
+    moodRecordedAt: string | null
+    detailRecordedAt: string | null
+    createdAt: string
+    updatedAt: string
+  }
 }
 
 export const db = new Kysely<Database>({

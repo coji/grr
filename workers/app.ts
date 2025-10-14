@@ -1,4 +1,5 @@
 import { createRequestHandler } from "react-router";
+import { sendDailyDiaryReminders } from "~/slack-app/reminders";
 
 declare module "react-router" {
   export interface AppLoadContext {
@@ -19,5 +20,8 @@ export default {
     return requestHandler(request, {
       cloudflare: { env, ctx },
     });
+  },
+  async scheduled(_controller, env) {
+    await sendDailyDiaryReminders(env);
   },
 } satisfies ExportedHandler<Env>;

@@ -1,19 +1,17 @@
-# grr - Slackでイライラを記録・共有するアプリ
+# ほたる日記 (grr) - Slackで気分日記を灯すアプリ
 
 [![Built with React Router](https://img.shields.io/badge/Built%20with-React%20Router-7d32e1)](https://reactrouter.com)
 [![Powered by Cloudflare](https://img.shields.io/badge/Powered%20by-Cloudflare-f38020)](https://workers.cloudflare.com/)
 [![Styled with Tailwind CSS](https://img.shields.io/badge/Styled%20with-Tailwind%20CSS-38b2ac)](https://tailwindcss.com)
 
-`grr` は、日々のちょっとしたイライラを Slack 上で簡単に記録し、チームや仲間内で共有できる Web アプリケーションです。Cloudflare Workers 上で動作し、React Router と Vite を使用して構築されています。
+`grr` は、日記灯の妖精「ほたる」と一緒に Slack 上でその日の気分とひとこと日記を残せるアプリです。Cloudflare Workers 上で動作し、React Router と Vite を使用して構築されています。
 
 ## 主な機能
 
-* **Slack から簡単記録:**
-  * `/grr [イラっとしたこと]` スラッシュコマンドで記録。
-  * 既存のメッセージからメッセージショートカットで記録。
-* **イライラ度の設定:** 1〜5段階でイライラ度を設定できます。
-* **記録の表示:** 記録されたイライラを一覧で確認できます (現在は基本的な表示のみ)。
-* **Slack 通知:** 記録時に指定されたチャンネルまたはDMに通知します。
+* **21時の自動リマインド:** 日記灯のほたるが毎晩21時 (JST) にDMで声をかけ、顔文字3択または好きな絵文字のリアクションで気分を記録できます。
+* **スレッド日記:** リマインドメッセージのスレッドに、その日の出来事や想いを自由に書き残せます。ほたるがときどき絵文字で寄り添います。
+* **ほたるへのメンション:** 困ったときや話したいときにアプリへメンションすると、ほたるが優しく相づち・アドバイス・共感でサポートします。
+* **Slack ショートカットとコマンド:** `/grr` やメッセージショートカットからも日記を開いて気分を記録できます。
 
 ## 技術スタック
 

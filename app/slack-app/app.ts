@@ -1,17 +1,19 @@
-import { env } from 'cloudflare:workers'
 import {
   SlackApp,
   type SlackAppLogLevel,
   type SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
+import { registerDiaryHandlers } from './handlers/diary'
 import { registerGrrHandlers } from './handlers/grr'
 
-export function createSlackApp() {
+export function createSlackApp(bindings: Env) {
+  const appEnv: SlackEdgeAppEnv = {
+    ...bindings,
+    SLACK_LOGGING_LEVEL: (bindings.SLACK_LOGGING_LEVEL as SlackAppLogLevel | undefined) ?? 'INFO',
+  }
+
   const app = new SlackApp<SlackEdgeAppEnv>({
-    env: {
-      ...env,
-      SLACK_LOGGING_LEVEL: env.SLACK_LOGGING_LEVEL as SlackAppLogLevel,
-    },
+    env: appEnv,
   })
 
   registerHandlers(app)
@@ -19,5 +21,6 @@ export function createSlackApp() {
 }
 
 function registerHandlers(app: SlackApp<SlackEdgeAppEnv>) {
+  registerDiaryHandlers(app)
   registerGrrHandlers(app)
 }

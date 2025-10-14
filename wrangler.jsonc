@@ -16,7 +16,10 @@
       "database_name": "grr-db",
       "database_id": "460b32d1-31d9-4db3-9fcd-89c296233287"
     }
-  ] /**
+  ],
+  "triggers": {
+    "crons": ["0 12 * * *"]
+  } /**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
    */
