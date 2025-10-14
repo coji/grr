@@ -120,13 +120,13 @@ pnpm run build
 
 ## デプロイ
 
-アプリケーションを Cloudflare Workers にデプロイします。
+アプリケーションを Cloudflare Workers にデプロイします。デプロイ前に D1 のマイグレーションを自動適用するため、`CLOUDFLARE_API_TOKEN` には D1 を編集できる権限を付与してください。
 
 ```bash
 pnpm deploy
 ```
 
-デプロイが成功すると、Worker の URL が表示されます。この URL を Slack アプリの設定 (Request URL, Interactivity Request URL など) に反映させてください。
+デプロイが成功すると、Worker の URL が表示されます。この URL を Slack アプリの設定 (Request URL, Interactivity Request URL など) に反映させてください。マイグレーションを手動で実行したい場合は `wrangler d1 migrations apply grr-db --remote` を使用できます。
 
 ## リンティングとフォーマット
 
