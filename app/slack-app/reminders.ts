@@ -81,21 +81,35 @@ export const sendDailyDiaryReminders = async (env: Env) => {
 
       if (existing) continue
 
-      const conversation = await client.conversations.open({ users: userId })
-      if (!conversation.ok || !conversation.channel?.id) {
-        console.warn('Failed to open DM', conversation.error)
+      // ユーザーの過去のエントリから最新のチャンネルIDを取得
+      const previousEntry = await db
+        .selectFrom('diaryEntries')
+        .select('channelId')
+        .where('userId', '=', userId)
+        .orderBy('entryDate', 'desc')
+        .limit(1)
+        .executeTakeFirst()
+
+      if (!previousEntry?.channelId) {
+        // 過去のエントリがない場合はスキップ（初回ユーザーは手動で開始する必要がある）
+        console.log(
+          `Skipping reminder for user ${userId}: no previous channel found`,
+        )
         continue
       }
 
+      const channelId = previousEntry.channelId
       const reminderText = await generateDiaryReminder({
         env,
         personaName: DIARY_PERSONA_NAME,
         userId,
         moodOptions: REMINDER_MOOD_OPTIONS,
       })
+
+      // ユーザーのチャンネルにメンション付きでメッセージを送信
       const message = await client.chat.postMessage({
-        channel: conversation.channel.id,
-        text: reminderText,
+        channel: channelId,
+        text: `<@${userId}> ${reminderText}`,
       })
 
       if (!message.ok || !message.ts) {
@@ -110,7 +124,7 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         .values({
           id: nanoid(),
           userId,
-          channelId: conversation.channel.id,
+          channelId,
           messageTs: message.ts,
           entryDate,
           moodEmoji: null,
@@ -128,7 +142,7 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       for (const choice of DIARY_MOOD_CHOICES) {
         try {
           await client.reactions.add({
-            channel: conversation.channel.id,
+            channel: channelId,
             timestamp: message.ts,
             name: choice.reaction,
           })
