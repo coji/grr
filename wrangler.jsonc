@@ -5,7 +5,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "grr",
-  "compatibility_date": "2025-10-15",
+  "compatibility_date": "2025-10-08",
   "compatibility_flags": [
     "nodejs_compat",
     "nodejs_compat_populate_process_env"
@@ -23,7 +23,7 @@
     }
   ],
   "triggers": {
-    "crons": ["0 12 * * *"]
+    "crons": ["0 13 * * *"]
   } /**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

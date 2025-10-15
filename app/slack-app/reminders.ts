@@ -53,6 +53,7 @@ const fetchAllWorkspaceUsers = async (client: SlackAPIClient) => {
 }
 
 export const sendDailyDiaryReminders = async (env: Env) => {
+  console.log('sendDailyDiaryReminders started')
   const client = new SlackAPIClient(env.SLACK_BOT_TOKEN)
   const auth = await client.auth.test()
   if (!auth.ok) {
