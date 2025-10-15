@@ -2,31 +2,8 @@ import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
-import { buildGrrModal } from './views/grr-modal'
 
-export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
-  app.command(
-    '/grr',
-    async () => {},
-    async ({ context, payload }) => {
-      await context.client.views.open({
-        trigger_id: payload.trigger_id,
-        view: buildGrrModal(payload.channel_id, payload.text),
-      })
-    },
-  )
-  app.shortcut(
-    'grr_shortcut',
-    async () => {},
-    async ({ context, payload }) => {
-      const message =
-        payload.type === 'message_action' ? payload.message.text : undefined
-      await context.client.views.open({
-        trigger_id: payload.trigger_id,
-        view: buildGrrModal(context.channelId, message),
-      })
-    },
-  )
+export function registerViewSubmissionHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.view(
     'grr_modal',
     async () => {
@@ -40,7 +17,6 @@ export const registerGrrHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
 
       const score = Number(level ?? '3') // fallback = 3
 
-      // ここに保存ロジック (D1 INSERT / UPSERT など)
       await db
         .insertInto('irritations')
         .values({
