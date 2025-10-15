@@ -27,7 +27,7 @@ export async function generateDiaryReply({
     .join('\n')
 
   try {
-    const model = google('gemini-2.5-flash')
+    const model = google('gemini-flash-lite-latest')
     const { text } = await generateText({
       model,
       system: `
