@@ -2,7 +2,10 @@ import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
-import { generateDiaryReply } from '~/services/ai'
+import {
+  generateDiaryReply,
+  generateSupportiveReaction,
+} from '~/services/ai'
 import { db } from '~/services/db'
 import {
   DIARY_MOOD_CHOICES,
@@ -19,9 +22,6 @@ const sanitizeText = (text: string | undefined) =>
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .trim() ?? ''
-
-const pickRandom = <T>(list: readonly T[]): T =>
-  list[Math.floor(Math.random() * list.length)]
 
 export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   app.event('reaction_added', async ({ payload, context }) => {
@@ -145,7 +145,13 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
       .execute()
 
     if (Math.random() < 0.35) {
-      const reaction = pickRandom(SUPPORTIVE_REACTIONS)
+      const reaction = await generateSupportiveReaction({
+        personaName: DIARY_PERSONA_NAME,
+        userId: entry.userId,
+        messageText: text,
+        moodLabel: entry.moodLabel,
+        availableReactions: SUPPORTIVE_REACTIONS,
+      })
       await context.client.reactions
         .add({ channel: entry.channelId, timestamp: event.ts, name: reaction })
         .catch((error) => {
@@ -262,7 +268,13 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
       text: message,
     })
 
-    const reactionName = pickRandom(SUPPORTIVE_REACTIONS)
+    const reactionName = await generateSupportiveReaction({
+      personaName: DIARY_PERSONA_NAME,
+      userId: event.user,
+      messageText: cleaned,
+      moodLabel: entry?.moodLabel ?? null,
+      availableReactions: SUPPORTIVE_REACTIONS,
+    })
     await context.client.reactions
       .add({
         channel: event.channel,
