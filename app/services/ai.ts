@@ -67,7 +67,7 @@ export async function generateDiaryReply({
 
   try {
     const google = createGoogleGenerativeAI({ apiKey })
-    const model = google('gemini-2.5-flash-latest')
+    const model = google('gemini-2.5-flash')
 
     const { text } = await generateText({
       model,
@@ -113,7 +113,7 @@ export async function generateDiaryReminder({
 
   try {
     const google = createGoogleGenerativeAI({ apiKey })
-    const model = google('gemini-2.5-flash-latest')
+    const model = google('gemini-2.5-flash')
 
     const { text } = await generateText({
       model,
