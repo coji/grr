@@ -11,6 +11,16 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('app_mention', async ({ payload, context }) => {
     const event = payload
     if (!event.user) return
+
+    // 処理中であることを控えめに伝える
+    await context.client.reactions
+      .add({
+        channel: event.channel,
+        timestamp: event.ts,
+        name: 'eyes',
+      })
+      .catch(() => {}) // リアクション追加失敗は無視
+
     const cleaned = sanitizeText(event.text)
     const insertedAt = dayjs().utc().toISOString()
     const entryDate = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
@@ -122,6 +132,15 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       thread_ts: event.thread_ts ?? event.ts,
       text: message,
     })
+
+    // 処理中リアクションを削除
+    await context.client.reactions
+      .remove({
+        channel: event.channel,
+        timestamp: event.ts,
+        name: 'eyes',
+      })
+      .catch(() => {}) // 削除失敗は無視
 
     const reactionName = await generateSupportiveReaction({
       personaName: DIARY_PERSONA_NAME,
