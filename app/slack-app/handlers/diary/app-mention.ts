@@ -89,8 +89,21 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       }
     }
 
+    // 前回のエントリを取得（当日より前の最新エントリ）
+    const previousEntry = entry
+      ? await db
+          .selectFrom('diaryEntries')
+          .selectAll()
+          .where('userId', '=', event.user)
+          .where('entryDate', '<', entry.entryDate)
+          .orderBy('entryDate', 'desc')
+          .limit(1)
+          .executeTakeFirst()
+      : null
+
     // スレッド全体をコンテキストとして使用
     const fullDetail = entry?.detail ?? null
+    const previousDetail = previousEntry?.detail ?? null
 
     const aiReply = await generateDiaryReply({
       env: app.env as Env,
@@ -98,6 +111,7 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       userId: event.user,
       moodLabel: entry?.moodLabel ?? null,
       latestEntry: fullDetail,
+      previousEntry: previousDetail,
       mentionMessage: cleaned || null,
     })
 

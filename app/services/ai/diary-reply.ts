@@ -8,6 +8,7 @@ export interface DiaryReplyContext {
   userId: string
   moodLabel?: string | null
   latestEntry?: string | null
+  previousEntry?: string | null
   mentionMessage?: string | null
 }
 
@@ -16,11 +17,13 @@ export async function generateDiaryReply({
   userId,
   moodLabel,
   latestEntry,
+  previousEntry,
   mentionMessage,
 }: DiaryReplyContext): Promise<string> {
   const detailSummary = [
     moodLabel ? `最近のきもち: ${moodLabel}` : undefined,
-    latestEntry ? `最新のきろく: """${latestEntry}"""` : undefined,
+    previousEntry ? `前回のきろく: """${previousEntry}"""` : undefined,
+    latestEntry ? `今日のきろく: """${latestEntry}"""` : undefined,
     mentionMessage ? `今回のメッセージ: """${mentionMessage}"""` : undefined,
   ]
     .filter(Boolean)
