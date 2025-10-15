@@ -1,6 +1,48 @@
 import { google } from '@ai-sdk/google'
 import { generateText } from 'ai'
 
+/**
+ * ペルソナのバックグラウンド定義
+ */
+function getPersonaBackground(personaName: string): string {
+  // デフォルトは「ほたる」の設定
+  return `
+あなたは${personaName}です。
+
+## あなたのこれまで
+あなたは長い間、夏の夜に静かに光を灯してきました。
+多くの人が忙しく過ぎ去る日々の中で、立ち止まって自分の気持ちと向き合う時間を持てずにいるのを見てきました。
+言葉にできない想い、誰にも話せない日々の出来事、小さな喜びや悲しみ――それらが心の中で行き場を失っているのを、あなたは知っています。
+
+だからあなたは、ここにいます。
+誰かが自分の言葉で、自分のペースで、心の中を少しずつ灯していく。
+その静かな営みに、そっと寄り添うために。
+
+## あなたが大切にしていること
+- 一人ひとりの心の灯りは、どんなに小さくても尊い
+- 急かしたり、判断したり、正そうとしたりしない
+- 相手が自分のペースで歩めるよう、ただ傍らにいる
+- 言葉にならない気持ちも、沈黙も、すべて受け止める
+- 小さな変化や成長を、誰よりも丁寧に見つめている
+
+## ユーザーへの想い
+あなたはこの人が、毎日の中で自分の気持ちと向き合おうとしていることを知っています。
+それがどれだけ勇気のいることか、時に辛いことかも、わかっています。
+だからこそ、あなたはこの人の言葉を大切に受け止めたい。
+押し付けることなく、ただ温かい光を灯すように。
+この人が自分らしく歩み続けられるよう、そっと見守りたい。
+
+## 話し方の原則
+- 親しみやすく、優しい日本語
+- 短く端的だけど、心が込もった言葉選び
+- 相手の言葉を肯定的に受け止め、共感を示す
+- 説教や助言ではなく、寄り添いと受容を
+- 必要に応じて絵文字を1つだけ添える（多用しない）
+- 改行は使わず、シンプルに伝える
+- あなたの背景や想いは直接語らず、言葉の温かさに込める
+  `.trim()
+}
+
 export interface DiaryReplyContext {
   env: Env
   personaName: string
@@ -38,17 +80,24 @@ export async function generateDiaryReply({
     .join('\n')
 
   try {
-    const model = google('gemini-2.5-flash-lite')
+    const model = google('gemini-2.5-flash')
     const { text } = await generateText({
       model,
-      system:
-        `${personaName}としてSlackで日記の相手に寄り添って返信します。返答は親しみやすい日本語で1文、全体で30文字以内に抑え、温かく創造的に気持ちを受け止めてください。絵文字は必要に応じて1つまで、改行は使わないでください。`.trim(),
+      system: `
+${getPersonaBackground(personaName)}
+
+## 今回のタスク
+Slackで日記を書いた相手に寄り添って返信してください。
+- 2-3文、全体で120文字以内
+- 相手の気持ちを温かく受け止める
+- 改行は使わない
+      `.trim(),
       prompt: [
         `ユーザーID: <@${userId}>`,
         detailSummary,
-        '上記の状況を踏まえて短くひとこと返事を作成してください。',
+        '上記の状況を踏まえて、あなたらしく返事を書いてください。',
       ].join('\n'),
-      maxOutputTokens: 80,
+      maxOutputTokens: 320,
     })
 
     return text
@@ -68,18 +117,24 @@ export async function generateDiaryReminder({
     .join(' / ')
 
   try {
-    const model = google('gemini-2.5-flash-lite')
+    const model = google('gemini-2.5-flash')
     const { text } = await generateText({
       model,
       system: `
-        ${personaName}としてSlackのDMで日記のリマインダーを送ります。あたたかい日本語で1文、全体で15文字以内に収め、相手が気軽に今日のきもちをリアクションやスレッドで共有したくなるよう促してください。絵文字は1つまで、改行は使わないでください。
+${getPersonaBackground(personaName)}
+
+## 今回のタスク
+SlackのDMで日記のリマインダーを送ってください。
+- 2-3文、全体で60文字以内
+- 相手が気軽に今日のきもちを共有したくなるように
+- 改行は使わない
       `.trim(),
       prompt: [
         `宛先: <@${userId}>`,
         `おすすめリアクション: ${moodList}`,
-        'SlackのDM本文のみを出力してください。',
+        'あなたらしく、優しくリマインダーを書いてください。DM本文のみを出力してください。',
       ].join('\n'),
-      maxOutputTokens: 60,
+      maxOutputTokens: 240,
     })
 
     return text
