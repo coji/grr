@@ -89,16 +89,15 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       }
     }
 
-    const latestDetail = entry?.detail
-      ? (entry.detail.split('\n\n---\n').at(-1) ?? null)
-      : cleaned || null
+    // スレッド全体をコンテキストとして使用
+    const fullDetail = entry?.detail ?? null
 
     const aiReply = await generateDiaryReply({
       env: app.env as Env,
       personaName: DIARY_PERSONA_NAME,
       userId: event.user,
       moodLabel: entry?.moodLabel ?? null,
-      latestEntry: latestDetail,
+      latestEntry: fullDetail,
       mentionMessage: cleaned || null,
     })
 
