@@ -1,5 +1,10 @@
 import { nanoid } from 'nanoid'
-import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
+import type {
+  GlobalShortcut,
+  MessageShortcut,
+  SlackApp,
+  SlackEdgeAppEnv,
+} from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
 import { TOKYO_TZ } from './utils'
@@ -7,9 +12,9 @@ import { TOKYO_TZ } from './utils'
 export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
   // メッセージショートカット: メッセージを日記に追加
   app.shortcut('add_to_diary', async ({ payload, context }) => {
-    const shortcut = payload as any
+    const shortcut = payload as MessageShortcut
     const userId = shortcut.user.id
-    const messageText = shortcut.message?.text || ''
+    const messageText = shortcut.message.text || ''
     const today = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
 
     // 既存のエントリを取得
@@ -39,7 +44,7 @@ export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
         .execute()
     } else {
       // 新規エントリを作成
-      const channelId = shortcut.channel?.id || userId
+      const channelId = shortcut.channel.id
 
       await db
         .insertInto('diaryEntries')
@@ -64,7 +69,7 @@ export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
     // 完了メッセージを表示
     await context.client.chat.postEphemeral({
-      channel: shortcut.channel?.id || userId,
+      channel: shortcut.channel.id,
       user: userId,
       text: '日記に追加しました！',
     })
@@ -72,7 +77,7 @@ export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
   // グローバルショートカット: 日記を書く
   app.shortcut('write_diary', async ({ payload, context }) => {
-    const shortcut = payload as any
+    const shortcut = payload as GlobalShortcut
     const today = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
 
     await context.client.views.open({

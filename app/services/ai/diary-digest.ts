@@ -2,7 +2,6 @@ import { google } from '@ai-sdk/google'
 import { generateText } from 'ai'
 
 interface DiaryDigestOptions {
-  env: Env
   personaName: string
   userId: string
   entries: Array<{
@@ -63,7 +62,6 @@ ${entriesText}
  * 気分トリガーの応援メッセージを生成する
  */
 export async function generateMoodSupportMessage(options: {
-  env: Env
   personaName: string
   userId: string
   consecutiveLowMoodDays: number

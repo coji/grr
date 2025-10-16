@@ -25,8 +25,7 @@ type ActionData =
     }
   | { type: 'error'; error: string }
 
-export const action = async ({ request, context }: Route.ActionArgs) => {
-  const env = context.cloudflare.env as Env
+export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData()
   const actionType = formData.get('actionType')
 
@@ -39,7 +38,6 @@ export const action = async ({ request, context }: Route.ActionArgs) => {
       const mentionMessage = formData.get('mentionMessage') as string | null
 
       const result = await generateDiaryReply({
-        env,
         personaName,
         userId,
         moodLabel: moodLabel || undefined,
@@ -78,7 +76,6 @@ export const action = async ({ request, context }: Route.ActionArgs) => {
       }
 
       const result = await generateDiaryReminder({
-        env,
         personaName,
         userId,
         moodOptions,

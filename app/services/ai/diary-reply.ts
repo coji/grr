@@ -6,7 +6,6 @@ import { getPersonaBackground } from './persona'
 const TOKYO_TZ = 'Asia/Tokyo'
 
 export interface DiaryReplyContext {
-  env: Env
   personaName: string
   userId: string
   moodLabel?: string | null

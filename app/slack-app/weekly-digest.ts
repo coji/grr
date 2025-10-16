@@ -43,7 +43,6 @@ export const sendWeeklyDigest = async (env: Env) => {
 
       // AIでダイジェストを生成
       const digestMessage = await generateWeeklyDigest({
-        env,
         personaName: DIARY_PERSONA_NAME,
         userId,
         entries: entries.map((e) => ({

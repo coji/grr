@@ -10,6 +10,7 @@ export function registerLinkUnfurlHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('link_shared', async ({ payload, context }) => {
     const event = payload
 
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic unfurl structure
     const unfurls: Record<string, any> = {}
 
     for (const link of event.links) {

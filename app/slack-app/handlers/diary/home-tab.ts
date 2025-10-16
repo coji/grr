@@ -1,4 +1,9 @@
-import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
+import type {
+  ButtonAction,
+  MessageBlockAction,
+  SlackApp,
+  SlackEdgeAppEnv,
+} from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
 import { TOKYO_TZ } from './utils'
@@ -159,6 +164,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       user_id: userId,
       view: {
         type: 'home',
+        // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
         blocks: blocks as any,
       },
     })
@@ -166,7 +172,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
   // ボタンアクションのハンドラー
   app.action('open_diary_modal', async ({ payload, context }) => {
-    const action = payload as any
+    const action = payload as MessageBlockAction<ButtonAction>
 
     await context.client.views.open({
       trigger_id: action.trigger_id,
@@ -196,7 +202,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
             element: {
               type: 'datepicker',
               action_id: 'date_value',
-              initial_date: action.value,
+              initial_date: action.actions[0].value,
             },
           },
           {
@@ -265,8 +271,8 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   })
 
   app.action('open_settings_modal', async ({ payload, context }) => {
-    const action = payload as any
-    const userId = action.user?.id
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
 
     // 現在の設定を取得
     const settings = await db
@@ -396,8 +402,8 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   })
 
   app.action('view_diary_entry', async ({ payload, context }) => {
-    const action = payload as any
-    const entryId = action.value
+    const action = payload as MessageBlockAction<ButtonAction>
+    const entryId = action.actions[0].value
 
     const entry = await db
       .selectFrom('diaryEntries')

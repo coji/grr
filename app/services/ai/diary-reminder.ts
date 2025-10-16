@@ -8,7 +8,6 @@ export interface DiaryReminderMoodOption {
 }
 
 export interface DiaryReminderContext {
-  env: Env
   personaName: string
   userId: string
   moodOptions: readonly DiaryReminderMoodOption[]

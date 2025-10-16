@@ -1,4 +1,10 @@
-import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
+import type {
+  ButtonAction,
+  MessageBlockAction,
+  SlackApp,
+  SlackAppContext,
+  SlackEdgeAppEnv,
+} from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { generateDiaryReply } from '~/services/ai'
 import { db } from '~/services/db'
@@ -7,9 +13,14 @@ import { DIARY_MOOD_CHOICES, DIARY_PERSONA_NAME } from '../diary-constants'
 export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
   // 「話を聞いてもらう」ボタン
   app.action('diary_request_support', async ({ payload, context }) => {
-    const action = payload as any
-    const entryId = action.value
-    const userId = action.user?.id
+    const action = payload as MessageBlockAction<ButtonAction>
+    const entryId = action.actions[0].value
+    const userId = action.user.id
+
+    if (!entryId || !userId) {
+      console.error('Missing entryId or userId', { entryId, userId })
+      return
+    }
 
     // エントリを取得
     const entry = await db
@@ -18,7 +29,14 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
       .where('id', '=', entryId)
       .executeTakeFirst()
 
-    if (!entry || entry.userId !== userId) return
+    if (!entry || entry.userId !== userId) {
+      console.error('Entry not found or userId mismatch', {
+        entryId,
+        userId,
+        entry,
+      })
+      return
+    }
 
     // 前回のエントリを取得
     const previousEntry = await db
@@ -32,11 +50,10 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
 
     // AI でフォローメッセージを生成
     const followUpMessage = await generateDiaryReply({
-      env: app.env as Env,
       personaName: DIARY_PERSONA_NAME,
       userId,
-      moodLabel: entry.moodLabel,
-      latestEntry: entry.detail,
+      moodLabel: entry.moodLabel ?? null,
+      latestEntry: entry.detail ?? null,
       previousEntry: previousEntry?.detail ?? null,
       mentionMessage: null,
     })
@@ -60,23 +77,35 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
 
   // クイック気分ボタン: ほっと安心
   app.action('diary_quick_mood_good', async ({ payload, context }) => {
-    await handleQuickMoodAction(payload as any, context, 'smile')
+    await handleQuickMoodAction(
+      payload as MessageBlockAction<ButtonAction>,
+      context,
+      'smile',
+    )
   })
 
   // クイック気分ボタン: ふつうの日
   app.action('diary_quick_mood_normal', async ({ payload, context }) => {
-    await handleQuickMoodAction(payload as any, context, 'neutral_face')
+    await handleQuickMoodAction(
+      payload as MessageBlockAction<ButtonAction>,
+      context,
+      'neutral_face',
+    )
   })
 
   // クイック気分ボタン: おつかれさま
   app.action('diary_quick_mood_tired', async ({ payload, context }) => {
-    await handleQuickMoodAction(payload as any, context, 'tired_face')
+    await handleQuickMoodAction(
+      payload as MessageBlockAction<ButtonAction>,
+      context,
+      'tired_face',
+    )
   })
 
   // 詳細を書くボタン
   app.action('diary_open_detail_modal', async ({ payload, context }) => {
-    const action = payload as any
-    const entryDate = action.value
+    const action = payload as MessageBlockAction<ButtonAction>
+    const entryDate = action.actions[0].value
 
     await context.client.views.open({
       trigger_id: action.trigger_id,
@@ -176,9 +205,9 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
 
   // 今日はスキップボタン
   app.action('diary_skip_today', async ({ payload, context }) => {
-    const action = payload as any
-    const userId = action.user?.id
-    const entryDate = action.value
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+    const entryDate = action.actions[0].value
 
     // エントリを削除（スキップマーク）
     await db
@@ -206,17 +235,16 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
 }
 
 async function handleQuickMoodAction(
-  action: any,
-  context: any,
+  action: MessageBlockAction<ButtonAction>,
+  context: SlackAppContext,
   moodReaction: string,
 ) {
-  const userId = action.user?.id
-  const entryDate = action.value
+  const userId = action.user.id
+  const entryDate = action.actions[0].value
 
   // 気分の詳細を取得
   const moodChoice = DIARY_MOOD_CHOICES.find((c) => c.reaction === moodReaction)
   if (!moodChoice) {
-    await context.ack()
     return
   }
 

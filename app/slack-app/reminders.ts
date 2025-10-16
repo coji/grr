@@ -100,7 +100,6 @@ export const sendDailyDiaryReminders = async (env: Env) => {
 
       const channelId = previousEntry.channelId
       const reminderText = await generateDiaryReminder({
-        env,
         personaName: DIARY_PERSONA_NAME,
         userId,
         moodOptions: REMINDER_MOOD_OPTIONS,

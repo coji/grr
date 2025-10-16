@@ -1,4 +1,8 @@
-import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
+import type {
+  SlackApp,
+  SlackAppContextWithOptionalRespond,
+  SlackEdgeAppEnv,
+} from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
 import { TOKYO_TZ } from './utils'
@@ -38,7 +42,10 @@ export function registerSlashCommandHandler(app: SlackApp<SlackEdgeAppEnv>) {
   })
 }
 
-async function handleTodayCommand(userId: string, context: any) {
+async function handleTodayCommand(
+  userId: string,
+  context: SlackAppContextWithOptionalRespond,
+) {
   const today = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
 
   const entry = await db
@@ -49,7 +56,7 @@ async function handleTodayCommand(userId: string, context: any) {
     .executeTakeFirst()
 
   if (!entry) {
-    await context.respond({
+    await context.respond?.({
       text: '今日の日記はまだ書かれていません。',
       response_type: 'ephemeral',
     })
@@ -60,7 +67,7 @@ async function handleTodayCommand(userId: string, context: any) {
   const detail = entry.detail || '_詳細なし_'
   const date = dayjs(entry.entryDate).format('YYYY年M月D日(ddd)')
 
-  await context.respond({
+  await context.respond?.({
     text: `*${date} の日記*\n気分: ${mood}\n\n${detail}`,
     response_type: 'ephemeral',
   })
@@ -69,10 +76,10 @@ async function handleTodayCommand(userId: string, context: any) {
 async function handleSearchCommand(
   userId: string,
   keyword: string,
-  context: any,
+  context: SlackAppContextWithOptionalRespond,
 ) {
   if (!keyword) {
-    await context.respond({
+    await context.respond?.({
       text: '検索キーワードを指定してください。\n使い方: `/diary search キーワード`',
       response_type: 'ephemeral',
     })
@@ -89,7 +96,7 @@ async function handleSearchCommand(
     .execute()
 
   if (entries.length === 0) {
-    await context.respond({
+    await context.respond?.({
       text: `「${keyword}」を含むエントリは見つかりませんでした。`,
       response_type: 'ephemeral',
     })
@@ -108,13 +115,16 @@ async function handleSearchCommand(
     })
     .join('\n\n')
 
-  await context.respond({
+  await context.respond?.({
     text: `*「${keyword}」の検索結果 (${entries.length}件)*\n\n${results}`,
     response_type: 'ephemeral',
   })
 }
 
-async function handleStatsCommand(userId: string, context: any) {
+async function handleStatsCommand(
+  userId: string,
+  context: SlackAppContextWithOptionalRespond,
+) {
   const allEntries = await db
     .selectFrom('diaryEntries')
     .selectAll()
@@ -122,7 +132,7 @@ async function handleStatsCommand(userId: string, context: any) {
     .execute()
 
   if (allEntries.length === 0) {
-    await context.respond({
+    await context.respond?.({
       text: 'まだ日記が記録されていません。',
       response_type: 'ephemeral',
     })
@@ -176,13 +186,16 @@ async function handleStatsCommand(userId: string, context: any) {
 ${moodStats || '  データなし'}
 `
 
-  await context.respond({
+  await context.respond?.({
     text: stats,
     response_type: 'ephemeral',
   })
 }
 
-async function handleExportCommand(userId: string, context: any) {
+async function handleExportCommand(
+  userId: string,
+  context: SlackAppContextWithOptionalRespond,
+) {
   const entries = await db
     .selectFrom('diaryEntries')
     .selectAll()
@@ -191,7 +204,7 @@ async function handleExportCommand(userId: string, context: any) {
     .execute()
 
   if (entries.length === 0) {
-    await context.respond({
+    await context.respond?.({
       text: 'エクスポートする日記がありません。',
       response_type: 'ephemeral',
     })
@@ -211,13 +224,13 @@ async function handleExportCommand(userId: string, context: any) {
 
   const csv = `"日付","気分","詳細"\n${csvData}`
 
-  await context.respond({
+  await context.respond?.({
     text: `*日記エクスポート (${entries.length}件)*\n\n\`\`\`\n${csv.slice(0, 2000)}${csv.length > 2000 ? '\n...(省略)' : ''}\n\`\`\`\n\n全データをコピーしてCSVファイルとして保存できます。`,
     response_type: 'ephemeral',
   })
 }
 
-async function handleHelpCommand(context: any) {
+async function handleHelpCommand(context: SlackAppContextWithOptionalRespond) {
   const help = `*日記コマンドヘルプ*
 
 \`/diary today\` - 今日の日記を表示
@@ -227,7 +240,7 @@ async function handleHelpCommand(context: any) {
 \`/diary help\` - このヘルプを表示
 `
 
-  await context.respond({
+  await context.respond?.({
     text: help,
     response_type: 'ephemeral',
   })

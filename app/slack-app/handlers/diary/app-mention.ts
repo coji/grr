@@ -116,7 +116,6 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const previousDetail = previousEntry?.detail ?? null
 
     const aiReply = await generateDiaryReply({
-      env: app.env as Env,
       personaName: DIARY_PERSONA_NAME,
       userId: event.user,
       moodLabel: entry?.moodLabel ?? null,
