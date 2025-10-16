@@ -106,10 +106,80 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         moodOptions: REMINDER_MOOD_OPTIONS,
       })
 
-      // ユーザーのチャンネルにメンション付きでメッセージを送信
+      // ユーザーのチャンネルにメンション付き＆ボタン付きでメッセージを送信
       const message = await client.chat.postMessage({
         channel: channelId,
         text: `<@${userId}> ${reminderText}`,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `<@${userId}> ${reminderText}`,
+            },
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '😄 ほっと安心',
+                  emoji: true,
+                },
+                action_id: 'diary_quick_mood_good',
+                value: entryDate,
+                style: 'primary',
+              },
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '😐 ふつうの日',
+                  emoji: true,
+                },
+                action_id: 'diary_quick_mood_normal',
+                value: entryDate,
+              },
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '😫 おつかれさま',
+                  emoji: true,
+                },
+                action_id: 'diary_quick_mood_tired',
+                value: entryDate,
+              },
+            ],
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '詳細を書く',
+                  emoji: true,
+                },
+                action_id: 'diary_open_detail_modal',
+                value: entryDate,
+              },
+              {
+                type: 'button',
+                text: {
+                  type: 'plain_text',
+                  text: '今日はスキップ',
+                  emoji: true,
+                },
+                action_id: 'diary_skip_today',
+                value: entryDate,
+              },
+            ],
+          },
+        ],
       })
 
       if (!message.ok || !message.ts) {

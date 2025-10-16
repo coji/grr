@@ -38,6 +38,23 @@ export interface Database {
     createdAt: string
     updatedAt: string
   }
+
+  userDiarySettings: {
+    userId: string
+    reminderHour: number
+    reminderEnabled: number
+    skipWeekends: number
+    diaryChannelId: string | null
+    createdAt: string
+    updatedAt: string
+  }
+
+  diaryTags: {
+    id: string
+    entryId: string
+    tagName: string
+    createdAt: string
+  }
 }
 
 export const db = new Kysely<Database>({
