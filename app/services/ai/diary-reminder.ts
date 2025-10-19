@@ -23,7 +23,7 @@ export async function generateDiaryReminder({
     .join(' / ')
 
   try {
-    const model = google('gemini-flash-lite-latest')
+    const model = google('gemini-flash-latest')
     const { text } = await generateText({
       model,
       system: `
@@ -40,7 +40,6 @@ SlackのDMで日記のリマインダーを送ってください。
         `おすすめリアクション: ${moodList}`,
         'あなたらしく、優しくリマインダーを書いてください。DM本文のみを出力してください。',
       ].join('\n'),
-      maxOutputTokens: 240,
     })
 
     return text

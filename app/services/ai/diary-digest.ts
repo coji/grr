@@ -98,7 +98,7 @@ ${entriesText}
 
 上記を踏まえて、さりげない気遣いのメッセージを生成してください。`
 
-  const model = google('gemini-flash-lite-latest')
+  const model = google('gemini-flash-latest')
   const { text } = await generateText({
     model,
     system: systemPrompt,

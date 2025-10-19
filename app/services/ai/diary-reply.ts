@@ -36,7 +36,7 @@ export async function generateDiaryReply({
     .join('\n')
 
   try {
-    const model = google('gemini-flash-lite-latest')
+    const model = google('gemini-flash-latest')
     const { text } = await generateText({
       model,
       system: `
@@ -70,7 +70,6 @@ Slackで日記を書いた相手に寄り添って返信してください。
         detailSummary,
         '上記の状況を踏まえて、あなたらしく返事を書いてください。',
       ].join('\n'),
-      maxOutputTokens: 320,
     })
 
     return text
