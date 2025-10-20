@@ -1,6 +1,10 @@
 import { google } from '@ai-sdk/google'
 import { generateText } from 'ai'
 import dayjs from '~/lib/dayjs'
+import {
+  inferDiaryReplyIntent,
+  type DiaryReplyIntentType,
+} from './diary-intent'
 import { getPersonaBackground } from './persona'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -22,6 +26,31 @@ export async function generateDiaryReply({
   previousEntry,
   mentionMessage,
 }: DiaryReplyContext): Promise<string> {
+  const intentAnalysis = await inferDiaryReplyIntent({
+    personaName,
+    userId,
+    latestEntry,
+    mentionMessage,
+  })
+
+  const intentLabels: Record<DiaryReplyIntentType, string> = {
+    comfort: '寄り添って聞いてほしい',
+    praise: '褒めてほしい',
+    tough_feedback: '率直な意見がほしい',
+    reprimand: '軽く叱ってほしい',
+  }
+
+  const intentGuidelines: Record<DiaryReplyIntentType, string> = {
+    comfort:
+      '- いつも以上に穏やかで安心感のあるトーンで寄り添い、共感を言葉で示す',
+    praise:
+      '- 相手が頑張った点や良いところを2つほど拾い、自然な言葉で称賛を伝える',
+    tough_feedback:
+      '- 相手の成長を願い、優しさを保ちつつも核心的な気づきをはっきりと伝える',
+    reprimand:
+      '- 親しみのある相手に語りかけるイメージで、励ましにつながる軽い叱咤激励を一言添える',
+  }
+
   const now = dayjs().tz(TOKYO_TZ)
   const dateInfo = `今日: ${now.format('YYYY年M月D日(ddd)')}`
 
@@ -31,6 +60,10 @@ export async function generateDiaryReply({
     previousEntry ? `前回のきろく: """${previousEntry}"""` : undefined,
     latestEntry ? `今日のきろく: """${latestEntry}"""` : undefined,
     mentionMessage ? `今回のメッセージ: """${mentionMessage}"""` : undefined,
+    `意図の推定: ${intentLabels[intentAnalysis.intent]}`,
+    intentAnalysis.rationale
+      ? `推定理由: ${intentAnalysis.rationale}`
+      : undefined,
   ]
     .filter(Boolean)
     .join('\n')
@@ -64,6 +97,9 @@ Slackで日記を書いた相手に寄り添って返信してください。
 - 2-3文、全体で120文字以内
 - 相手の気持ちを温かく受け止める
 - 改行は使わない
+
+### 返答スタイルの指示
+${intentGuidelines[intentAnalysis.intent]}
       `.trim(),
       prompt: [
         `ユーザーID: <@${userId}>`,
