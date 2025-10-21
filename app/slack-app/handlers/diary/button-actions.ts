@@ -102,107 +102,6 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     )
   })
 
-  // 詳細を書くボタン
-  app.action('diary_open_detail_modal', async ({ payload, context }) => {
-    const action = payload as MessageBlockAction<ButtonAction>
-    const entryDate = action.actions[0].value
-
-    await context.client.views.open({
-      trigger_id: action.trigger_id,
-      view: {
-        type: 'modal',
-        callback_id: 'diary_entry_modal',
-        title: {
-          type: 'plain_text',
-          text: '日記を書く',
-        },
-        submit: {
-          type: 'plain_text',
-          text: '保存',
-        },
-        close: {
-          type: 'plain_text',
-          text: 'キャンセル',
-        },
-        blocks: [
-          {
-            type: 'input',
-            block_id: 'entry_date',
-            label: {
-              type: 'plain_text',
-              text: '日付',
-            },
-            element: {
-              type: 'datepicker',
-              action_id: 'date_value',
-              initial_date: entryDate,
-            },
-          },
-          {
-            type: 'input',
-            block_id: 'mood',
-            label: {
-              type: 'plain_text',
-              text: '今日の気分',
-            },
-            element: {
-              type: 'static_select',
-              action_id: 'mood_value',
-              placeholder: {
-                type: 'plain_text',
-                text: '気分を選択',
-              },
-              options: [
-                {
-                  text: {
-                    type: 'plain_text',
-                    text: '😄 ほっと安心',
-                    emoji: true,
-                  },
-                  value: 'smile',
-                },
-                {
-                  text: {
-                    type: 'plain_text',
-                    text: '😐 ふつうの日',
-                    emoji: true,
-                  },
-                  value: 'neutral_face',
-                },
-                {
-                  text: {
-                    type: 'plain_text',
-                    text: '😫 おつかれさま',
-                    emoji: true,
-                  },
-                  value: 'tired_face',
-                },
-              ],
-            },
-          },
-          {
-            type: 'input',
-            block_id: 'detail',
-            label: {
-              type: 'plain_text',
-              text: '詳細',
-            },
-            element: {
-              type: 'plain_text_input',
-              action_id: 'detail_value',
-              multiline: true,
-              placeholder: {
-                type: 'plain_text',
-                text: '今日あったこと、感じたことを自由に書いてください',
-              },
-            },
-            optional: true,
-          },
-        ],
-      },
-    })
-  })
-
   // 今日はスキップボタン
   app.action('diary_skip_today', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
@@ -276,22 +175,6 @@ async function handleQuickMoodAction(
           type: 'mrkdwn',
           text: `<@${userId}> 気分「${moodChoice.emoji} ${moodChoice.label}」を記録しました！\nスレッドに返信して詳細を追加できます。`,
         },
-      },
-      {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: '詳細を書く',
-              emoji: true,
-            },
-            action_id: 'diary_open_detail_modal',
-            value: entryDate,
-            style: 'primary',
-          },
-        ],
       },
     ],
   })
