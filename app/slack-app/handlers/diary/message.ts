@@ -43,7 +43,7 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
       .where('id', '=', entry.id)
       .execute()
 
-    // リアクション + ボタンを追加（35%の確率）
+    // リアクションを追加（35%の確率）
     if (Math.random() < 0.35) {
       const reaction = await generateSupportiveReaction({
         personaName: DIARY_PERSONA_NAME,
@@ -62,34 +62,6 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
             return
           }
           console.error('Failed to add supportive reaction', error)
-        })
-
-      // 「話を聞いてもらう」ボタンを追加
-      await context.client.chat
-        .postMessage({
-          channel: entry.channelId,
-          thread_ts: event.thread_ts,
-          text: '',
-          blocks: [
-            {
-              type: 'actions',
-              elements: [
-                {
-                  type: 'button',
-                  text: {
-                    type: 'plain_text',
-                    text: '💬 ほたるに話を聞いてもらう',
-                    emoji: true,
-                  },
-                  action_id: 'diary_request_support',
-                  value: entry.id,
-                },
-              ],
-            },
-          ],
-        })
-        .catch((error) => {
-          console.error('Failed to post support button', error)
         })
     }
   })
