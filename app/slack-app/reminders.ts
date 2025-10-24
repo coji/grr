@@ -160,16 +160,6 @@ export const sendDailyDiaryReminders = async (env: Env) => {
                 type: 'button',
                 text: {
                   type: 'plain_text',
-                  text: '詳細を書く',
-                  emoji: true,
-                },
-                action_id: 'diary_open_detail_modal',
-                value: entryDate,
-              },
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
                   text: '今日はスキップ',
                   emoji: true,
                 },
