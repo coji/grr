@@ -83,6 +83,7 @@ async function handleQuickMoodAction(
   }
 
   const now = dayjs().utc().toISOString()
+  const formattedEntryDate = dayjs(entryDate).format('YYYY年M月D日(ddd)')
 
   // エントリを更新
   await db
@@ -102,13 +103,13 @@ async function handleQuickMoodAction(
   await context.client.chat.update({
     channel: action.channel?.id,
     ts: action.message?.ts,
-    text: `気分「${moodChoice.label}」を記録しました！`,
+    text: `${formattedEntryDate}の気分「${moodChoice.label}」を記録しました！`,
     blocks: [
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `<@${userId}> 気分「${moodChoice.emoji} ${moodChoice.label}」を記録しました！\nスレッドに返信して詳細を追加できます。`,
+          text: `<@${userId}> ${formattedEntryDate}の気分「${moodChoice.emoji} ${moodChoice.label}」を記録しました！\nスレッドに返信して詳細を追加できます。`,
         },
       },
     ],
