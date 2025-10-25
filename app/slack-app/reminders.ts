@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { SlackAPIClient, SlackAPIError } from 'slack-edge'
+import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import type { DiaryReminderMoodOption } from '~/services/ai'
 import { generateDiaryReminder } from '~/services/ai'
@@ -198,23 +198,6 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         })
         .execute()
 
-      for (const choice of DIARY_MOOD_CHOICES) {
-        try {
-          await client.reactions.add({
-            channel: channelId,
-            timestamp: message.ts,
-            name: choice.reaction,
-          })
-        } catch (error) {
-          if (
-            error instanceof SlackAPIError &&
-            error.error === 'already_reacted'
-          ) {
-            continue
-          }
-          console.error('Failed to add preset reaction', error)
-        }
-      }
     } catch (error) {
       console.error(
         'Failed to process diary reminder for user',
