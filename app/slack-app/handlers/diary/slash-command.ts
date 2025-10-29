@@ -29,6 +29,8 @@ export function registerSlashCommandHandler(app: SlackApp<SlackEdgeAppEnv>) {
           return await handleStatsCommand(userId, context)
         case 'export':
           return await handleExportCommand(userId, context)
+        case 'reflection':
+          return await handleReflectionCommand(userId, args.slice(1), context)
         default:
           return await handleHelpCommand(context)
       }
@@ -230,6 +232,70 @@ async function handleExportCommand(
   })
 }
 
+async function handleReflectionCommand(
+  userId: string,
+  args: string[],
+  context: SlackAppContextWithOptionalRespond,
+) {
+  const tokyoNow = dayjs().tz(TOKYO_TZ)
+
+  const parseDateArg = (value: string) => {
+    if (!value) return undefined
+    if (value.toLowerCase() === 'today') return tokyoNow.format('YYYY-MM-DD')
+    if (value.toLowerCase() === 'yesterday')
+      return tokyoNow.subtract(1, 'day').format('YYYY-MM-DD')
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+    return null
+  }
+
+  const requestedDate = args[0]
+  const parsed = requestedDate ? parseDateArg(requestedDate) : undefined
+
+  if (parsed === null) {
+    await context.respond?.({
+      text: '日付は `YYYY-MM-DD` 形式、または `today` / `yesterday` で指定してください。',
+      response_type: 'ephemeral',
+    })
+    return
+  }
+
+  const targetDate = parsed ?? tokyoNow.format('YYYY-MM-DD')
+
+  let reflection = await db
+    .selectFrom('aiDailyReflections')
+    .selectAll()
+    .where('userId', '=', userId)
+    .where('entryDate', '=', targetDate)
+    .executeTakeFirst()
+
+  if (!reflection && !requestedDate) {
+    reflection = await db
+      .selectFrom('aiDailyReflections')
+      .selectAll()
+      .where('userId', '=', userId)
+      .orderBy('entryDate', 'desc')
+      .limit(1)
+      .executeTakeFirst()
+  }
+
+  if (!reflection) {
+    await context.respond?.({
+      text: 'ふりかえりメモはまだ生成されていません。日記を記録すると翌日以降に振り返りが届きます。',
+      response_type: 'ephemeral',
+    })
+    return
+  }
+
+  const displayDate = dayjs(reflection.entryDate)
+    .tz(TOKYO_TZ)
+    .format('YYYY年M月D日(ddd)')
+
+  await context.respond?.({
+    text: `*${displayDate} のふりかえりメモ*\n\n${reflection.reflection}\n\n別の日付を見るときは \`/diary reflection YYYY-MM-DD\` と入力してください。`,
+    response_type: 'ephemeral',
+  })
+}
+
 async function handleHelpCommand(context: SlackAppContextWithOptionalRespond) {
   const help = `*日記コマンドヘルプ*
 
@@ -237,6 +303,7 @@ async function handleHelpCommand(context: SlackAppContextWithOptionalRespond) {
 \`/diary search キーワード\` - 日記を検索
 \`/diary stats\` - 統計を表示
 \`/diary export\` - CSVエクスポート
+\`/diary reflection [日付]\` - AIふりかえりメモを表示
 \`/diary help\` - このヘルプを表示
 `
 

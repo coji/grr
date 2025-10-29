@@ -55,6 +55,17 @@ export interface Database {
     tagName: string
     createdAt: string
   }
+
+  aiDailyReflections: {
+    id: string
+    userId: string
+    userName: string | null
+    entryDate: string
+    reflection: string
+    sourceEntryIds: string | null
+    createdAt: string
+    updatedAt: string
+  }
 }
 
 export const db = new Kysely<Database>({
