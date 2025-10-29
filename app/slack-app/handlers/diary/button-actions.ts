@@ -104,25 +104,30 @@ async function handleQuickMoodAction(
   const messageLines = [
     `<@${userId}> ${formattedEntryDate}の気分「${moodChoice.emoji} ${moodChoice.label}」を記録しました！`,
   ]
+  const fallbackLines = [
+    `${formattedEntryDate}の気分「${moodChoice.label}」を記録しました！`,
+  ]
 
   if (streakCount >= 2) {
     messageLines.push(
       `継続うれしいな〜。これで${streakCount}日連続で記録できています。`,
     )
+    fallbackLines.push(
+      `継続うれしいな〜。これで${streakCount}日連続で記録できています。`,
+    )
   }
 
   messageLines.push('スレッドに返信して詳細を追加できます。')
+  fallbackLines.push('スレッドに返信して詳細を追加できます。')
 
   const responseText = messageLines.join('\n')
+  const fallbackText = fallbackLines.join('\n')
 
   // メッセージを更新して記録完了を表示
   await context.client.chat.update({
     channel: action.channel?.id,
     ts: action.message?.ts,
-    text:
-      streakCount >= 2
-        ? `${formattedEntryDate}の気分「${moodChoice.label}」を記録しました！ これで${streakCount}日連続で記録できています。`
-        : `${formattedEntryDate}の気分「${moodChoice.label}」を記録しました！`,
+    text: fallbackText,
     blocks: [
       {
         type: 'section',
