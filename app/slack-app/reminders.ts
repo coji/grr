@@ -197,7 +197,6 @@ export const sendDailyDiaryReminders = async (env: Env) => {
           updatedAt: insertedAt,
         })
         .execute()
-
     } catch (error) {
       console.error(
         'Failed to process diary reminder for user',

@@ -1,4 +1,9 @@
 export {
+  generateDailyReflection,
+  type DailyReflectionEntry,
+  type GenerateDailyReflectionOptions,
+} from './daily-reflection'
+export {
   generateMoodSupportMessage,
   generateWeeklyDigest,
 } from './diary-digest'

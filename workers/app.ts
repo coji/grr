@@ -1,4 +1,5 @@
 import { createRequestHandler } from 'react-router'
+import { generateDailyDiaryReflections } from '~/slack-app/daily-reflection'
 import { sendDailyDiaryReminders } from '~/slack-app/reminders'
 import { sendWeeklyDigest } from '~/slack-app/weekly-digest'
 
@@ -26,6 +27,11 @@ export default {
     // 毎日13時(UTC) = JST 22時: 日記リマインダー
     if (controller.cron === '0 13 * * *') {
       await sendDailyDiaryReminders(env)
+    }
+
+    // 毎日15時(UTC) = JST 0時: 前日分のふりかえり生成
+    if (controller.cron === '0 15 * * *') {
+      await generateDailyDiaryReflections()
     }
 
     // 毎週土曜日1時(UTC) = JST 10時: 週次ダイジェスト
