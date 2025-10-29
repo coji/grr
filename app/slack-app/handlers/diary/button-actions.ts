@@ -99,19 +99,70 @@ async function handleQuickMoodAction(
     .where('entryDate', '=', entryDate)
     .execute()
 
+  const streakCount = await calculateMoodStreak(userId, entryDate)
+
+  const messageLines = [
+    `<@${userId}> ${formattedEntryDate}の気分「${moodChoice.emoji} ${moodChoice.label}」を記録しました！`,
+  ]
+  const fallbackLines = [
+    `${formattedEntryDate}の気分「${moodChoice.label}」を記録しました！`,
+  ]
+
+  if (streakCount >= 2) {
+    messageLines.push(`これで${streakCount}日連続で記録できています。`)
+    fallbackLines.push(`これで${streakCount}日連続で記録できています。`)
+  }
+
+  messageLines.push('スレッドに返信して詳細を追加できます。')
+  fallbackLines.push('スレッドに返信して詳細を追加できます。')
+
+  const responseText = messageLines.join('\n')
+  const fallbackText = fallbackLines.join('\n')
+
   // メッセージを更新して記録完了を表示
   await context.client.chat.update({
     channel: action.channel?.id,
     ts: action.message?.ts,
-    text: `${formattedEntryDate}の気分「${moodChoice.label}」を記録しました！`,
+    text: fallbackText,
     blocks: [
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `<@${userId}> ${formattedEntryDate}の気分「${moodChoice.emoji} ${moodChoice.label}」を記録しました！\nスレッドに返信して詳細を追加できます。`,
+          text: responseText,
         },
       },
     ],
   })
+}
+
+async function calculateMoodStreak(userId: string, entryDate: string) {
+  const rows = await db
+    .selectFrom('diaryEntries')
+    .select(['entryDate', 'moodRecordedAt'])
+    .where('userId', '=', userId)
+    .where('entryDate', '<=', entryDate)
+    .orderBy('entryDate', 'desc')
+    .limit(30)
+    .execute()
+
+  let streak = 0
+  let expectedDate = dayjs(entryDate)
+
+  for (const row of rows) {
+    const expectedDateString = expectedDate.format('YYYY-MM-DD')
+
+    if (row.entryDate !== expectedDateString) {
+      break
+    }
+
+    if (!row.moodRecordedAt) {
+      break
+    }
+
+    streak += 1
+    expectedDate = expectedDate.subtract(1, 'day')
+  }
+
+  return streak
 }
