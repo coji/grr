@@ -109,12 +109,8 @@ async function handleQuickMoodAction(
   ]
 
   if (streakCount >= 2) {
-    messageLines.push(
-      `継続うれしいな〜。これで${streakCount}日連続で記録できています。`,
-    )
-    fallbackLines.push(
-      `継続うれしいな〜。これで${streakCount}日連続で記録できています。`,
-    )
+    messageLines.push(`これで${streakCount}日連続で記録できています。`)
+    fallbackLines.push(`これで${streakCount}日連続で記録できています。`)
   }
 
   messageLines.push('スレッドに返信して詳細を追加できます。')
