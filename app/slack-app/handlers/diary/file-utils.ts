@@ -10,7 +10,6 @@ export interface SlackFile {
   filetype?: string
   size?: number
   url_private?: string
-  url_private_download?: string // For bot token authentication
   permalink?: string
   thumb_360?: string
   thumb_video?: string
