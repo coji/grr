@@ -29,33 +29,66 @@ const SUPPORTED_FILE_TYPES: Record<FileType, string[]> = {
   document: ['pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'],
 }
 
-// MIME type patterns for categorization
-const MIME_TYPE_PATTERNS: Record<FileType, RegExp> = {
-  image: /^image\//,
-  video: /^video\//,
-  document: /^(application|text)\//,
+// Safe MIME type whitelists for categorization
+// Using strict whitelists to prevent accepting dangerous files like executables or archives
+const SAFE_MIME_TYPES: Record<FileType, string[]> = {
+  image: [
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    'image/svg+xml',
+  ],
+  video: [
+    'video/mp4',
+    'video/quicktime',
+    'video/x-msvideo',
+    'video/x-ms-wmv',
+    'video/x-flv',
+    'video/webm',
+  ],
+  document: [
+    // PDF
+    'application/pdf',
+    // Plain text
+    'text/plain',
+    // Microsoft Office (legacy)
+    'application/msword',
+    'application/vnd.ms-excel',
+    'application/vnd.ms-powerpoint',
+    // Microsoft Office (modern OpenXML)
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    // Rich Text Format
+    'application/rtf',
+  ],
 }
 
 /**
- * Categorize a file based on its MIME type and file extension
+ * Categorize a file based on its file extension and MIME type
+ * Uses extension-first checking with MIME type as a strict whitelist fallback
+ * to prevent accepting dangerous files like executables or archives
  * @param file - Slack file object
  * @returns File type category or null if not supported
  */
 export function categorizeFileType(file: SlackFile): FileType | null {
-  // First try MIME type
-  if (file.mimetype) {
-    for (const [type, pattern] of Object.entries(MIME_TYPE_PATTERNS)) {
-      if (pattern.test(file.mimetype)) {
+  // Primary check: file extension (most reliable)
+  if (file.filetype) {
+    const extension = file.filetype.toLowerCase()
+    for (const [type, extensions] of Object.entries(SUPPORTED_FILE_TYPES)) {
+      if (extensions.includes(extension)) {
         return type as FileType
       }
     }
   }
 
-  // Fallback to file extension
-  if (file.filetype) {
-    const extension = file.filetype.toLowerCase()
-    for (const [type, extensions] of Object.entries(SUPPORTED_FILE_TYPES)) {
-      if (extensions.includes(extension)) {
+  // Fallback: MIME type whitelist (strict check to prevent dangerous files)
+  if (file.mimetype) {
+    const mimeType = file.mimetype.toLowerCase()
+    for (const [type, safeMimeTypes] of Object.entries(SAFE_MIME_TYPES)) {
+      if (safeMimeTypes.includes(mimeType)) {
         return type as FileType
       }
     }

@@ -63,6 +63,96 @@ describe('file-utils', () => {
       }
       expect(categorizeFileType(unknownFile)).toBeNull()
     })
+
+    // Security tests: reject dangerous file types
+    it('should reject executable files with application/x-executable MIME type', () => {
+      const execFile: SlackFile = {
+        id: 'F129',
+        name: 'malware.exe',
+        mimetype: 'application/x-executable',
+        filetype: 'exe',
+      }
+      expect(categorizeFileType(execFile)).toBeNull()
+    })
+
+    it('should reject archive files with application/zip MIME type', () => {
+      const zipFile: SlackFile = {
+        id: 'F130',
+        name: 'archive.zip',
+        mimetype: 'application/zip',
+        filetype: 'zip',
+      }
+      expect(categorizeFileType(zipFile)).toBeNull()
+    })
+
+    it('should reject script files with application/javascript MIME type', () => {
+      const jsFile: SlackFile = {
+        id: 'F131',
+        name: 'script.js',
+        mimetype: 'application/javascript',
+        filetype: 'js',
+      }
+      expect(categorizeFileType(jsFile)).toBeNull()
+    })
+
+    it('should reject binary files with application/octet-stream MIME type', () => {
+      const binFile: SlackFile = {
+        id: 'F132',
+        name: 'binary.bin',
+        mimetype: 'application/octet-stream',
+        filetype: 'bin',
+      }
+      expect(categorizeFileType(binFile)).toBeNull()
+    })
+
+    it('should reject shell scripts with text/x-shellscript MIME type', () => {
+      const shFile: SlackFile = {
+        id: 'F133',
+        name: 'script.sh',
+        mimetype: 'text/x-shellscript',
+        filetype: 'sh',
+      }
+      expect(categorizeFileType(shFile)).toBeNull()
+    })
+
+    it('should accept whitelisted document MIME types only', () => {
+      const validDocs: SlackFile[] = [
+        { id: 'F140', name: 'doc.pdf', mimetype: 'application/pdf' },
+        { id: 'F141', name: 'doc.txt', mimetype: 'text/plain' },
+        {
+          id: 'F142',
+          name: 'doc.docx',
+          mimetype:
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+        { id: 'F143', name: 'doc.doc', mimetype: 'application/msword' },
+        { id: 'F144', name: 'doc.rtf', mimetype: 'application/rtf' },
+      ]
+      for (const doc of validDocs) {
+        expect(categorizeFileType(doc)).toBe('document')
+      }
+    })
+
+    it('should prioritize extension check over MIME type', () => {
+      // Extension is whitelisted, but MIME type would be rejected
+      const fileWithValidExt: SlackFile = {
+        id: 'F150',
+        name: 'doc.pdf',
+        filetype: 'pdf', // Valid extension
+        mimetype: 'application/octet-stream', // Would be rejected if checked first
+      }
+      expect(categorizeFileType(fileWithValidExt)).toBe('document')
+    })
+
+    it('should use MIME type whitelist as fallback when extension is missing', () => {
+      const fileWithValidMime: SlackFile = {
+        id: 'F151',
+        name: 'document',
+        mimetype: 'application/pdf', // Valid MIME type
+        // No filetype
+      }
+      expect(categorizeFileType(fileWithValidMime)).toBe('document')
+    })
   })
 
   describe('isSupportedFile', () => {
@@ -100,6 +190,18 @@ describe('file-utils', () => {
         mimetype: 'audio/mpeg', // audio files are not supported
       }
       expect(isSupportedFile(unknownFile)).toBe(false)
+    })
+
+    it('should return false for dangerous files like executables and archives', () => {
+      const dangerousFiles: SlackFile[] = [
+        { id: 'D1', name: 'malware.exe', mimetype: 'application/x-executable' },
+        { id: 'D2', name: 'archive.zip', mimetype: 'application/zip' },
+        { id: 'D3', name: 'script.sh', mimetype: 'text/x-shellscript' },
+        { id: 'D4', name: 'binary.bin', mimetype: 'application/octet-stream' },
+      ]
+      for (const file of dangerousFiles) {
+        expect(isSupportedFile(file)).toBe(false)
+      }
     })
   })
 
