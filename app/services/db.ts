@@ -56,6 +56,24 @@ export interface Database {
     createdAt: string
   }
 
+  diaryAttachments: {
+    id: string
+    entryId: string
+    fileType: 'image' | 'video' | 'document'
+    fileName: string
+    mimeType: string | null
+    fileSize: number | null
+    slackFileId: string
+    slackUrlPrivate: string
+    slackPermalink: string | null
+    slackThumb360: string | null
+    slackThumbvideo: string | null
+    width: number | null
+    height: number | null
+    displayOrder: number
+    createdAt: string
+  }
+
   aiDailyReflections: {
     id: string
     userId: string

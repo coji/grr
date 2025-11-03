@@ -67,7 +67,16 @@
      - [api.slack.com](https://api.slack.com/apps?new_app=1) にアクセスし、「From an app manifest」を選択。
      - ワークスペースを選択し、マニフェストの内容を YAML または JSON 形式で貼り付けます。
      - **重要:** マニフェスト内の `request_url` (`https://example.com/webhook/slack`) は、後でデプロイする Cloudflare Worker の URL に置き換える必要があります。まずは仮のURLで作成し、デプロイ後に更新してください。
+   - **必須の OAuth スコープ:**
+     - `app_mentions:read` - メンション機能用
+     - `commands` - スラッシュコマンド用
+     - `users:read` - ユーザー情報取得用
+     - `chat:write` - メッセージ送信用
+     - `reactions:read`, `reactions:write` - リアクション機能用
+     - `im:write`, `im:history` - DM送信用
+     - **`files:read`** - 日記に添付された画像やファイルのダウンロード用 (重要)
    - アプリをワークスペースにインストールします。
+     - **注意:** 既存のアプリに `files:read` スコープを追加した場合は、必ずアプリを再インストールしてください。
    - インストール後、以下の情報を取得します。
      - **Bot User OAuth Token:** (`xoxb-...`)
      - **Signing Secret:**

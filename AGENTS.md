@@ -28,11 +28,67 @@ Welcome! This document captures the ground rules for working inside **grr**, a S
 - When adding React Router loaders/actions/components, follow the existing pattern of exporting `loader`/`action` and using the generated `Route.ComponentProps` types.
 - UI components rely on Tailwind CSS v4 utility classes and helper components from `app/components/ui`; prefer composing those before introducing new design systems.
 
+## Cloudflare Workers environment variables
+
+**Always use `import { env } from 'cloudflare:workers'` to access environment variables.**
+
+```typescript
+// ✅ CORRECT: Import env from cloudflare:workers
+import { env } from 'cloudflare:workers'
+
+const botToken = env.SLACK_BOT_TOKEN
+const apiKey = env.GOOGLE_GENERATIVE_AI_API_KEY
+```
+
+```typescript
+// ❌ WRONG: Don't use context.env or context.cloudflare.env
+// These don't exist in the Slack handler context
+const botToken = context.env.SLACK_BOT_TOKEN // Type error!
+const botToken = context.cloudflare.env.SLACK_BOT_TOKEN // Type error!
+```
+
+**Why this matters:**
+- Cloudflare Workers provides a global `env` object via the `cloudflare:workers` module
+- This is the standard way to access bindings (environment variables, D1 database, etc.)
+- The Slack handler `context` object does not include `env` or `cloudflare.env`
+- See `app/services/db.ts` for the canonical example of this pattern
+
 ## Slack app guidelines
 
 - Register new Slack commands, shortcuts, and views via `registerGrrHandlers` in `app/slack-app/handlers/grr.ts` or sibling modules; keep handler registration centralized in `app/slack-app/app.ts`.
 - Encapsulate Block Kit structures in dedicated builder files inside `app/slack-app/handlers/views/` to keep handler logic concise.
 - Use the provided Slack Web API client (`context.client`) and respect Slack rate limits (queue async work via `context.cloudflare.ctx.waitUntil` if needed for long tasks).
+
+## File attachments in diary entries
+
+The diary app supports file attachments (images, videos, documents) in diary entries via Slack messages.
+
+### Architecture
+
+- **Storage**: Files are referenced via Slack URLs (no separate file storage required)
+- **Supported types**: Images (PNG, JPG, GIF, etc.), Videos (MP4, MOV, etc.), Documents (PDF, DOC, TXT, etc.)
+- **Limit**: Maximum 10 files per diary entry (configurable via `MAX_ATTACHMENTS_PER_ENTRY` in `file-utils.ts`)
+- **Database**: Attachments are stored in the `diary_attachments` table with metadata and Slack URLs
+
+### Key files
+
+- `app/services/attachments.ts` - Service for storing and retrieving attachments
+- `app/slack-app/handlers/diary/file-utils.ts` - Utilities for file type detection and validation
+- `migrations/0006_diary_attachments.sql` - Database schema for attachments
+
+### Usage patterns
+
+When a user posts a message with files in a diary thread:
+1. Files are automatically detected in message/app_mention handlers
+2. Supported files are filtered (via `filterSupportedFiles()`)
+3. File metadata is extracted and stored in the database (via `storeAttachments()`)
+4. Images are displayed inline in Block Kit views; other files shown as links
+
+### Important notes
+
+- **Column naming**: Due to CamelCasePlugin behavior, avoid underscores before numbers in SQL column names (e.g., use `slack_thumb360` not `slack_thumb_360`)
+- **Slack URL limitations**: Files may become inaccessible if deleted from Slack or if the user leaves the workspace
+- **Future migration**: The schema is designed to support future migration to R2 storage if needed
 
 ## Data access & persistence
 

@@ -4,6 +4,7 @@ import type {
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
+import { getAttachmentStats } from '~/services/attachments'
 import { db } from '~/services/db'
 import { TOKYO_TZ } from './utils'
 
@@ -69,8 +70,15 @@ async function handleTodayCommand(
   const detail = entry.detail || '_詳細なし_'
   const date = dayjs(entry.entryDate).format('YYYY年M月D日(ddd)')
 
+  // Get attachment stats
+  const stats = await getAttachmentStats(entry.id)
+  const attachmentInfo =
+    stats.total > 0
+      ? `\n📎 添付: ${stats.images > 0 ? `画像${stats.images}枚` : ''}${stats.videos > 0 ? ` 動画${stats.videos}本` : ''}${stats.documents > 0 ? ` ドキュメント${stats.documents}個` : ''} (計${stats.total}ファイル)`
+      : ''
+
   await context.respond?.({
-    text: `*${date} の日記*\n気分: ${mood}\n\n${detail}`,
+    text: `*${date} の日記*\n気分: ${mood}${attachmentInfo}\n\n${detail}`,
     response_type: 'ephemeral',
   })
 }
@@ -105,15 +113,24 @@ async function handleSearchCommand(
     return
   }
 
+  // Get attachment stats for all entries
+  const entryIds = entries.map((e) => e.id)
+  const attachmentStats = await Promise.all(
+    entryIds.map((id) => getAttachmentStats(id)),
+  )
+
   const results = entries
-    .map((entry) => {
+    .map((entry, index) => {
       const date = dayjs(entry.entryDate).format('M月D日(ddd)')
       const mood = entry.moodEmoji || '😶'
       const preview =
         entry.detail && entry.detail.length > 80
           ? `${entry.detail.slice(0, 80)}...`
           : entry.detail || '_詳細なし_'
-      return `• *${date} ${mood}*\n  ${preview}`
+      const stats = attachmentStats[index]
+      const attachmentIndicator =
+        stats && stats.total > 0 ? ` 📎${stats.total}` : ''
+      return `• *${date} ${mood}*${attachmentIndicator}\n  ${preview}`
     })
     .join('\n\n')
 
