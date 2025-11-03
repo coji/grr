@@ -28,6 +28,31 @@ Welcome! This document captures the ground rules for working inside **grr**, a S
 - When adding React Router loaders/actions/components, follow the existing pattern of exporting `loader`/`action` and using the generated `Route.ComponentProps` types.
 - UI components rely on Tailwind CSS v4 utility classes and helper components from `app/components/ui`; prefer composing those before introducing new design systems.
 
+## Cloudflare Workers environment variables
+
+**Always use `import { env } from 'cloudflare:workers'` to access environment variables.**
+
+```typescript
+// ✅ CORRECT: Import env from cloudflare:workers
+import { env } from 'cloudflare:workers'
+
+const botToken = env.SLACK_BOT_TOKEN
+const apiKey = env.GOOGLE_GENERATIVE_AI_API_KEY
+```
+
+```typescript
+// ❌ WRONG: Don't use context.env or context.cloudflare.env
+// These don't exist in the Slack handler context
+const botToken = context.env.SLACK_BOT_TOKEN // Type error!
+const botToken = context.cloudflare.env.SLACK_BOT_TOKEN // Type error!
+```
+
+**Why this matters:**
+- Cloudflare Workers provides a global `env` object via the `cloudflare:workers` module
+- This is the standard way to access bindings (environment variables, D1 database, etc.)
+- The Slack handler `context` object does not include `env` or `cloudflare.env`
+- See `app/services/db.ts` for the canonical example of this pattern
+
 ## Slack app guidelines
 
 - Register new Slack commands, shortcuts, and views via `registerGrrHandlers` in `app/slack-app/handlers/grr.ts` or sibling modules; keep handler registration centralized in `app/slack-app/app.ts`.

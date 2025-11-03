@@ -9,6 +9,12 @@ import { getPersonaBackground } from './persona'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
+export interface ImageAttachment {
+  buffer: Buffer
+  mimeType: string
+  fileName: string
+}
+
 export interface DiaryReplyContext {
   personaName: string
   userId: string
@@ -16,6 +22,7 @@ export interface DiaryReplyContext {
   latestEntry?: string | null
   previousEntry?: string | null
   mentionMessage?: string | null
+  imageAttachments?: ImageAttachment[]
 }
 
 export async function generateDiaryReply({
@@ -25,6 +32,7 @@ export async function generateDiaryReply({
   latestEntry,
   previousEntry,
   mentionMessage,
+  imageAttachments,
 }: DiaryReplyContext): Promise<string> {
   const intentAnalysis = await inferDiaryReplyIntent({
     personaName,
@@ -78,9 +86,43 @@ export async function generateDiaryReply({
     .join('\n')
 
   try {
-    const model = google('gemini-flash-latest')
+    // Use gemini-2.5-flash for better multimodal capabilities
+    const model = google('gemini-2.5-flash')
+
+    // Build content array with text and images
+    const content: Array<
+      | { type: 'text'; text: string }
+      | { type: 'file'; data: Buffer; mediaType: string }
+    > = [
+      {
+        type: 'text',
+        text: [
+          `ユーザーID: <@${userId}>`,
+          detailSummary,
+          '上記の状況を踏まえて、あなたらしく返事を書いてください。',
+        ].join('\n'),
+      },
+    ]
+
+    // Add image attachments if present
+    if (imageAttachments && imageAttachments.length > 0) {
+      for (const attachment of imageAttachments) {
+        content.push({
+          type: 'file',
+          data: attachment.buffer,
+          mediaType: attachment.mimeType,
+        })
+      }
+    }
+
     const { text } = await generateText({
       model,
+      messages: [
+        {
+          role: 'user',
+          content,
+        },
+      ],
       system: `
 ${getPersonaBackground(personaName)}
 
@@ -91,8 +133,14 @@ Slackで日記を書いた相手に寄り添って返信してください。
 あなたは日記の内容を深く読み取り、その人の考え方や感情の流れを理解しようとする思慮深い対話者です。
 - まず、その人の書いた内容をしっかり読んでいることを短く伝え、感情や思考の流れを受けとめて寄り添ってください。
 - もし文章の中に「本人がまだ気づいていないけれど、核心をつくような構造」や「行動・感情のパターン」が見つかった場合だけ、それを自然な言葉で伝えてください。
-- そのときはアドバイスや評価ではなく、「あなたにとって〜はこういう意味を持っているのかもしれないね」のように、本人が自分で考えたくなる“気づき”として表現します。
+- そのときはアドバイスや評価ではなく、「あなたにとって〜はこういう意味を持っているのかもしれないね」のように、本人が自分で考えたくなる"気づき"として表現します。
 - 無理に深読みしたり、なにかを言おうとせず、何も見えないときは「今日は特にハッとするような気づきはないけれど、感じたことを大事にできているね」とだけ伝えてください。
+
+### 画像の扱い方
+- 画像が添付されている場合は、その内容も考慮してコメントしてください
+- 画像について触れる場合は、「写真見たよ」「素敵な写真だね」など自然に
+- ただし画像の詳細な説明は不要で、雰囲気を受け止める程度で十分です
+- 画像がなくても通常通り温かく寄り添ってください
 
 ### 重要な原則
 - ユーザーが具体的な指示や質問をしている場合は、まずそれに応える
@@ -114,11 +162,6 @@ ${intentGuidelines[intentAnalysis.intent]}
 ### 最終チェック
 - 上記の意図と指示に従っているか内省し、ずれていれば推敲してから出力する
       `.trim(),
-      prompt: [
-        `ユーザーID: <@${userId}>`,
-        detailSummary,
-        '上記の状況を踏まえて、あなたらしく返事を書いてください。',
-      ].join('\n'),
     })
 
     return text

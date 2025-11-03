@@ -1,10 +1,13 @@
+import { env } from 'cloudflare:workers'
 import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
-import { storeAttachments } from '~/services/attachments'
+import type { ImageAttachment } from '~/services/ai/diary-reply'
+import { getEntryAttachments, storeAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
+import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import { DIARY_PERSONA_NAME, SUPPORTIVE_REACTIONS } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { TOKYO_TZ, sanitizeText } from './utils'
@@ -137,6 +140,33 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const fullDetail = entry?.detail ?? null
     const previousDetail = previousEntry?.detail ?? null
 
+    // Download image attachments for AI context (max 3 images)
+    let imageAttachments: ImageAttachment[] | undefined
+    if (entry) {
+      const attachments = await getEntryAttachments(entry.id)
+      const images = attachments
+        .filter((a) => a.fileType === 'image')
+        .slice(0, 3) // Limit to 3 images for memory safety
+
+      if (images.length > 0) {
+        const downloaded = await downloadSlackFiles(
+          images.map((img) => ({
+            urlPrivate: img.slackUrlPrivate,
+            fileName: img.fileName,
+          })),
+          env.SLACK_BOT_TOKEN,
+        )
+
+        if (downloaded.length > 0) {
+          imageAttachments = downloaded.map((d) => ({
+            buffer: d.buffer,
+            mimeType: d.mimeType,
+            fileName: d.fileName,
+          }))
+        }
+      }
+    }
+
     const aiReply = await generateDiaryReply({
       personaName: DIARY_PERSONA_NAME,
       userId: event.user,
@@ -144,6 +174,7 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       latestEntry: fullDetail,
       previousEntry: previousDetail,
       mentionMessage: cleaned || null,
+      imageAttachments,
     })
 
     const message = `${mention} ${aiReply}`.trim()
