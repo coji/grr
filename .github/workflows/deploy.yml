@@ -36,5 +36,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Run database migrations
+        run: pnpm db:migrate:remote
+
       - name: Build, migrate, and deploy
         run: pnpm run deploy
