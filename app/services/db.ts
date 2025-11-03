@@ -68,7 +68,10 @@ export interface Database {
   }
 }
 
-export const db = new Kysely<Database>({
-  dialect: new D1Dialect({ database: env.DB }),
-  plugins: [new CamelCasePlugin()],
-})
+export const createDb = (database: D1Database) =>
+  new Kysely<Database>({
+    dialect: new D1Dialect({ database }),
+    plugins: [new CamelCasePlugin()],
+  })
+
+export const db = createDb(env.DB)

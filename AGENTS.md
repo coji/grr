@@ -37,11 +37,77 @@ Welcome! This document captures the ground rules for working inside **grr**, a S
 ## Data access & persistence
 
 - Interact with Cloudflare D1 through the shared Kysely instance exported from `app/services/db.ts`. Keep column names camelCased in TypeScript while matching snake_case in SQL migrations.
-- When changing the database schema, update both the SQL migration files and the `Database` interface so type inference remains accurate. Run migrations through Wrangler (`wrangler d1 migration apply`).
+- When changing the database schema, follow these steps:
+  1. Create a new SQL migration file in `/migrations/`
+  2. Update the `Database` interface in `app/services/db.ts` so type inference remains accurate
+  3. **Add the new migration import** to `tests/setup/integration-setup.ts` (both the import statement and the migrations array)
+  4. Run migrations through Wrangler (`wrangler d1 migration apply` or `pnpm db:migrate:local`)
+- IMPORTANT: Integration tests auto-load migrations from SQL files. Every new migration file MUST be imported in `tests/setup/integration-setup.ts` or integration tests will fail with "no such table" errors.
 
 ## Testing & quality gates
 
+### Testing strategy
+
+This project uses Vitest with three levels of testing:
+
+1. **Unit tests** (`*.test.ts`): Fast tests for pure functions and business logic
+   - Run with `pnpm test:unit` during development
+   - Mock external dependencies (Slack API, Google AI, database)
+   - Keep tests close to source files (e.g., `utils.test.ts` next to `utils.ts`)
+
+2. **Integration tests** (`*.integration.test.ts`): Tests with real D1 database
+   - Run with `pnpm test:integration` before committing
+   - Use `@cloudflare/vitest-pool-workers` for D1 access
+   - Test database operations and handler logic together
+   - Mock external HTTP APIs via MSW
+
+3. **E2E tests**: Not recommended for this project
+   - E2E tests are complex to maintain in Cloudflare Workers environment
+   - Instead, write comprehensive integration tests that cover critical paths
+   - Manual testing via `pnpm dev` for UI changes
+
+### Test commands
+
+- `pnpm test:unit` - Run unit tests only (fast)
+- `pnpm test:integration` - Run integration tests with D1
+- `pnpm test:all` - Run all tests (use before creating PRs)
+- `pnpm test:coverage` - Generate coverage reports
+- `pnpm test:ui` - Run tests with Vitest UI
+
+### Writing tests
+
+- **Mock utilities** are available in `__mocks__/` directory:
+  - `__mocks__/slack.ts` - Slack Web API client mocks
+  - `__mocks__/ai.ts` - Google AI SDK mocks
+  - `__mocks__/db.ts` - Database query builder mocks
+- **MSW handlers** for HTTP mocking are in `tests/setup/msw-handlers.ts`
+- Follow existing test patterns for consistency
+- Prefer testing behavior over implementation details
+- Aim for 70-80% coverage on business logic, not 100%
+- Skip coverage on routes, type definitions, and Block Kit view builders
+
+### Path aliases in tests
+
+**Important**: Integration tests require special configuration for path aliases (`~/`) to work correctly.
+
+**Why this is needed:**
+
+- Unit tests run in standard Node.js environment where `vite-tsconfig-paths` plugin works normally
+- Integration tests run in Cloudflare Workers runtime (Miniflare/Workerd) which has different module resolution
+- `@cloudflare/vitest-pool-workers` creates an isolated runtime where Vite plugins don't fully propagate to the execution environment
+
+**Current solution:**
+
+1. `vitest.integration.config.ts` - Define both `plugins: [tsconfigPaths()]` AND `resolve.alias: { '~': path.resolve(__dirname, './app') }`
+2. `tests/tsconfig.json` - Must re-declare `baseUrl` and `paths` even when extending parent tsconfig (TypeScript limitation)
+
+**Root cause:** When `defineWorkersConfig` processes plugins, the Workers runtime uses a separate module resolver that doesn't fully inherit Vite's plugin-based path resolution. The manual `resolve.alias` ensures paths work at runtime, while `vite-tsconfig-paths` helps during the build/transform phase.
+
+### Quality gates
+
 - Ensure `pnpm typecheck` passes before committing.
+- Run `pnpm test:unit` during development for quick feedback.
+- Run `pnpm test:all` before creating pull requests.
 - Run Biome linting (`pnpm biome check .`) when touching TypeScript/TSX files; apply fixes with `--apply` if necessary.
 - Front-end changes that impact visuals should be previewed via `pnpm dev`; capture screenshots when modifying user-facing UI if feasible.
 
