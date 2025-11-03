@@ -16,6 +16,7 @@ import {
   type WorkflowEvent,
   type WorkflowStep,
 } from 'cloudflare:workers'
+import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
@@ -56,6 +57,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
     step: WorkflowStep,
   ): Promise<void> {
     const params = event.payload
+    const slackClient = new SlackAPIClient(env.SLACK_BOT_TOKEN)
 
     // Step 1: Download image attachments
     const imageAttachments = await step.do(
@@ -82,18 +84,43 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             `Attempting to download ${images.length} images for AI context`,
           )
 
-          // Log the URLs being downloaded (first 100 chars of each)
-          images.forEach((img, idx) => {
-            console.log(
-              `Image ${idx + 1} URL: ${img.slackUrlPrivate.substring(0, 100)}...`,
-            )
-          })
+          // Get fresh URLs from Slack API (event payload URLs may be stale)
+          const fileUrls: Array<{ urlPrivate: string; fileName: string }> = []
+
+          for (const img of images) {
+            try {
+              const fileInfo = await slackClient.files.info({
+                file: img.slackFileId,
+              })
+
+              if (fileInfo.ok && fileInfo.file?.url_private) {
+                fileUrls.push({
+                  urlPrivate: fileInfo.file.url_private,
+                  fileName: img.fileName,
+                })
+                console.log(
+                  `Got fresh URL for ${img.fileName}: ${fileInfo.file.url_private.substring(0, 100)}...`,
+                )
+              } else {
+                console.warn(
+                  `Failed to get file info for ${img.slackFileId}: ${fileInfo.error || 'unknown error'}`,
+                )
+              }
+            } catch (error) {
+              console.error(
+                `Error fetching file info for ${img.slackFileId}:`,
+                error,
+              )
+            }
+          }
+
+          if (fileUrls.length === 0) {
+            console.warn('No valid file URLs obtained from Slack API')
+            return undefined
+          }
 
           const downloaded = await downloadSlackFiles(
-            images.map((img) => ({
-              urlPrivate: img.slackUrlPrivate,
-              fileName: img.fileName,
-            })),
+            fileUrls,
             env.SLACK_BOT_TOKEN,
           )
 
@@ -174,29 +201,12 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       async (): Promise<void> => {
         const message = `${params.mention} ${aiReply}`.trim()
 
-        const response = await fetch('https://slack.com/api/chat.postMessage', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
-          },
-          body: JSON.stringify({
-            channel: params.channel,
-            thread_ts: params.threadTs ?? params.messageTs,
-            text: message,
-          }),
+        const result = await slackClient.chat.postMessage({
+          channel: params.channel,
+          thread_ts: params.threadTs ?? params.messageTs,
+          text: message,
         })
 
-        if (!response.ok) {
-          throw new Error(
-            `Failed to post message: ${response.status} ${response.statusText}`,
-          )
-        }
-
-        const result = (await response.json()) as {
-          ok: boolean
-          error?: string
-        }
         if (!result.ok) {
           throw new Error(`Slack API error: ${result.error}`)
         }
@@ -208,28 +218,12 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
     // Step 4: Remove processing reaction
     await step.do('remove-processing-reaction', async (): Promise<void> => {
       try {
-        const response = await fetch('https://slack.com/api/reactions.remove', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
-          },
-          body: JSON.stringify({
-            channel: params.channel,
-            timestamp: params.messageTs,
-            name: 'eyes',
-          }),
+        const result = await slackClient.reactions.remove({
+          channel: params.channel,
+          timestamp: params.messageTs,
+          name: 'eyes',
         })
 
-        if (!response.ok) {
-          console.warn(`Failed to remove reaction: ${response.status}`)
-          return
-        }
-
-        const result = (await response.json()) as {
-          ok: boolean
-          error?: string
-        }
         if (!result.ok && result.error !== 'no_reaction') {
           console.warn(`Slack API error removing reaction: ${result.error}`)
         }
@@ -250,28 +244,12 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
           availableReactions: SUPPORTIVE_REACTIONS,
         })
 
-        const response = await fetch('https://slack.com/api/reactions.add', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
-          },
-          body: JSON.stringify({
-            channel: params.channel,
-            timestamp: params.messageTs,
-            name: reactionName,
-          }),
+        const result = await slackClient.reactions.add({
+          channel: params.channel,
+          timestamp: params.messageTs,
+          name: reactionName,
         })
 
-        if (!response.ok) {
-          console.warn(`Failed to add reaction: ${response.status}`)
-          return
-        }
-
-        const result = (await response.json()) as {
-          ok: boolean
-          error?: string
-        }
         if (!result.ok && result.error !== 'already_reacted') {
           console.warn(`Slack API error adding reaction: ${result.error}`)
         }

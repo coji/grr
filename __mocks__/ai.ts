@@ -13,7 +13,7 @@ export const mockGenerateText = vi.fn(async () => ({
   request: {},
 }))
 
-export const mockGenerateObject = vi.fn(async ({ schema }) => ({
+export const mockGenerateObject = vi.fn(async () => ({
   object: {
     intent: 'comfort',
     rationale: 'Mock intent classification',

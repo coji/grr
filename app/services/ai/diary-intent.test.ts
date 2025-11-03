@@ -24,10 +24,11 @@ describe('inferDiaryReplyIntent', () => {
         rationale: 'ユーザーが疲れを表現している',
       },
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: { promptTokens: 10, completionTokens: 20 },
       rawCall: { rawPrompt: null, rawSettings: {} },
       warnings: undefined,
       request: {},
+      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
     } as any)
 
     const result = await inferDiaryReplyIntent({
@@ -55,10 +56,11 @@ describe('inferDiaryReplyIntent', () => {
         rationale: 'ユーザーが成果を報告している',
       },
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: { promptTokens: 10, completionTokens: 20 },
       rawCall: { rawPrompt: null, rawSettings: {} },
       warnings: undefined,
       request: {},
+      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
     } as any)
 
     const result = await inferDiaryReplyIntent({
@@ -78,10 +80,11 @@ describe('inferDiaryReplyIntent', () => {
         rationale: 'ユーザーが率直な意見を求めている',
       },
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: { promptTokens: 10, completionTokens: 20 },
       rawCall: { rawPrompt: null, rawSettings: {} },
       warnings: undefined,
       request: {},
+      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
     } as any)
 
     const result = await inferDiaryReplyIntent({
@@ -101,10 +104,11 @@ describe('inferDiaryReplyIntent', () => {
         rationale: 'ユーザーが叱咤激励を求めている',
       },
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: { promptTokens: 10, completionTokens: 20 },
       rawCall: { rawPrompt: null, rawSettings: {} },
       warnings: undefined,
       request: {},
+      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
     } as any)
 
     const result = await inferDiaryReplyIntent({
@@ -156,10 +160,11 @@ describe('inferDiaryReplyIntent', () => {
         rationale: 'テスト',
       },
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: { promptTokens: 10, completionTokens: 20 },
       rawCall: { rawPrompt: null, rawSettings: {} },
       warnings: undefined,
       request: {},
+      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
     } as any)
 
     await inferDiaryReplyIntent({
