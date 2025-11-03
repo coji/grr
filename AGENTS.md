@@ -40,9 +40,8 @@ Welcome! This document captures the ground rules for working inside **grr**, a S
 - When changing the database schema, follow these steps:
   1. Create a new SQL migration file in `/migrations/`
   2. Update the `Database` interface in `app/services/db.ts` so type inference remains accurate
-  3. **Add the new migration import** to `tests/setup/integration-setup.ts` (both the import statement and the migrations array)
-  4. Run migrations through Wrangler (`wrangler d1 migration apply` or `pnpm db:migrate:local`)
-- IMPORTANT: Integration tests auto-load migrations from SQL files. Every new migration file MUST be imported in `tests/setup/integration-setup.ts` or integration tests will fail with "no such table" errors.
+  3. Run migrations through Wrangler (`wrangler d1 migration apply` or `pnpm db:migrate:local`)
+- Integration tests **automatically detect and apply all migrations** from `/migrations` directory using Cloudflare's official `readD1Migrations()` and `applyD1Migrations()` APIs. No manual import needed when adding new migrations.
 
 ## Testing & quality gates
 

@@ -15,6 +15,7 @@
     "../app/**/*.integration.test.ts",
     "../app/**/*.e2e.test.ts",
     "./**/*.ts",
-    "../worker-configuration.d.ts"
+    "../worker-configuration.d.ts",
+    "../env.d.ts"
   ]
 }
