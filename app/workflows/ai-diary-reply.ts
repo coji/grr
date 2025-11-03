@@ -2,12 +2,16 @@
  * Cloudflare Workflow for processing AI diary replies with image attachments
  *
  * This workflow handles the time-intensive process of:
- * 1. Downloading image attachments from Slack
- * 2. Generating AI replies with image context
- * 3. Posting the reply back to Slack
+ * 1. Downloading image attachments and generating AI replies (combined step)
+ * 2. Posting the reply back to Slack
+ * 3. Removing processing reaction
+ * 4. Adding supportive reaction
  *
  * Using Workflows allows us to exceed the 30-second waitUntil limit
  * and provides automatic retry logic for each step.
+ *
+ * Note: Download and AI generation are combined into one step to avoid
+ * the 1MiB output limit for step results (image data would exceed this).
  */
 
 import {
@@ -59,16 +63,18 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
     const params = event.payload
     const slackClient = new SlackAPIClient(env.SLACK_BOT_TOKEN)
 
-    // Step 1: Download image attachments
-    const imageAttachments = await step.do(
-      'download-images',
+    // Step 1: Download images and generate AI reply
+    // Note: Combined into single step to avoid 1MiB output limit for image data
+    const aiReply = await step.do(
+      'download-and-generate-reply',
       {
         retries: {
-          limit: 3,
-          delay: '5 seconds',
+          limit: 2,
+          delay: '10 seconds',
         },
       },
-      async (): Promise<ImageAttachment[] | undefined> => {
+      async (): Promise<string> => {
+        let imageAttachments: ImageAttachment[] | undefined
         try {
           const attachments = await getEntryAttachments(params.entryId)
           const images = attachments
@@ -77,106 +83,97 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
 
           if (images.length === 0) {
             console.log('No image attachments found')
-            return undefined
-          }
+            imageAttachments = undefined
+          } else {
+            console.log(
+              `Attempting to download ${images.length} images for AI context`,
+            )
 
-          console.log(
-            `Attempting to download ${images.length} images for AI context`,
-          )
+            // Get fresh URLs from Slack API (event payload URLs may be stale)
+            const fileUrls: Array<{ urlPrivate: string; fileName: string }> = []
 
-          // Get fresh URLs from Slack API (event payload URLs may be stale)
-          const fileUrls: Array<{ urlPrivate: string; fileName: string }> = []
-
-          for (const img of images) {
-            try {
-              const fileInfo = await slackClient.files.info({
-                file: img.slackFileId,
-              })
-
-              if (fileInfo.ok && fileInfo.file?.url_private) {
-                fileUrls.push({
-                  urlPrivate: fileInfo.file.url_private,
-                  fileName: img.fileName,
+            for (const img of images) {
+              try {
+                const fileInfo = await slackClient.files.info({
+                  file: img.slackFileId,
                 })
-                console.log(
-                  `Got fresh URL for ${img.fileName}: ${fileInfo.file.url_private.substring(0, 100)}...`,
-                )
-              } else {
-                console.warn(
-                  `Failed to get file info for ${img.slackFileId}: ${fileInfo.error || 'unknown error'}`,
+
+                if (fileInfo.ok && fileInfo.file?.url_private) {
+                  fileUrls.push({
+                    urlPrivate: fileInfo.file.url_private,
+                    fileName: img.fileName,
+                  })
+                  console.log(
+                    `Got fresh URL for ${img.fileName}: ${fileInfo.file.url_private.substring(0, 100)}...`,
+                  )
+                } else {
+                  console.warn(
+                    `Failed to get file info for ${img.slackFileId}: ${fileInfo.error || 'unknown error'}`,
+                  )
+                }
+              } catch (error) {
+                console.error(
+                  `Error fetching file info for ${img.slackFileId}:`,
+                  error,
                 )
               }
-            } catch (error) {
-              console.error(
-                `Error fetching file info for ${img.slackFileId}:`,
-                error,
+            }
+
+            if (fileUrls.length === 0) {
+              console.warn('No valid file URLs obtained from Slack API')
+              imageAttachments = undefined
+            } else {
+              const downloaded = await downloadSlackFiles(
+                fileUrls,
+                env.SLACK_BOT_TOKEN,
               )
+
+              if (downloaded.length === 0) {
+                console.warn('No images were successfully downloaded')
+                imageAttachments = undefined
+              } else {
+                console.log(
+                  `Successfully downloaded ${downloaded.length} images`,
+                )
+
+                // Log MIME types for debugging
+                downloaded.forEach((d, idx) => {
+                  console.log(
+                    `Image ${idx + 1}: ${d.fileName}, MIME: ${d.mimeType}, size: ${d.size} bytes`,
+                  )
+                })
+
+                // Filter out non-image MIME types (safety check)
+                const validImages = downloaded.filter((d) =>
+                  d.mimeType.startsWith('image/'),
+                )
+
+                if (validImages.length < downloaded.length) {
+                  console.warn(
+                    `Filtered out ${downloaded.length - validImages.length} files with invalid MIME types`,
+                  )
+                }
+
+                if (validImages.length === 0) {
+                  console.warn('No valid image files after MIME type filtering')
+                  imageAttachments = undefined
+                } else {
+                  imageAttachments = validImages.map((d) => ({
+                    buffer: d.buffer,
+                    mimeType: d.mimeType,
+                    fileName: d.fileName,
+                  }))
+                }
+              }
             }
           }
-
-          if (fileUrls.length === 0) {
-            console.warn('No valid file URLs obtained from Slack API')
-            return undefined
-          }
-
-          const downloaded = await downloadSlackFiles(
-            fileUrls,
-            env.SLACK_BOT_TOKEN,
-          )
-
-          if (downloaded.length === 0) {
-            console.warn('No images were successfully downloaded')
-            return undefined
-          }
-
-          console.log(`Successfully downloaded ${downloaded.length} images`)
-
-          // Log MIME types for debugging
-          downloaded.forEach((d, idx) => {
-            console.log(
-              `Image ${idx + 1}: ${d.fileName}, MIME: ${d.mimeType}, size: ${d.size} bytes`,
-            )
-          })
-
-          // Filter out non-image MIME types (safety check)
-          const validImages = downloaded.filter((d) =>
-            d.mimeType.startsWith('image/'),
-          )
-
-          if (validImages.length < downloaded.length) {
-            console.warn(
-              `Filtered out ${downloaded.length - validImages.length} files with invalid MIME types`,
-            )
-          }
-
-          if (validImages.length === 0) {
-            console.warn('No valid image files after MIME type filtering')
-            return undefined
-          }
-
-          return validImages.map((d) => ({
-            buffer: d.buffer,
-            mimeType: d.mimeType,
-            fileName: d.fileName,
-          }))
         } catch (error) {
           console.error('Failed to download image attachments:', error)
-          // Return undefined to continue without images
-          return undefined
+          // Continue without images
+          imageAttachments = undefined
         }
-      },
-    )
 
-    // Step 2: Generate AI reply
-    const aiReply = await step.do(
-      'generate-ai-reply',
-      {
-        retries: {
-          limit: 2,
-          delay: '10 seconds',
-        },
-      },
-      async (): Promise<string> => {
+        // Generate AI reply with downloaded images (if any)
         return await generateDiaryReply({
           personaName: DIARY_PERSONA_NAME,
           userId: params.userId,
@@ -189,7 +186,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       },
     )
 
-    // Step 3: Post message to Slack
+    // Step 2: Post message to Slack
     await step.do(
       'post-slack-message',
       {
@@ -215,7 +212,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       },
     )
 
-    // Step 4: Remove processing reaction
+    // Step 3: Remove processing reaction
     await step.do('remove-processing-reaction', async (): Promise<void> => {
       try {
         const result = await slackClient.reactions.remove({
@@ -233,7 +230,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       }
     })
 
-    // Step 5: Add supportive reaction
+    // Step 4: Add supportive reaction
     await step.do('add-supportive-reaction', async (): Promise<void> => {
       try {
         const reactionName = await generateSupportiveReaction({
