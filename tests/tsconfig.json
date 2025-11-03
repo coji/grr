@@ -5,7 +5,11 @@
       "@cloudflare/vitest-pool-workers",
       "vitest/globals",
       "vite/client"
-    ]
+    ],
+    "baseUrl": "..",
+    "paths": {
+      "~/*": ["./app/*"]
+    }
   },
   "include": [
     "../app/**/*.integration.test.ts",

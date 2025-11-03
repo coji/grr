@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createDb } from '../../../services/db'
+import { createDb } from '~/services/db'
 
 /**
  * Integration test for reaction-added handler.
