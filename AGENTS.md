@@ -41,7 +41,51 @@ Welcome! This document captures the ground rules for working inside **grr**, a S
 
 ## Testing & quality gates
 
+### Testing strategy
+
+This project uses Vitest with three levels of testing:
+
+1. **Unit tests** (`*.test.ts`): Fast tests for pure functions and business logic
+   - Run with `pnpm test:unit` during development
+   - Mock external dependencies (Slack API, Google AI, database)
+   - Keep tests close to source files (e.g., `utils.test.ts` next to `utils.ts`)
+
+2. **Integration tests** (`*.integration.test.ts`): Tests with real D1 database
+   - Run with `pnpm test:integration` before committing
+   - Use `@cloudflare/vitest-pool-workers` for D1 access
+   - Test database operations and handler logic together
+   - Mock external HTTP APIs via MSW
+
+3. **E2E tests**: Not recommended for this project
+   - E2E tests are complex to maintain in Cloudflare Workers environment
+   - Instead, write comprehensive integration tests that cover critical paths
+   - Manual testing via `pnpm dev` for UI changes
+
+### Test commands
+
+- `pnpm test:unit` - Run unit tests only (fast)
+- `pnpm test:integration` - Run integration tests with D1
+- `pnpm test:all` - Run all tests (use before creating PRs)
+- `pnpm test:coverage` - Generate coverage reports
+- `pnpm test:ui` - Run tests with Vitest UI
+
+### Writing tests
+
+- **Mock utilities** are available in `__mocks__/` directory:
+  - `__mocks__/slack.ts` - Slack Web API client mocks
+  - `__mocks__/ai.ts` - Google AI SDK mocks
+  - `__mocks__/db.ts` - Database query builder mocks
+- **MSW handlers** for HTTP mocking are in `tests/setup/msw-handlers.ts`
+- Follow existing test patterns for consistency
+- Prefer testing behavior over implementation details
+- Aim for 70-80% coverage on business logic, not 100%
+- Skip coverage on routes, type definitions, and Block Kit view builders
+
+### Quality gates
+
 - Ensure `pnpm typecheck` passes before committing.
+- Run `pnpm test:unit` during development for quick feedback.
+- Run `pnpm test:all` before creating pull requests.
 - Run Biome linting (`pnpm biome check .`) when touching TypeScript/TSX files; apply fixes with `--apply` if necessary.
 - Front-end changes that impact visuals should be previewed via `pnpm dev`; capture screenshots when modifying user-facing UI if feasible.
 

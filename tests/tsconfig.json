@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.cloudflare.json",
+  "compilerOptions": {
+    "types": [
+      "@cloudflare/vitest-pool-workers",
+      "vitest/globals",
+      "vite/client"
+    ]
+  },
+  "include": [
+    "../app/**/*.integration.test.ts",
+    "../app/**/*.e2e.test.ts",
+    "./**/*.ts",
+    "../worker-configuration.d.ts"
+  ]
+}
