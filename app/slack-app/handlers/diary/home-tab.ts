@@ -5,7 +5,9 @@ import type {
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
+import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
+import { getFileTypeEmoji } from './file-utils'
 import { TOKYO_TZ } from './utils'
 
 export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
@@ -134,11 +136,18 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
             ? `${entry.detail.slice(0, 100)}...`
             : entry.detail || '_詳細なし_'
 
+        // Get attachment stats for this entry
+        const stats = await getAttachmentStats(entry.id)
+        const attachmentInfo =
+          stats.total > 0
+            ? ` 📎 ${stats.total}個のファイル${stats.images > 0 ? ` (画像${stats.images})` : ''}`
+            : ''
+
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*${date} ${mood}*\n${preview}`,
+            text: `*${date} ${mood}*${attachmentInfo}\n${preview}`,
           },
         })
         blocks.push({
@@ -417,6 +426,60 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const mood = entry.moodLabel || '未記録'
     const detail = entry.detail || '_詳細なし_'
 
+    // Fetch attachments for this entry
+    const attachments = await getEntryAttachments(entryId)
+
+    // Build blocks with attachments
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
+    const blocks: any[] = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*日付:* ${date}\n*気分:* ${mood}\n\n${detail}`,
+        },
+      },
+    ]
+
+    // Add attachment blocks
+    if (attachments.length > 0) {
+      blocks.push({
+        type: 'divider',
+      })
+
+      // Add inline images
+      const images = attachments.filter((a) => a.fileType === 'image')
+      for (const image of images) {
+        if (image.slackUrlPrivate) {
+          blocks.push({
+            type: 'image',
+            image_url: image.slackUrlPrivate,
+            alt_text: image.fileName,
+          })
+        }
+      }
+
+      // Add file links for videos and documents
+      const files = attachments.filter((a) => a.fileType !== 'image')
+      if (files.length > 0) {
+        const fileLinks = files
+          .map((file) => {
+            const emoji = getFileTypeEmoji(file.fileType)
+            const link = file.slackPermalink || file.slackUrlPrivate
+            return `${emoji} <${link}|${file.fileName}>`
+          })
+          .join('\n')
+
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*添付ファイル:*\n${fileLinks}`,
+          },
+        })
+      }
+    }
+
     await context.client.views.open({
       trigger_id: action.trigger_id,
       view: {
@@ -430,15 +493,8 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
           type: 'plain_text',
           text: '閉じる',
         },
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*日付:* ${date}\n*気分:* ${mood}\n\n${detail}`,
-            },
-          },
-        ],
+        // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
+        blocks: blocks as any,
       },
     })
   })

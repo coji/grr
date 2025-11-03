@@ -3,8 +3,10 @@ import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
+import { storeAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
 import { DIARY_PERSONA_NAME, SUPPORTIVE_REACTIONS } from '../diary-constants'
+import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { TOKYO_TZ, sanitizeText } from './utils'
 
 export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
@@ -22,6 +24,7 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       .catch(() => {}) // リアクション追加失敗は無視
 
     const cleaned = sanitizeText(event.text)
+    const hasFiles = 'files' in event && event.files && event.files.length > 0
     const insertedAt = dayjs().utc().toISOString()
     const entryDate = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
     const mention = `<@${event.user}> さん`
@@ -96,6 +99,25 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
         detail: combined,
         detailRecordedAt: insertedAt,
         updatedAt: insertedAt,
+      }
+    }
+
+    // Process file attachments if present
+    if (entry && hasFiles) {
+      const slackFiles = event.files as SlackFile[]
+      const supportedFiles = filterSupportedFiles(slackFiles)
+
+      if (supportedFiles.length > 0) {
+        await storeAttachments(entry.id, supportedFiles)
+
+        // Update entry timestamp if files were added
+        await db
+          .updateTable('diaryEntries')
+          .set({
+            updatedAt: insertedAt,
+          })
+          .where('id', '=', entry.id)
+          .execute()
       }
     }
 
