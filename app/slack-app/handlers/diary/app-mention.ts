@@ -163,11 +163,32 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
           if (downloaded.length > 0) {
             console.log(`Successfully downloaded ${downloaded.length} images`)
-            imageAttachments = downloaded.map((d) => ({
-              buffer: d.buffer,
-              mimeType: d.mimeType,
-              fileName: d.fileName,
-            }))
+            // Log MIME types for debugging
+            downloaded.forEach((d, idx) => {
+              console.log(
+                `Image ${idx + 1}: ${d.fileName}, MIME: ${d.mimeType}, size: ${d.size} bytes`,
+              )
+            })
+
+            // Filter out non-image MIME types (safety check)
+            const validImages = downloaded.filter((d) =>
+              d.mimeType.startsWith('image/'),
+            )
+            if (validImages.length < downloaded.length) {
+              console.warn(
+                `Filtered out ${downloaded.length - validImages.length} files with invalid MIME types`,
+              )
+            }
+
+            if (validImages.length > 0) {
+              imageAttachments = validImages.map((d) => ({
+                buffer: d.buffer,
+                mimeType: d.mimeType,
+                fileName: d.fileName,
+              }))
+            } else {
+              console.warn('No valid image files after MIME type filtering')
+            }
           } else {
             console.warn('No images were successfully downloaded')
           }
