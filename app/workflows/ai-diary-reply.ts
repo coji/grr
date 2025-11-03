@@ -16,6 +16,7 @@ import {
   type WorkflowEvent,
   type WorkflowStep,
 } from 'cloudflare:workers'
+import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
@@ -83,21 +84,14 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
           )
 
           // Get fresh URLs from Slack API (event payload URLs may be stale)
+          const slackClient = new SlackAPIClient(env.SLACK_BOT_TOKEN)
           const fileUrls: Array<{ urlPrivate: string; fileName: string }> = []
+
           for (const img of images) {
             try {
-              const fileInfoResponse = await fetch(
-                `https://slack.com/api/files.info?file=${img.slackFileId}`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
-                  },
-                },
-              )
-              const fileInfo = (await fileInfoResponse.json()) as {
-                ok: boolean
-                file?: { url_private?: string }
-              }
+              const fileInfo = await slackClient.files.info({
+                file: img.slackFileId,
+              })
 
               if (fileInfo.ok && fileInfo.file?.url_private) {
                 fileUrls.push({
@@ -109,7 +103,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
                 )
               } else {
                 console.warn(
-                  `Failed to get file info for ${img.slackFileId}: ${JSON.stringify(fileInfo)}`,
+                  `Failed to get file info for ${img.slackFileId}: ${fileInfo.error || 'unknown error'}`,
                 )
               }
             } catch (error) {
