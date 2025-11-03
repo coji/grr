@@ -118,6 +118,18 @@ export async function downloadSlackFile(
     })
 
     if (!response.ok) {
+      // Log response body for debugging (limit to first 500 chars)
+      const bodyText = await response
+        .text()
+        .catch(() => '[unable to read body]')
+      const truncatedBody =
+        bodyText.length > 500 ? `${bodyText.slice(0, 500)}...` : bodyText
+      console.error('File download failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType: response.headers.get('content-type'),
+        bodyPreview: truncatedBody,
+      })
       throw new FileDownloadError(
         `Failed to download file: ${response.status} ${response.statusText}`,
         response.status,

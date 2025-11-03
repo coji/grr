@@ -143,26 +143,44 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
     // Download image attachments for AI context (max 3 images)
     let imageAttachments: ImageAttachment[] | undefined
     if (entry) {
-      const attachments = await getEntryAttachments(entry.id)
-      const images = attachments
-        .filter((a) => a.fileType === 'image')
-        .slice(0, 3) // Limit to 3 images for memory safety
+      try {
+        const attachments = await getEntryAttachments(entry.id)
+        const images = attachments
+          .filter((a) => a.fileType === 'image')
+          .slice(0, 3) // Limit to 3 images for memory safety
 
-      if (images.length > 0) {
-        const downloaded = await downloadSlackFiles(
-          images.map((img) => ({
-            urlPrivate: img.slackUrlPrivate,
-            fileName: img.fileName,
-          })),
-          env.SLACK_BOT_TOKEN,
-        )
+        if (images.length > 0) {
+          console.log(
+            `Attempting to download ${images.length} images for AI context`,
+          )
+          const downloaded = await downloadSlackFiles(
+            images.map((img) => ({
+              urlPrivate: img.slackUrlPrivate,
+              fileName: img.fileName,
+            })),
+            env.SLACK_BOT_TOKEN,
+          )
 
-        if (downloaded.length > 0) {
-          imageAttachments = downloaded.map((d) => ({
-            buffer: d.buffer,
-            mimeType: d.mimeType,
-            fileName: d.fileName,
-          }))
+          if (downloaded.length > 0) {
+            console.log(`Successfully downloaded ${downloaded.length} images`)
+            imageAttachments = downloaded.map((d) => ({
+              buffer: d.buffer,
+              mimeType: d.mimeType,
+              fileName: d.fileName,
+            }))
+          } else {
+            console.warn('No images were successfully downloaded')
+          }
+        }
+      } catch (error) {
+        // Log error but continue without images - AI reply should still work
+        console.error('Failed to download image attachments:', error)
+        if (error instanceof Error) {
+          console.error('Error details:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          })
         }
       }
     }
