@@ -37,7 +37,12 @@ Welcome! This document captures the ground rules for working inside **grr**, a S
 ## Data access & persistence
 
 - Interact with Cloudflare D1 through the shared Kysely instance exported from `app/services/db.ts`. Keep column names camelCased in TypeScript while matching snake_case in SQL migrations.
-- When changing the database schema, update both the SQL migration files and the `Database` interface so type inference remains accurate. Run migrations through Wrangler (`wrangler d1 migration apply`).
+- When changing the database schema, follow these steps:
+  1. Create a new SQL migration file in `/migrations/`
+  2. Update the `Database` interface in `app/services/db.ts` so type inference remains accurate
+  3. **Add the new migration import** to `tests/setup/integration-setup.ts` (both the import statement and the migrations array)
+  4. Run migrations through Wrangler (`wrangler d1 migration apply` or `pnpm db:migrate:local`)
+- IMPORTANT: Integration tests auto-load migrations from SQL files. Every new migration file MUST be imported in `tests/setup/integration-setup.ts` or integration tests will fail with "no such table" errors.
 
 ## Testing & quality gates
 
