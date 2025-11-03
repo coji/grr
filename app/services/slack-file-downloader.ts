@@ -141,6 +141,23 @@ export async function downloadSlackFile(
     const mimeType =
       response.headers.get('content-type') || 'application/octet-stream'
 
+    // Debug: Log response details for text/html responses (likely errors)
+    if (mimeType.includes('text/html')) {
+      const bodyPreview = buffer.toString(
+        'utf-8',
+        0,
+        Math.min(500, buffer.length),
+      )
+      console.error('Received HTML instead of file:', {
+        url: urlPrivate.substring(0, 100),
+        status: response.status,
+        statusText: response.statusText,
+        mimeType,
+        size: buffer.length,
+        bodyPreview,
+      })
+    }
+
     return {
       buffer,
       mimeType,

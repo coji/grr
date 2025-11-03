@@ -82,6 +82,13 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             `Attempting to download ${images.length} images for AI context`,
           )
 
+          // Log the URLs being downloaded (first 100 chars of each)
+          images.forEach((img, idx) => {
+            console.log(
+              `Image ${idx + 1} URL: ${img.slackUrlPrivate.substring(0, 100)}...`,
+            )
+          })
+
           const downloaded = await downloadSlackFiles(
             images.map((img) => ({
               urlPrivate: img.slackUrlPrivate,
