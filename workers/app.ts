@@ -2,6 +2,9 @@ import { createRequestHandler } from 'react-router'
 import { generateDailyDiaryReflections } from '~/slack-app/daily-reflection'
 import { sendDailyDiaryReminders } from '~/slack-app/reminders'
 import { sendWeeklyDigest } from '~/slack-app/weekly-digest'
+import { AiDiaryReplyWorkflow } from '~/workflows/ai-diary-reply'
+
+export { AiDiaryReplyWorkflow }
 
 declare module 'react-router' {
   export interface AppLoadContext {
