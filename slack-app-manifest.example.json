@@ -38,7 +38,8 @@
         "reactions:read",
         "reactions:write",
         "im:write",
-        "im:history"
+        "im:history",
+        "files:read"
       ]
     }
   },
