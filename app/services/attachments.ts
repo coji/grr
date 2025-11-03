@@ -30,9 +30,19 @@ export async function storeAttachments(
   const now = dayjs().utc().toISOString()
   const attachments: DiaryAttachment[] = []
 
-  // Create attachment records
-  for (let i = 0; i < slackFiles.length; i++) {
-    const file = slackFiles[i]
+  // Get existing attachments to avoid duplicates
+  const existingAttachments = await getEntryAttachments(entryId)
+  const existingFileIds = new Set(existingAttachments.map((a) => a.slackFileId))
+
+  // Create attachment records (skip duplicates)
+  let displayOrder = existingAttachments.length
+  for (const file of slackFiles) {
+    // Skip if already stored
+    if (existingFileIds.has(file.id)) {
+      console.log(`Skipping duplicate file: ${file.id} (${file.name})`)
+      continue
+    }
+
     const fileType = categorizeFileType(file)
 
     if (!fileType) {
@@ -53,7 +63,7 @@ export async function storeAttachments(
       slackThumbvideo: file.thumb_video || null,
       width: file.original_w || null,
       height: file.original_h || null,
-      displayOrder: i,
+      displayOrder: displayOrder++,
       createdAt: now,
     }
 
