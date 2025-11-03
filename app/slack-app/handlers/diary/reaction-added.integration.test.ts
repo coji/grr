@@ -1,151 +1,141 @@
 import { env } from 'cloudflare:workers'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { createDb } from '../../../services/db'
 
 /**
  * Integration test for reaction-added handler.
  * This tests the database operations when a user adds a reaction to a diary entry.
  *
- * Note: D1 migrations should be applied manually before running integration tests:
- * Run: pnpm db:migrate:local
+ * Note: D1 migrations are automatically applied before tests run
+ * via tests/setup/integration-setup.ts
  */
 describe('Reaction Added Handler (Integration)', () => {
   beforeEach(async () => {
-    // Clean up test data before each test
-    await env.DB.prepare('DELETE FROM diary_entries WHERE id LIKE ?')
-      .bind('test-%')
-      .run()
+    const db = createDb(env.DB)
+    // Clean up test data before each test using Kysely
+    await db.deleteFrom('diaryEntries').where('id', 'like', 'test-%').execute()
   })
 
   it('should record mood when user adds reaction to diary entry', async () => {
-    // 1. Insert a test diary entry using raw D1 SQL
+    const db = createDb(env.DB)
+
+    // 1. Insert a test diary entry using Kysely
     const entryId = 'test-entry-1'
     const userId = 'U123'
     const channelId = 'C123'
     const messageTs = '1234567890.123456'
+    const now = new Date().toISOString()
 
-    await env.DB.prepare(
-      `
-      INSERT INTO diary_entries (
-        id, user_id, channel_id, message_ts, entry_date,
-        reminder_sent_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    )
-      .bind(
-        entryId,
+    await db
+      .insertInto('diaryEntries')
+      .values({
+        id: entryId,
         userId,
         channelId,
         messageTs,
-        '2025-01-01',
-        '2025-01-01T09:00:00Z',
-        '2025-01-01T09:00:00Z',
-        '2025-01-01T09:00:00Z',
-      )
-      .run()
+        entryDate: '2025-01-01',
+        reminderSentAt: '2025-01-01T09:00:00Z',
+        createdAt: '2025-01-01T09:00:00Z',
+        updatedAt: '2025-01-01T09:00:00Z',
+      })
+      .execute()
 
     // 2. Simulate the database update that would happen in the handler
-    const now = new Date().toISOString()
-    await env.DB.prepare(
-      `
-      UPDATE diary_entries
-      SET mood_emoji = ?, mood_label = ?, mood_value = ?,
-          mood_recorded_at = ?, updated_at = ?
-      WHERE id = ?
-    `,
-    )
-      .bind(':smile:', 'ほっと安心', 3, now, now, entryId)
-      .run()
+    await db
+      .updateTable('diaryEntries')
+      .set({
+        moodEmoji: ':smile:',
+        moodLabel: 'ほっと安心',
+        moodValue: 3,
+        moodRecordedAt: now,
+        updatedAt: now,
+      })
+      .where('id', '=', entryId)
+      .execute()
 
     // 3. Verify the database was updated correctly
-    const result = await env.DB.prepare(
-      'SELECT mood_emoji, mood_label, mood_value, mood_recorded_at FROM diary_entries WHERE id = ?',
-    )
-      .bind(entryId)
-      .first()
+    const result = await db
+      .selectFrom('diaryEntries')
+      .select(['moodEmoji', 'moodLabel', 'moodValue', 'moodRecordedAt'])
+      .where('id', '=', entryId)
+      .executeTakeFirst()
 
     expect(result).toBeDefined()
-    expect(result.mood_emoji).toBe(':smile:')
-    expect(result.mood_label).toBe('ほっと安心')
-    expect(result.mood_value).toBe(3)
-    expect(result.mood_recorded_at).toBeDefined()
+    expect(result?.moodEmoji).toBe(':smile:')
+    expect(result?.moodLabel).toBe('ほっと安心')
+    expect(result?.moodValue).toBe(3)
+    expect(result?.moodRecordedAt).toBeDefined()
   })
 
   it('should only update mood if entry exists', async () => {
+    const db = createDb(env.DB)
     const nonExistentTs = '9999999999.999999'
 
     // Try to find an entry that doesn't exist
-    const entry = await env.DB.prepare(
-      'SELECT * FROM diary_entries WHERE message_ts = ?',
-    )
-      .bind(nonExistentTs)
-      .first()
+    const entry = await db
+      .selectFrom('diaryEntries')
+      .selectAll()
+      .where('messageTs', '=', nonExistentTs)
+      .executeTakeFirst()
 
-    expect(entry).toBeNull()
+    expect(entry).toBeUndefined()
   })
 
   it('should allow multiple mood updates for the same entry', async () => {
+    const db = createDb(env.DB)
+
     // Insert test entry
     const entryId = 'test-entry-2'
-    await env.DB.prepare(
-      `
-      INSERT INTO diary_entries (
-        id, user_id, channel_id, message_ts, entry_date,
-        reminder_sent_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    )
-      .bind(
-        entryId,
-        'U123',
-        'C123',
-        '1234567890.123457',
-        '2025-01-02',
-        '2025-01-02T09:00:00Z',
-        '2025-01-02T09:00:00Z',
-        '2025-01-02T09:00:00Z',
-      )
-      .run()
+    await db
+      .insertInto('diaryEntries')
+      .values({
+        id: entryId,
+        userId: 'U123',
+        channelId: 'C123',
+        messageTs: '1234567890.123457',
+        entryDate: '2025-01-02',
+        reminderSentAt: '2025-01-02T09:00:00Z',
+        createdAt: '2025-01-02T09:00:00Z',
+        updatedAt: '2025-01-02T09:00:00Z',
+      })
+      .execute()
 
     // First mood
-    await env.DB.prepare(
-      `
-      UPDATE diary_entries
-      SET mood_emoji = ?, mood_label = ?, mood_value = ?,
-          mood_recorded_at = ?, updated_at = ?
-      WHERE id = ?
-    `,
-    )
-      .bind(
-        ':smile:',
-        'ほっと安心',
-        3,
-        new Date().toISOString(),
-        new Date().toISOString(),
-        entryId,
-      )
-      .run()
+    const firstMoodTime = new Date().toISOString()
+    await db
+      .updateTable('diaryEntries')
+      .set({
+        moodEmoji: ':smile:',
+        moodLabel: 'ほっと安心',
+        moodValue: 3,
+        moodRecordedAt: firstMoodTime,
+        updatedAt: firstMoodTime,
+      })
+      .where('id', '=', entryId)
+      .execute()
 
     // Second mood (user changed their mind)
     const secondMoodTime = new Date().toISOString()
-    await env.DB.prepare(
-      `
-      UPDATE diary_entries
-      SET mood_emoji = ?, mood_label = ?, mood_value = ?,
-          mood_recorded_at = ?, updated_at = ?
-      WHERE id = ?
-    `,
-    )
-      .bind(':tada:', 'わくわく', 5, secondMoodTime, secondMoodTime, entryId)
-      .run()
+    await db
+      .updateTable('diaryEntries')
+      .set({
+        moodEmoji: ':tada:',
+        moodLabel: 'わくわく',
+        moodValue: 5,
+        moodRecordedAt: secondMoodTime,
+        updatedAt: secondMoodTime,
+      })
+      .where('id', '=', entryId)
+      .execute()
 
-    const result = await env.DB.prepare(
-      'SELECT mood_emoji, mood_label, mood_value FROM diary_entries WHERE id = ?',
-    )
-      .bind(entryId)
-      .first()
+    const result = await db
+      .selectFrom('diaryEntries')
+      .select(['moodEmoji', 'moodLabel', 'moodValue'])
+      .where('id', '=', entryId)
+      .executeTakeFirst()
 
-    expect(result?.mood_emoji).toBe(':tada:')
-    expect(result?.mood_label).toBe('わくわく')
-    expect(result?.mood_value).toBe(5)
+    expect(result?.moodEmoji).toBe(':tada:')
+    expect(result?.moodLabel).toBe('わくわく')
+    expect(result?.moodValue).toBe(5)
   })
 })
