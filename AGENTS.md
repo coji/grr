@@ -27,6 +27,7 @@ Welcome! This document captures the ground rules for working inside **grr**, a S
 - Reuse shared utilities: use `dayjs` from `app/lib/dayjs.ts` for any date/time work so locale/timezone plugins stay applied.
 - When adding React Router loaders/actions/components, follow the existing pattern of exporting `loader`/`action` and using the generated `Route.ComponentProps` types.
 - UI components rely on Tailwind CSS v4 utility classes and helper components from `app/components/ui`; prefer composing those before introducing new design systems.
+- **CRITICAL: Never use fallback values with `||` or `??` operators to mask missing data.** If a required field is missing, fail explicitly with a clear error message instead of silently substituting a default value. This prevents bugs from being hidden and makes problems visible immediately.
 
 ## Cloudflare Workers environment variables
 
@@ -89,6 +90,7 @@ When a user posts a message with files in a diary thread:
 ### Important notes
 
 - **Column naming**: Due to CamelCasePlugin behavior, avoid underscores before numbers in SQL column names (e.g., use `slack_thumb360` not `slack_thumb_360`)
+- **Slack URL for bot authentication**: ALWAYS use `url_private_download` field from Slack file objects for bot token authentication. The `url_private` field requires cookie-based authentication and will NOT work with bot tokens. Never use `url_private` as a fallback - if `url_private_download` is missing, the file cannot be downloaded by the bot.
 - **Slack URL limitations**: Files may become inaccessible if deleted from Slack or if the user leaves the workspace
 - **Future migration**: The schema is designed to support future migration to R2 storage if needed
 

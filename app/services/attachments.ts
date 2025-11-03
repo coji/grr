@@ -49,6 +49,14 @@ export async function storeAttachments(
       continue // Skip unsupported files
     }
 
+    // Skip files without url_private_download (required for bot token authentication)
+    if (!file.url_private_download) {
+      console.warn(
+        `Skipping file ${file.name}: missing url_private_download field`,
+      )
+      continue
+    }
+
     const attachment: DiaryAttachment = {
       id: randomUUID(),
       entryId,
@@ -57,7 +65,7 @@ export async function storeAttachments(
       mimeType: file.mimetype || null,
       fileSize: file.size || null,
       slackFileId: file.id,
-      slackUrlPrivate: file.url_private || '',
+      slackUrlPrivate: file.url_private_download,
       slackPermalink: file.permalink || null,
       slackThumb360: file.thumb_360 || null,
       slackThumbvideo: file.thumb_video || null,
