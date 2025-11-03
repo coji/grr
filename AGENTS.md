@@ -86,6 +86,23 @@ This project uses Vitest with three levels of testing:
 - Aim for 70-80% coverage on business logic, not 100%
 - Skip coverage on routes, type definitions, and Block Kit view builders
 
+### Path aliases in tests
+
+**Important**: Integration tests require special configuration for path aliases (`~/`) to work correctly.
+
+**Why this is needed:**
+
+- Unit tests run in standard Node.js environment where `vite-tsconfig-paths` plugin works normally
+- Integration tests run in Cloudflare Workers runtime (Miniflare/Workerd) which has different module resolution
+- `@cloudflare/vitest-pool-workers` creates an isolated runtime where Vite plugins don't fully propagate to the execution environment
+
+**Current solution:**
+
+1. `vitest.integration.config.ts` - Define both `plugins: [tsconfigPaths()]` AND `resolve.alias: { '~': path.resolve(__dirname, './app') }`
+2. `tests/tsconfig.json` - Must re-declare `baseUrl` and `paths` even when extending parent tsconfig (TypeScript limitation)
+
+**Root cause:** When `defineWorkersConfig` processes plugins, the Workers runtime uses a separate module resolver that doesn't fully inherit Vite's plugin-based path resolution. The manual `resolve.alias` ensures paths work at runtime, while `vite-tsconfig-paths` helps during the build/transform phase.
+
 ### Quality gates
 
 - Ensure `pnpm typecheck` passes before committing.
