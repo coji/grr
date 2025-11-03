@@ -82,18 +82,51 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             `Attempting to download ${images.length} images for AI context`,
           )
 
-          // Log the URLs being downloaded (first 100 chars of each)
-          images.forEach((img, idx) => {
-            console.log(
-              `Image ${idx + 1} URL: ${img.slackUrlPrivate.substring(0, 100)}...`,
-            )
-          })
+          // Get fresh URLs from Slack API (event payload URLs may be stale)
+          const fileUrls: Array<{ urlPrivate: string; fileName: string }> = []
+          for (const img of images) {
+            try {
+              const fileInfoResponse = await fetch(
+                `https://slack.com/api/files.info?file=${img.slackFileId}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
+                  },
+                },
+              )
+              const fileInfo = (await fileInfoResponse.json()) as {
+                ok: boolean
+                file?: { url_private?: string }
+              }
+
+              if (fileInfo.ok && fileInfo.file?.url_private) {
+                fileUrls.push({
+                  urlPrivate: fileInfo.file.url_private,
+                  fileName: img.fileName,
+                })
+                console.log(
+                  `Got fresh URL for ${img.fileName}: ${fileInfo.file.url_private.substring(0, 100)}...`,
+                )
+              } else {
+                console.warn(
+                  `Failed to get file info for ${img.slackFileId}: ${JSON.stringify(fileInfo)}`,
+                )
+              }
+            } catch (error) {
+              console.error(
+                `Error fetching file info for ${img.slackFileId}:`,
+                error,
+              )
+            }
+          }
+
+          if (fileUrls.length === 0) {
+            console.warn('No valid file URLs obtained from Slack API')
+            return undefined
+          }
 
           const downloaded = await downloadSlackFiles(
-            images.map((img) => ({
-              urlPrivate: img.slackUrlPrivate,
-              fileName: img.fileName,
-            })),
+            fileUrls,
             env.SLACK_BOT_TOKEN,
           )
 

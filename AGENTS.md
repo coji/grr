@@ -90,7 +90,7 @@ When a user posts a message with files in a diary thread:
 ### Important notes
 
 - **Column naming**: Due to CamelCasePlugin behavior, avoid underscores before numbers in SQL column names (e.g., use `slack_thumb360` not `slack_thumb_360`)
-- **Slack URL for bot authentication**: Use `url_private` field from Slack file objects. It works with bot token authentication when the `files:read` OAuth scope is present. Requires `Authorization: Bearer <bot-token>` header for access.
+- **Slack URL for bot authentication**: **CRITICAL** - Do NOT use `url_private` from event payloads directly. Event payload URLs may contain stale/invalid file IDs. Always fetch fresh URLs via `files.info` API using the file ID before downloading. The API-provided `url_private` works with bot token authentication (`Authorization: Bearer <bot-token>` header) when `files:read` OAuth scope is present.
 - **Slack URL limitations**: Files may become inaccessible if deleted from Slack or if the user leaves the workspace
 - **Future migration**: The schema is designed to support future migration to R2 storage if needed
 
