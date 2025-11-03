@@ -48,6 +48,7 @@ const botToken = context.cloudflare.env.SLACK_BOT_TOKEN // Type error!
 ```
 
 **Why this matters:**
+
 - Cloudflare Workers provides a global `env` object via the `cloudflare:workers` module
 - This is the standard way to access bindings (environment variables, D1 database, etc.)
 - The Slack handler `context` object does not include `env` or `cloudflare.env`
@@ -79,6 +80,7 @@ The diary app supports file attachments (images, videos, documents) in diary ent
 ### Usage patterns
 
 When a user posts a message with files in a diary thread:
+
 1. Files are automatically detected in message/app_mention handlers
 2. Supported files are filtered (via `filterSupportedFiles()`)
 3. File metadata is extracted and stored in the database (via `storeAttachments()`)
@@ -166,8 +168,57 @@ This project uses Vitest with three levels of testing:
 - Run Biome linting (`pnpm biome check .`) when touching TypeScript/TSX files; apply fixes with `--apply` if necessary.
 - Front-end changes that impact visuals should be previewed via `pnpm dev`; capture screenshots when modifying user-facing UI if feasible.
 
+## Git workflow
+
+**CRITICAL: Never commit directly to the `main` branch.**
+
+### Branch naming conventions
+
+- Feature branches: `feat/description` (e.g., `feat/diary-file-attachments`)
+- Bug fixes: `fix/description` (e.g., `fix/mime-type-validation`)
+- Refactoring: `refactor/description`
+- Documentation: `docs/description`
+
+### Development workflow
+
+1. **Always create a feature branch** from `main` before making changes:
+
+   ```bash
+   git checkout main
+   git pull
+   git checkout -b feat/your-feature-name
+   ```
+
+2. **Make commits to the feature branch**:
+
+   ```bash
+   git add -A
+   git commit -m "descriptive message"
+   git push -u origin feat/your-feature-name
+   ```
+
+3. **Create a pull request** when ready:
+
+   ```bash
+   gh pr create --title "feat: description" --body "..."
+   ```
+
+4. **Merge via pull request** - never push directly to `main`
+
+### Emergency hotfixes
+
+Even for urgent fixes, **always use a branch**:
+
+```bash
+git checkout -b fix/urgent-issue
+# make changes
+git commit -m "fix: urgent issue"
+git push -u origin fix/urgent-issue
+gh pr create --title "fix: urgent issue"
+```
+
 ## Collaboration notes
 
 - Favor descriptive commit messages and PR summaries that explain user-facing changes.
-- Keep the “Hotaru diary” assistant tone friendly and empathetic in user copy or automated Slack messages.
+- Keep the "Hotaru diary" assistant tone friendly and empathetic in user copy or automated Slack messages.
 - Mention in PR descriptions any environment limitations (e.g., inability to run Slack or Cloudflare emulators) that block testing.
