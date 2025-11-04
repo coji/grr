@@ -11,14 +11,28 @@ import { sanitizeText } from './utils'
 export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('message', async ({ payload, context }) => {
     const event = payload
+    // メッセージの削除などのsubtypeは無視
+    // thread_broadcastは処理する（スレッド内のメッセージがチャンネルにも投稿される場合）
+    // file_shareも処理する（ファイル付きメッセージ）
     if (
       'subtype' in event &&
       event.subtype &&
-      event.subtype !== 'thread_broadcast'
-    )
+      event.subtype !== 'thread_broadcast' &&
+      event.subtype !== 'file_share'
+    ) {
+      console.log(`[message] Skipping message with subtype: ${event.subtype}`)
       return
-    if (!('thread_ts' in event) || !event.thread_ts) return
-    if (!event.user) return
+    }
+
+    if (!('thread_ts' in event) || !event.thread_ts) {
+      console.log('[message] Skipping non-thread message')
+      return
+    }
+
+    if (!event.user) {
+      console.log('[message] Skipping message without user')
+      return
+    }
 
     const entry = await db
       .selectFrom('diaryEntries')
@@ -26,8 +40,19 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
       .where('messageTs', '=', event.thread_ts)
       .executeTakeFirst()
 
-    if (!entry) return
-    if (entry.userId !== event.user) return
+    if (!entry) {
+      console.log(
+        `[message] No diary entry found for thread_ts: ${event.thread_ts}`,
+      )
+      return
+    }
+
+    if (entry.userId !== event.user) {
+      console.log(
+        `[message] User mismatch: entry.userId=${entry.userId}, event.user=${event.user}`,
+      )
+      return
+    }
 
     const text = sanitizeText(event.text)
     const hasFiles = 'files' in event && event.files && event.files.length > 0
@@ -55,10 +80,28 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
     // Process file attachments if present
     if (hasFiles) {
       const slackFiles = event.files as SlackFile[]
+      console.log(
+        `[message] Received ${slackFiles.length} files:`,
+        slackFiles.map((f) => ({
+          id: f.id,
+          name: f.name,
+          mimetype: f.mimetype,
+          url_private: f.url_private
+            ? `${f.url_private.substring(0, 50)}...`
+            : undefined,
+        })),
+      )
+
       const supportedFiles = filterSupportedFiles(slackFiles)
+      console.log(
+        `[message] ${supportedFiles.length} supported files after filtering`,
+      )
 
       if (supportedFiles.length > 0) {
         await storeAttachments(entry.id, supportedFiles)
+        console.log(
+          `[message] Stored ${supportedFiles.length} attachments for entry ${entry.id}`,
+        )
 
         // Update entry timestamp even if no text was added
         if (!text) {
