@@ -52,11 +52,8 @@
    * Actual values are set as Cloudflare secrets in production.
    */
   "vars": {
-    "SLACK_SIGNING_SECRET": "",
-    "SLACK_BOT_TOKEN": "",
-    "SLACK_LOGGING_LEVEL": "INFO",
-    "GOOGLE_GENERATIVE_AI_API_KEY": ""
-  },
+    "SLACK_LOGGING_LEVEL": "INFO"
+  }
   /**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/

@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google'
+import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateText } from 'ai'
 
 interface DiaryDigestOptions {
@@ -52,6 +52,11 @@ ${entriesText}
   const model = google('gemini-3-flash-preview')
   const { text } = await generateText({
     model,
+    providerOptions: {
+      google: {
+        thinkingConfig: { thinkingLevel: 'medium' },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
     system: systemPrompt,
     prompt: userPrompt,
   })
@@ -101,6 +106,11 @@ ${entriesText}
   const model = google('gemini-3-flash-preview')
   const { text } = await generateText({
     model,
+    providerOptions: {
+      google: {
+        thinkingConfig: { thinkingLevel: 'medium' },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
     system: systemPrompt,
     prompt: userPrompt,
   })
