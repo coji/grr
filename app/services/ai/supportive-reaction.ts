@@ -25,7 +25,7 @@ export async function generateSupportiveReaction({
   })
 
   try {
-    const model = google('gemini-2.5-flash')
+    const model = google('gemini-3-flash-preview')
     const { object } = await generateObject({
       model,
       schema: reactionSchema,

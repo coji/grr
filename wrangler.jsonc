@@ -31,7 +31,8 @@
   ],
   "triggers": {
     "crons": ["0 13 * * *", "0 15 * * *", "0 1 * * 6"]
-  } /**
+  },
+  /**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
    */
@@ -47,8 +48,15 @@
   /**
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+   * Note: SLACK_* vars are declared here for type generation.
+   * Actual values are set as Cloudflare secrets in production.
    */
-  // "vars": { "MY_VARIABLE": "production_value" },
+  "vars": {
+    "SLACK_SIGNING_SECRET": "",
+    "SLACK_BOT_TOKEN": "",
+    "SLACK_LOGGING_LEVEL": "INFO",
+    "GOOGLE_GENERATIVE_AI_API_KEY": ""
+  },
   /**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/

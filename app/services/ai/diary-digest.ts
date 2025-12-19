@@ -49,7 +49,7 @@ ${entriesText}
 
 上記を踏まえて、週次ダイジェストメッセージを生成してください。`
 
-  const model = google('gemini-flash-lite-latest')
+  const model = google('gemini-3-flash-preview')
   const { text } = await generateText({
     model,
     system: systemPrompt,
@@ -98,7 +98,7 @@ ${entriesText}
 
 上記を踏まえて、さりげない気遣いのメッセージを生成してください。`
 
-  const model = google('gemini-flash-latest')
+  const model = google('gemini-3-flash-preview')
   const { text } = await generateText({
     model,
     system: systemPrompt,
