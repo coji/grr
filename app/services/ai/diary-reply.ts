@@ -86,8 +86,8 @@ export async function generateDiaryReply({
     .join('\n')
 
   try {
-    // Use gemini-2.5-flash for better multimodal capabilities
-    const model = google('gemini-2.5-flash')
+    // Use gemini-3-flash-preview for better multimodal capabilities
+    const model = google('gemini-3-flash-preview')
 
     // Build content array with text and images
     const content: Array<
