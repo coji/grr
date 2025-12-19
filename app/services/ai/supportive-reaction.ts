@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google'
+import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateObject } from 'ai'
 import { z } from 'zod'
 import { getPersonaBackground } from './persona'
@@ -28,6 +28,11 @@ export async function generateSupportiveReaction({
     const model = google('gemini-3-flash-preview')
     const { object } = await generateObject({
       model,
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: 'minimal' },
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       schema: reactionSchema,
       system: `
 ${getPersonaBackground(personaName)}

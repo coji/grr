@@ -1,4 +1,4 @@
-import { google } from '@ai-sdk/google'
+import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateText } from 'ai'
 import dayjs from '~/lib/dayjs'
 import {
@@ -117,6 +117,11 @@ export async function generateDiaryReply({
 
     const { text } = await generateText({
       model,
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: 'medium' },
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
       messages: [
         {
           role: 'user',
