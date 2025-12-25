@@ -78,6 +78,9 @@ ${getPersonaBackground(personaName)}
 - 明確な希望があれば必ず尊重する
 - 希望が曖昧な場合はcomfortを選ぶ
 - ネガティブな自己評価で励ましを求めているときはpraiseを優先する
+- 自分を責めている、自己嫌悪の様子があるときはcomfortを選び、否定せず受け止める方向へ
+- 他者への怒りや不満があるときも、まずcomfortで感情を受け止める
+- ユーザーがtough_feedbackやreprimandを明示的に求めていない限り、そちらを選ばない
 - 分類が難しい場合でも必ず上記のいずれかを選ぶ
       `.trim(),
       prompt: [
