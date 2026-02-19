@@ -75,11 +75,17 @@ export async function detectAndStoreFutureEvents(
     return []
   }
 
-  // Check for existing pending follow-ups to avoid duplicates
+  // Check for existing follow-ups to avoid duplicates
+  // Include both 'pending' and 'sent' (within last 7 days) to prevent re-registering same event
   const existingFollowups = await getPendingFollowupsForUser(userId)
+  const recentCutoff = dayjs().subtract(7, 'day').utc().toISOString()
   const existingDescriptions = new Set(
     existingFollowups
-      .filter((f) => f.status === 'pending')
+      .filter(
+        (f) =>
+          f.status === 'pending' ||
+          (f.status === 'sent' && f.updatedAt >= recentCutoff),
+      )
       .map((f) => f.eventDescription.toLowerCase()),
   )
 
