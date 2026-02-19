@@ -4,6 +4,7 @@ import dayjs from '~/lib/dayjs'
 import type { DiaryReminderMoodOption } from '~/services/ai'
 import { generateDiaryReminder } from '~/services/ai'
 import { db } from '~/services/db'
+import { getUserMilestones } from '~/services/proactive-messages'
 import {
   DIARY_MOOD_CHOICES,
   DIARY_PERSONA_NAME,
@@ -50,6 +51,84 @@ const fetchAllWorkspaceUsers = async (client: SlackAPIClient) => {
     if (!cursor) break
   } while (cursor)
   return members
+}
+
+/**
+ * Get context for personalized reminder variations
+ */
+async function getReminderContext(
+  userId: string,
+  tokyoNow: dayjs.Dayjs,
+): Promise<{
+  daysSinceLastEntry?: number
+  currentStreak?: number
+  isWeekStart?: boolean
+  isWeekEnd?: boolean
+  recentMoodTrend?: 'positive' | 'negative' | 'neutral'
+}> {
+  const context: {
+    daysSinceLastEntry?: number
+    currentStreak?: number
+    isWeekStart?: boolean
+    isWeekEnd?: boolean
+    recentMoodTrend?: 'positive' | 'negative' | 'neutral'
+  } = {}
+
+  // Day of week context
+  const dayOfWeek = tokyoNow.day()
+  context.isWeekStart = dayOfWeek === 1 // Monday
+  context.isWeekEnd = dayOfWeek === 5 || dayOfWeek === 6 // Friday or Saturday
+
+  try {
+    // Get milestone data for streak info
+    const milestones = await getUserMilestones(userId)
+    if (milestones) {
+      context.currentStreak = milestones.currentStreak
+
+      if (milestones.lastEntryDate) {
+        const lastEntry = dayjs(milestones.lastEntryDate).tz(TOKYO_TZ)
+        context.daysSinceLastEntry = tokyoNow.diff(lastEntry, 'day')
+      }
+    }
+
+    // Get recent mood trend (last 5 entries)
+    const recentEntries = await db
+      .selectFrom('diaryEntries')
+      .select('moodLabel')
+      .where('userId', '=', userId)
+      .where('moodLabel', 'is not', null)
+      .orderBy('entryDate', 'desc')
+      .limit(5)
+      .execute()
+
+    if (recentEntries.length >= 3) {
+      const positiveMoods = ['ほっと安心', 'いい感じ', 'うれしい']
+      const negativeMoods = ['おつかれさま', 'もやもや', 'うーん']
+
+      let positiveCount = 0
+      let negativeCount = 0
+
+      for (const entry of recentEntries) {
+        if (entry.moodLabel && positiveMoods.includes(entry.moodLabel)) {
+          positiveCount++
+        } else if (entry.moodLabel && negativeMoods.includes(entry.moodLabel)) {
+          negativeCount++
+        }
+      }
+
+      if (positiveCount >= 3) {
+        context.recentMoodTrend = 'positive'
+      } else if (negativeCount >= 3) {
+        context.recentMoodTrend = 'negative'
+      } else {
+        context.recentMoodTrend = 'neutral'
+      }
+    }
+  } catch (error) {
+    console.error('Failed to get reminder context:', error)
+  }
+
+  return context
 }
 
 export const sendDailyDiaryReminders = async (env: Env) => {
@@ -99,10 +178,15 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       }
 
       const channelId = previousEntry.channelId
+
+      // Get context for reminder variations
+      const reminderContext = await getReminderContext(userId, tokyoNow)
+
       const reminderText = await generateDiaryReminder({
         personaName: DIARY_PERSONA_NAME,
         userId,
         moodOptions: REMINDER_MOOD_OPTIONS,
+        context: reminderContext,
       })
 
       // ユーザーのチャンネルにメンション付き＆ボタン付きでメッセージを送信
