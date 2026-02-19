@@ -4,9 +4,10 @@ import dayjs from '~/lib/dayjs'
 import { generateSupportiveReaction } from '~/services/ai'
 import { storeAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
+import { detectAndStoreFutureEvents } from '~/services/pending-followups'
 import { DIARY_PERSONA_NAME, SUPPORTIVE_REACTIONS } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
-import { sanitizeText } from './utils'
+import { sanitizeText, TOKYO_TZ } from './utils'
 
 export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('message', async ({ payload, context }) => {
@@ -75,6 +76,19 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
         })
         .where('id', '=', entry.id)
         .execute()
+
+      // 未来のイベントを検出してフォローアップをスケジュール (Heartbeat機能)
+      // Note: This runs async but we don't await it to avoid blocking the response
+      const entryDate = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
+      detectAndStoreFutureEvents(
+        entry.id,
+        event.user,
+        entry.channelId,
+        text, // 新しく追加されたテキストのみを解析
+        entryDate,
+      ).catch((error) => {
+        console.error('Failed to detect future events:', error)
+      })
     }
 
     // Process file attachments if present

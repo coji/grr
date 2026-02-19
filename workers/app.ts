@@ -1,6 +1,7 @@
 import { createRequestHandler } from 'react-router'
 import { generateDailyDiaryReflections } from '~/slack-app/daily-reflection'
 import { sendDailyDiaryReminders } from '~/slack-app/reminders'
+import { sendFollowupReminders } from '~/slack-app/send-followup-reminders'
 import { sendWeeklyDigest } from '~/slack-app/weekly-digest'
 import { AiDiaryReplyWorkflow } from '~/workflows/ai-diary-reply'
 
@@ -40,6 +41,11 @@ export default {
     // 毎週土曜日1時(UTC) = JST 10時: 週次ダイジェスト
     if (controller.cron === '0 1 * * 6') {
       await sendWeeklyDigest(env)
+    }
+
+    // 毎日14時(UTC) = JST 23時: フォローアップリマインダー (Heartbeat機能)
+    if (controller.cron === '0 14 * * *') {
+      await sendFollowupReminders(env)
     }
   },
 } satisfies ExportedHandler<Env>

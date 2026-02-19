@@ -84,6 +84,21 @@ export interface Database {
     createdAt: string
     updatedAt: string
   }
+
+  pendingFollowups: {
+    id: string
+    entryId: string
+    userId: string
+    channelId: string
+    eventDescription: string
+    eventDate: string // YYYY-MM-DD - the date the event occurs
+    followUpDate: string // YYYY-MM-DD - when to send the follow-up
+    followUpType: 'how_did_it_go' | 'reminder'
+    messageTs: string | null // Slack message timestamp of the follow-up
+    status: 'pending' | 'sent' | 'answered' | 'expired'
+    createdAt: string
+    updatedAt: string
+  }
 }
 
 export const createDb = (database: D1Database) =>
