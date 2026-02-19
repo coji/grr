@@ -3,6 +3,16 @@ import dayjs from '~/lib/dayjs'
 import { generateFollowupMessage } from '~/services/ai'
 import { db } from '~/services/db'
 import {
+  evaluateAnniversaryMessages,
+  evaluateBriefFollowupMessages,
+  evaluateQuestionMessages,
+  evaluateRandomCheckinMessages,
+  evaluateSeasonalMessages,
+  evaluateWeeklyInsightMessages,
+  recordMessageSent,
+  type ProactiveMessageResult,
+} from '~/services/heartbeat-evaluators'
+import {
   expireOldFollowups,
   getFollowupWithEntry,
   markFollowupAsSent,
@@ -18,20 +28,26 @@ const HEARTBEAT_CONFIG = {
   activeHoursEnd: 21, // 9:00 PM
   // User must have been active within this many days to receive follow-ups
   userActivityWindowDays: 3,
-  // Minimum hours between follow-ups to the same user
-  minHoursBetweenFollowups: 24,
+  // Minimum hours between ANY proactive messages to the same user
+  minHoursBetweenMessages: 24,
 }
 
 /**
- * HEARTBEAT: Periodically wake up and check if there are meaningful follow-ups to send.
+ * HEARTBEAT: Periodically wake up and check if there are meaningful messages to send.
  *
- * This is NOT a blind cron job. It checks:
- * 1. Is it a reasonable hour for the user?
- * 2. Has the user been active recently?
- * 3. Is the follow-up ready to send? (event date has passed)
- * 4. Haven't we already sent a follow-up recently?
+ * This is NOT a blind cron job. It evaluates multiple types of proactive messages:
+ * 1. Event follow-ups (from pending_followups table)
+ * 2. Anniversary reminders (1年前の日記)
+ * 3. Seasonal greetings (季節の挨拶)
+ * 4. Weekly insights (週イチ気づき)
+ * 5. Random check-ins (ランダムな一言)
+ * 6. Question interventions (問いかけ型介入)
+ * 7. Brief entry follow-ups (続きを聞かせて)
  *
- * If conditions aren't met, we just return and wait for the next heartbeat.
+ * Conditions checked:
+ * - Is it a reasonable hour for the user?
+ * - Has the user been active recently?
+ * - Haven't we already sent a message recently?
  */
 export const heartbeatFollowups = async (env: Env) => {
   const tokyoNow = dayjs().tz(TOKYO_TZ)
@@ -53,7 +69,24 @@ export const heartbeatFollowups = async (env: Env) => {
     return
   }
 
-  // Expire old follow-ups
+  const client = new SlackAPIClient(env.SLACK_BOT_TOKEN)
+
+  // Track which users already received a message in this heartbeat
+  const sentToUsers = new Set<string>()
+
+  // ============================================
+  // Phase 1: Process pending event follow-ups
+  // ============================================
+  await processEventFollowups(client, todayDate, sentToUsers)
+
+  // ============================================
+  // Phase 2: Evaluate and send proactive messages
+  // ============================================
+  await processProactiveMessages(client, sentToUsers)
+
+  // ============================================
+  // Phase 3: Cleanup
+  // ============================================
   try {
     const expiredCount = await expireOldFollowups(7)
     if (expiredCount > 0) {
@@ -63,7 +96,17 @@ export const heartbeatFollowups = async (env: Env) => {
     console.error('[HEARTBEAT] Failed to expire old follow-ups:', error)
   }
 
-  // Get all pending follow-ups that are ready (follow-up date <= today)
+  console.log('[HEARTBEAT] Complete')
+}
+
+/**
+ * Process pending event follow-ups from the pendingFollowups table
+ */
+async function processEventFollowups(
+  client: SlackAPIClient,
+  todayDate: string,
+  sentToUsers: Set<string>,
+): Promise<void> {
   const pendingFollowups = await db
     .selectFrom('pendingFollowups')
     .selectAll()
@@ -73,19 +116,24 @@ export const heartbeatFollowups = async (env: Env) => {
     .execute()
 
   if (pendingFollowups.length === 0) {
-    console.log('[HEARTBEAT] No pending follow-ups ready. Sleeping.')
+    console.log('[HEARTBEAT] No pending event follow-ups')
     return
   }
 
   console.log(
-    `[HEARTBEAT] Found ${pendingFollowups.length} pending follow-ups to evaluate`,
+    `[HEARTBEAT] Found ${pendingFollowups.length} pending event follow-ups`,
   )
 
-  const client = new SlackAPIClient(env.SLACK_BOT_TOKEN)
   let sentCount = 0
   let skippedCount = 0
 
   for (const followup of pendingFollowups) {
+    // Skip if we already sent to this user
+    if (sentToUsers.has(followup.userId)) {
+      skippedCount++
+      continue
+    }
+
     const shouldSend = await evaluateFollowup(followup.userId, followup.id)
 
     if (!shouldSend.send) {
@@ -96,7 +144,6 @@ export const heartbeatFollowups = async (env: Env) => {
       continue
     }
 
-    // All conditions met - send the follow-up
     try {
       const followupWithEntry = await getFollowupWithEntry(followup.id)
       const originalEntry = followupWithEntry?.entryDetail ?? null
@@ -133,6 +180,7 @@ export const heartbeatFollowups = async (env: Env) => {
 
       if (result.ok && result.ts) {
         await markFollowupAsSent(followup.id, result.ts)
+        sentToUsers.add(followup.userId)
         sentCount++
         console.log(
           `[HEARTBEAT] Sent follow-up to ${followup.userId}: "${followup.eventDescription}"`,
@@ -147,16 +195,254 @@ export const heartbeatFollowups = async (env: Env) => {
   }
 
   console.log(
-    `[HEARTBEAT] Complete. Sent: ${sentCount}, Skipped: ${skippedCount}`,
+    `[HEARTBEAT] Event follow-ups: Sent ${sentCount}, Skipped ${skippedCount}`,
   )
 }
 
 /**
- * Evaluate whether we should send a follow-up to a user right now.
+ * Process all types of proactive messages
+ */
+async function processProactiveMessages(
+  client: SlackAPIClient,
+  sentToUsers: Set<string>,
+): Promise<void> {
+  const allMessages: ProactiveMessageResult[] = []
+
+  // Evaluate all types of proactive messages
+  try {
+    // Anniversary messages (1年前リマインド)
+    const anniversaryMessages =
+      await evaluateAnniversaryMessages(DIARY_PERSONA_NAME)
+    allMessages.push(...anniversaryMessages)
+    if (anniversaryMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${anniversaryMessages.length} anniversary messages`,
+      )
+    }
+  } catch (error) {
+    console.error('[HEARTBEAT] Failed to evaluate anniversary messages:', error)
+  }
+
+  try {
+    // Seasonal messages (季節の挨拶)
+    const seasonalMessages = await evaluateSeasonalMessages(DIARY_PERSONA_NAME)
+    allMessages.push(...seasonalMessages)
+    if (seasonalMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${seasonalMessages.length} seasonal messages`,
+      )
+    }
+  } catch (error) {
+    console.error('[HEARTBEAT] Failed to evaluate seasonal messages:', error)
+  }
+
+  try {
+    // Weekly insight messages (週イチ気づき)
+    const weeklyMessages =
+      await evaluateWeeklyInsightMessages(DIARY_PERSONA_NAME)
+    allMessages.push(...weeklyMessages)
+    if (weeklyMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${weeklyMessages.length} weekly insight messages`,
+      )
+    }
+  } catch (error) {
+    console.error(
+      '[HEARTBEAT] Failed to evaluate weekly insight messages:',
+      error,
+    )
+  }
+
+  try {
+    // Question intervention messages (問いかけ型介入)
+    const questionMessages = await evaluateQuestionMessages(DIARY_PERSONA_NAME)
+    allMessages.push(...questionMessages)
+    if (questionMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${questionMessages.length} question messages`,
+      )
+    }
+  } catch (error) {
+    console.error('[HEARTBEAT] Failed to evaluate question messages:', error)
+  }
+
+  try {
+    // Brief entry follow-up messages (続きを聞かせて)
+    const briefMessages =
+      await evaluateBriefFollowupMessages(DIARY_PERSONA_NAME)
+    allMessages.push(...briefMessages)
+    if (briefMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${briefMessages.length} brief follow-up messages`,
+      )
+    }
+  } catch (error) {
+    console.error(
+      '[HEARTBEAT] Failed to evaluate brief follow-up messages:',
+      error,
+    )
+  }
+
+  try {
+    // Random check-in messages (ランダムな一言) - evaluated last due to low probability
+    const randomMessages =
+      await evaluateRandomCheckinMessages(DIARY_PERSONA_NAME)
+    allMessages.push(...randomMessages)
+    if (randomMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${randomMessages.length} random check-in messages`,
+      )
+    }
+  } catch (error) {
+    console.error(
+      '[HEARTBEAT] Failed to evaluate random check-in messages:',
+      error,
+    )
+  }
+
+  if (allMessages.length === 0) {
+    console.log('[HEARTBEAT] No proactive messages to send')
+    return
+  }
+
+  console.log(
+    `[HEARTBEAT] Total ${allMessages.length} proactive messages to evaluate`,
+  )
+
+  // Send proactive messages
+  let sentCount = 0
+
+  for (const message of allMessages) {
+    // Skip if we already sent to this user
+    if (sentToUsers.has(message.userId)) {
+      continue
+    }
+
+    // Check if user received any proactive message recently
+    const canSend = await canSendProactiveMessage(message.userId)
+    if (!canSend) {
+      console.log(
+        `[HEARTBEAT] Skipping ${message.messageType} for ${message.userId}: sent recently`,
+      )
+      continue
+    }
+
+    try {
+      const result = await client.chat.postMessage({
+        channel: message.channelId,
+        text: `<@${message.userId}> ${message.text}`,
+        blocks: buildProactiveMessageBlocks(message),
+      })
+
+      if (result.ok && result.ts) {
+        await recordMessageSent(message, result.ts)
+        sentToUsers.add(message.userId)
+        sentCount++
+        console.log(
+          `[HEARTBEAT] Sent ${message.messageType} to ${message.userId}`,
+        )
+      }
+    } catch (error) {
+      console.error(
+        `[HEARTBEAT] Failed to send ${message.messageType} to ${message.userId}:`,
+        error,
+      )
+    }
+  }
+
+  console.log(`[HEARTBEAT] Sent ${sentCount} proactive messages`)
+}
+
+/**
+ * Build Block Kit blocks for different proactive message types
+ */
+function buildProactiveMessageBlocks(
+  message: ProactiveMessageResult,
+): Array<
+  | { type: 'section'; text: { type: 'mrkdwn'; text: string } }
+  | { type: 'context'; elements: Array<{ type: 'mrkdwn'; text: string }> }
+> {
+  const blocks: Array<
+    | { type: 'section'; text: { type: 'mrkdwn'; text: string } }
+    | { type: 'context'; elements: Array<{ type: 'mrkdwn'; text: string }> }
+  > = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `<@${message.userId}> ${message.text}`,
+      },
+    },
+  ]
+
+  // Add context based on message type
+  const contextMap: Record<string, string> = {
+    anniversary: '📅 _1年前の今日の日記から_',
+    seasonal: '🌸 _季節のご挨拶_',
+    weekly_insight: '📝 _今週の日記から_',
+    random_checkin: '💭 _ふと思い出して_',
+    question: '🤔 _最近の日記を読んで_',
+    brief_followup: '✏️ _日記の続き_',
+  }
+
+  const contextText = contextMap[message.messageType]
+  if (contextText) {
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: contextText,
+        },
+      ],
+    })
+  }
+
+  return blocks
+}
+
+/**
+ * Check if we can send a proactive message to a user
+ */
+async function canSendProactiveMessage(userId: string): Promise<boolean> {
+  const tokyoNow = dayjs().tz(TOKYO_TZ)
+  const cutoff = tokyoNow
+    .subtract(HEARTBEAT_CONFIG.minHoursBetweenMessages, 'hour')
+    .utc()
+    .toISOString()
+
+  // Check proactive_messages table
+  const recentProactive = await db
+    .selectFrom('proactiveMessages')
+    .select('id')
+    .where('userId', '=', userId)
+    .where('sentAt', '>=', cutoff)
+    .limit(1)
+    .executeTakeFirst()
+
+  if (recentProactive) {
+    return false
+  }
+
+  // Check pending_followups table
+  const recentFollowup = await db
+    .selectFrom('pendingFollowups')
+    .select('id')
+    .where('userId', '=', userId)
+    .where('status', '=', 'sent')
+    .where('updatedAt', '>=', cutoff)
+    .limit(1)
+    .executeTakeFirst()
+
+  return !recentFollowup
+}
+
+/**
+ * Evaluate whether we should send an event follow-up to a user right now.
  */
 async function evaluateFollowup(
   userId: string,
-  followupId: string,
+  _followupId: string,
 ): Promise<{ send: boolean; reason?: string }> {
   const tokyoNow = dayjs().tz(TOKYO_TZ)
 
@@ -180,26 +466,12 @@ async function evaluateFollowup(
     }
   }
 
-  // Check: Have we sent a follow-up to this user recently?
-  const recentFollowupCutoff = tokyoNow
-    .subtract(HEARTBEAT_CONFIG.minHoursBetweenFollowups, 'hour')
-    .utc()
-    .toISOString()
-
-  const recentFollowup = await db
-    .selectFrom('pendingFollowups')
-    .select('id')
-    .where('userId', '=', userId)
-    .where('status', '=', 'sent')
-    .where('updatedAt', '>=', recentFollowupCutoff)
-    .where('id', '!=', followupId)
-    .limit(1)
-    .executeTakeFirst()
-
-  if (recentFollowup) {
+  // Check: Have we sent any message to this user recently?
+  const canSend = await canSendProactiveMessage(userId)
+  if (!canSend) {
     return {
       send: false,
-      reason: `Already sent follow-up within ${HEARTBEAT_CONFIG.minHoursBetweenFollowups}h`,
+      reason: `Already sent message within ${HEARTBEAT_CONFIG.minHoursBetweenMessages}h`,
     }
   }
 

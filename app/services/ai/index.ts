@@ -27,3 +27,12 @@ export {
   type DetectFutureEventsContext,
   type FutureEvent,
 } from './future-event-detection'
+export {
+  generateAnniversaryMessage,
+  generateMilestoneMessage,
+  generateWeeklyInsightMessage,
+  generateSeasonalMessage,
+  generateRandomCheckinMessage,
+  generateQuestionMessage,
+  generateBriefFollowupMessage,
+} from './proactive-messages'

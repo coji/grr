@@ -6,6 +6,7 @@
     "app/**/.server/**/*",
     "app/**/.client/**/*",
     "workers/**/*",
+    "env.d.ts",
     "worker-configuration.d.ts"
   ],
   "exclude": ["app/**/*.integration.test.ts"],

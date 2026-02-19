@@ -4,7 +4,9 @@ import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { storeAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
+import { handleDiaryEntryMilestone } from '~/services/milestone-handler'
 import { detectAndStoreFutureEvents } from '~/services/pending-followups'
+import { DIARY_PERSONA_NAME } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { TOKYO_TZ, sanitizeText } from './utils'
 
@@ -143,6 +145,18 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
         entryDate,
       ).catch((error) => {
         console.error('Failed to detect future events:', error)
+      })
+    }
+
+    // マイルストーン追跡と祝いメッセージ (非同期で実行)
+    if (entry) {
+      handleDiaryEntryMilestone(
+        event.user,
+        event.channel,
+        entryDate,
+        DIARY_PERSONA_NAME,
+      ).catch((error) => {
+        console.error('Failed to handle milestone:', error)
       })
     }
 
