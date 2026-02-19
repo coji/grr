@@ -4,6 +4,7 @@ import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { storeAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
+import { detectAndStoreFutureEvents } from '~/services/pending-followups'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { TOKYO_TZ, sanitizeText } from './utils'
 
@@ -129,6 +130,20 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
           .where('id', '=', entry.id)
           .execute()
       }
+    }
+
+    // 未来のイベントを検出してフォローアップをスケジュール (Heartbeat機能)
+    // Note: This runs async but we don't await it to avoid blocking the response
+    if (entry && cleaned) {
+      detectAndStoreFutureEvents(
+        entry.id,
+        event.user,
+        event.channel,
+        cleaned,
+        entryDate,
+      ).catch((error) => {
+        console.error('Failed to detect future events:', error)
+      })
     }
 
     // 前回のエントリを取得（当日より前の最新エントリ）
