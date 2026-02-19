@@ -99,6 +99,38 @@ export interface Database {
     createdAt: string
     updatedAt: string
   }
+
+  proactiveMessages: {
+    id: string
+    userId: string
+    channelId: string
+    messageType:
+      | 'anniversary'
+      | 'milestone'
+      | 'weekly_insight'
+      | 'seasonal'
+      | 'random_checkin'
+      | 'monthly_report'
+      | 'question'
+      | 'brief_followup'
+    messageKey: string | null
+    metadata: string | null
+    messageTs: string | null
+    sentAt: string
+    createdAt: string
+  }
+
+  userMilestones: {
+    userId: string
+    totalEntries: number
+    currentStreak: number
+    longestStreak: number
+    lastEntryDate: string | null
+    firstEntryDate: string | null
+    lastMilestoneCelebrated: string | null // JSON array
+    createdAt: string
+    updatedAt: string
+  }
 }
 
 export const createDb = (database: D1Database) =>

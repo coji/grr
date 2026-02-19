@@ -1,5 +1,6 @@
 import { createRequestHandler } from 'react-router'
 import { generateDailyDiaryReflections } from '~/slack-app/daily-reflection'
+import { sendMonthlyReport } from '~/slack-app/monthly-report'
 import { sendDailyDiaryReminders } from '~/slack-app/reminders'
 import { heartbeatFollowups } from '~/slack-app/send-followup-reminders'
 import { sendWeeklyDigest } from '~/slack-app/weekly-digest'
@@ -47,6 +48,8 @@ export default {
     // 9-21時JST以外は自動でスリープする
     if (controller.cron === '0 */3 * * *') {
       await heartbeatFollowups(env)
+      // 月次レポート (月初1-7日の土曜日のみ実行される)
+      await sendMonthlyReport(env)
     }
   },
 } satisfies ExportedHandler<Env>
