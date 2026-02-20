@@ -27,6 +27,11 @@
       "name": "ai-diary-reply",
       "binding": "AI_DIARY_REPLY_WORKFLOW",
       "class_name": "AiDiaryReplyWorkflow"
+    },
+    {
+      "name": "memory-extraction",
+      "binding": "MEMORY_EXTRACTION_WORKFLOW",
+      "class_name": "MemoryExtractionWorkflow"
     }
   ],
   "triggers": {

@@ -4,6 +4,7 @@ import dayjs from '~/lib/dayjs'
 import { generateSupportiveReaction } from '~/services/ai'
 import { storeAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
+import { queueMemoryExtraction } from '~/services/memory'
 import { detectAndStoreFutureEvents } from '~/services/pending-followups'
 import { DIARY_PERSONA_NAME, SUPPORTIVE_REACTIONS } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
@@ -88,6 +89,11 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
         entryDate,
       ).catch((error) => {
         console.error('Failed to detect future events:', error)
+      })
+
+      // メモリ抽出をキューに追加 (HEARTBEATで非同期処理)
+      queueMemoryExtraction(event.user, entry.id).catch((error) => {
+        console.error('Failed to queue memory extraction:', error)
       })
     }
 

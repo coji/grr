@@ -1,6 +1,7 @@
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateText } from 'ai'
 import dayjs from '~/lib/dayjs'
+import { getMemoryContextForReply } from '~/services/memory-retrieval'
 import {
   inferDiaryReplyIntent,
   type DiaryReplyIntentType,
@@ -71,6 +72,18 @@ export async function generateDiaryReply({
   const now = dayjs().tz(TOKYO_TZ)
   const dateInfo = `今日: ${now.format('YYYY年M月D日(ddd)')}`
 
+  // Retrieve memory context for the user
+  let memoryContext = ''
+  try {
+    const memoryResult = await getMemoryContextForReply(userId, 500)
+    if (memoryResult.summary) {
+      memoryContext = memoryResult.summary
+    }
+  } catch (error) {
+    console.warn('Failed to retrieve memory context:', error)
+    // Continue without memory context
+  }
+
   const detailSummary = [
     dateInfo,
     moodLabel ? `最近のきもち: ${moodLabel}` : undefined,
@@ -130,7 +143,7 @@ export async function generateDiaryReply({
       ],
       system: `
 ${getPersonaBackground(personaName)}
-
+${memoryContext ? `\n${memoryContext}\n` : ''}
 ## 今回のタスク
 Slackで日記を書いた相手に寄り添って返信してください。
 
