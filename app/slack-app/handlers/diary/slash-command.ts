@@ -6,6 +6,14 @@ import type {
 import dayjs from '~/lib/dayjs'
 import { getAttachmentStats } from '~/services/attachments'
 import { db } from '~/services/db'
+import {
+  CATEGORY_LABELS,
+  clearAllMemories,
+  deleteMemory,
+  getActiveMemories,
+  type MemoryCategory,
+} from '~/services/memory'
+import { getMemoryStats } from '~/services/memory-retrieval'
 import { TOKYO_TZ } from './utils'
 
 export function registerSlashCommandHandler(app: SlackApp<SlackEdgeAppEnv>) {
@@ -32,6 +40,8 @@ export function registerSlashCommandHandler(app: SlackApp<SlackEdgeAppEnv>) {
           return await handleExportCommand(userId, context)
         case 'reflection':
           return await handleReflectionCommand(userId, args.slice(1), context)
+        case 'memory':
+          return await handleMemoryCommand(userId, args.slice(1), context)
         default:
           return await handleHelpCommand(context)
       }
@@ -313,6 +323,201 @@ async function handleReflectionCommand(
   })
 }
 
+async function handleMemoryCommand(
+  userId: string,
+  args: string[],
+  context: SlackAppContextWithOptionalRespond,
+) {
+  const action = args[0]?.toLowerCase() || 'list'
+
+  switch (action) {
+    case 'list':
+      return await handleMemoryListCommand(userId, context)
+    case 'delete':
+      return await handleMemoryDeleteCommand(userId, args[1], context)
+    case 'clear':
+      return await handleMemoryClearCommand(userId, context)
+    case 'stats':
+      return await handleMemoryStatsCommand(userId, context)
+    default:
+      await context.respond?.({
+        text: `*メモリーコマンドヘルプ*
+
+\`/diary memory list\` - 覚えていることを一覧表示
+\`/diary memory stats\` - メモリーの統計を表示
+\`/diary memory delete <ID>\` - 特定のメモリーを削除
+\`/diary memory clear\` - すべてのメモリーを削除
+`,
+        response_type: 'ephemeral',
+      })
+  }
+}
+
+async function handleMemoryListCommand(
+  userId: string,
+  context: SlackAppContextWithOptionalRespond,
+) {
+  const memories = await getActiveMemories(userId)
+
+  if (memories.length === 0) {
+    await context.respond?.({
+      text: '覚えていることはまだありません。日記を書き続けると、あなたのことを少しずつ覚えていきます。',
+      response_type: 'ephemeral',
+    })
+    return
+  }
+
+  // Group by category
+  const grouped: Record<string, typeof memories> = {}
+  for (const memory of memories) {
+    const category = (memory.category ?? 'general') as MemoryCategory
+    if (!grouped[category]) grouped[category] = []
+    grouped[category].push(memory)
+  }
+
+  // Build display
+  const sections: string[] = []
+  const categoryOrder: MemoryCategory[] = [
+    'work',
+    'family',
+    'personal',
+    'health',
+    'hobby',
+    'general',
+  ]
+
+  for (const category of categoryOrder) {
+    const categoryMemories = grouped[category]
+    if (!categoryMemories || categoryMemories.length === 0) continue
+
+    const label = CATEGORY_LABELS[category]
+    const items = categoryMemories
+      .map((m) => `  • ${m.content} \`[${m.id.slice(0, 8)}]\``)
+      .join('\n')
+    sections.push(`*${label}*\n${items}`)
+  }
+
+  const text = `*ほたるが覚えていること* (${memories.length}件)\n\n${sections.join('\n\n')}\n\n_削除するには \`/diary memory delete <ID>\` を使用してください_`
+
+  await context.respond?.({
+    text,
+    response_type: 'ephemeral',
+  })
+}
+
+async function handleMemoryDeleteCommand(
+  userId: string,
+  memoryId: string | undefined,
+  context: SlackAppContextWithOptionalRespond,
+) {
+  if (!memoryId) {
+    await context.respond?.({
+      text: '削除するメモリーのIDを指定してください。\n使い方: `/diary memory delete <ID>`',
+      response_type: 'ephemeral',
+    })
+    return
+  }
+
+  // Find the memory (support partial ID matching)
+  const memories = await getActiveMemories(userId)
+  const memory = memories.find(
+    (m) => m.id === memoryId || m.id.startsWith(memoryId),
+  )
+
+  if (!memory) {
+    await context.respond?.({
+      text: `ID「${memoryId}」のメモリーが見つかりませんでした。\n\`/diary memory list\` で一覧を確認してください。`,
+      response_type: 'ephemeral',
+    })
+    return
+  }
+
+  await deleteMemory(memory.id)
+
+  await context.respond?.({
+    text: `メモリーを削除しました:\n_${memory.content}_`,
+    response_type: 'ephemeral',
+  })
+}
+
+async function handleMemoryClearCommand(
+  userId: string,
+  context: SlackAppContextWithOptionalRespond,
+) {
+  const count = await clearAllMemories(userId)
+
+  if (count === 0) {
+    await context.respond?.({
+      text: '削除するメモリーがありませんでした。',
+      response_type: 'ephemeral',
+    })
+    return
+  }
+
+  await context.respond?.({
+    text: `${count}件のメモリーをすべて削除しました。\nまた日記を書き始めると、新しく覚えていきます。`,
+    response_type: 'ephemeral',
+  })
+}
+
+async function handleMemoryStatsCommand(
+  userId: string,
+  context: SlackAppContextWithOptionalRespond,
+) {
+  const stats = await getMemoryStats(userId)
+
+  if (stats.totalCount === 0) {
+    await context.respond?.({
+      text: '覚えていることはまだありません。',
+      response_type: 'ephemeral',
+    })
+    return
+  }
+
+  const typeLabels: Record<string, string> = {
+    fact: '事実',
+    preference: '好み',
+    pattern: 'パターン',
+    relationship: '関係',
+    goal: '目標',
+    emotion_trigger: '感情トリガー',
+  }
+
+  const byTypeStr = Object.entries(stats.byType)
+    .map(([type, count]) => `  ${typeLabels[type] || type}: ${count}件`)
+    .join('\n')
+
+  const byCategoryStr = Object.entries(stats.byCategory)
+    .map(
+      ([cat, count]) =>
+        `  ${CATEGORY_LABELS[cat as MemoryCategory] || cat}: ${count}件`,
+    )
+    .join('\n')
+
+  const oldest = stats.oldestMemory
+    ? dayjs(stats.oldestMemory).format('YYYY年M月D日')
+    : '不明'
+  const newest = stats.newestMemory
+    ? dayjs(stats.newestMemory).format('YYYY年M月D日')
+    : '不明'
+
+  const text = `*メモリー統計*
+
+総数: ${stats.totalCount}件
+期間: ${oldest} 〜 ${newest}
+
+*種類別*
+${byTypeStr}
+
+*カテゴリ別*
+${byCategoryStr}`
+
+  await context.respond?.({
+    text,
+    response_type: 'ephemeral',
+  })
+}
+
 async function handleHelpCommand(context: SlackAppContextWithOptionalRespond) {
   const help = `*日記コマンドヘルプ*
 
@@ -321,6 +526,7 @@ async function handleHelpCommand(context: SlackAppContextWithOptionalRespond) {
 \`/diary stats\` - 統計を表示
 \`/diary export\` - CSVエクスポート
 \`/diary reflection [日付]\` - AIふりかえりメモを表示
+\`/diary memory\` - メモリー管理 (list/delete/clear/stats)
 \`/diary help\` - このヘルプを表示
 `
 

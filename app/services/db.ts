@@ -131,6 +131,57 @@ export interface Database {
     createdAt: string
     updatedAt: string
   }
+
+  userMemories: {
+    id: string
+    userId: string
+    memoryType:
+      | 'fact'
+      | 'preference'
+      | 'pattern'
+      | 'relationship'
+      | 'goal'
+      | 'emotion_trigger'
+    category:
+      | 'work'
+      | 'health'
+      | 'hobby'
+      | 'family'
+      | 'personal'
+      | 'general'
+      | null
+    content: string
+    sourceEntryIds: string | null // JSON array of entry IDs
+    confidence: number
+    importance: number
+    firstObservedAt: string
+    lastConfirmedAt: string
+    mentionCount: number
+    isActive: number // 0 or 1
+    supersededBy: string | null
+    userConfirmed: number // 0 or 1
+    createdAt: string
+    updatedAt: string
+  }
+
+  memoryExtractions: {
+    id: string
+    userId: string
+    entryId: string
+    status: 'pending' | 'processing' | 'completed' | 'failed'
+    extractedMemories: string | null // JSON array
+    processingNotes: string | null
+    createdAt: string
+    processedAt: string | null
+  }
+
+  memoryContextCache: {
+    userId: string
+    contextSummary: string
+    memorySnapshot: string // JSON
+    lastUpdatedAt: string
+    invalidatedAt: string | null
+  }
 }
 
 export const createDb = (database: D1Database) =>
