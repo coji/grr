@@ -152,6 +152,7 @@ export function registerModalSubmissionHandlers(
           reminderHour,
           skipWeekends,
           diaryChannelId: null,
+          personalityChangePending: 0,
           createdAt: now,
           updatedAt: now,
         })
