@@ -304,6 +304,11 @@ export async function getMemoryCount(userId: string): Promise<number> {
 export async function triggerImmediateMemoryExtraction(
   userId: string,
   entryId: string,
+  options?: {
+    channelId?: string
+    messageTs?: string
+    threadTs?: string
+  },
 ): Promise<void> {
   const now = dayjs().utc().toISOString()
 
@@ -343,6 +348,9 @@ export async function triggerImmediateMemoryExtraction(
         extractionId,
         entryId,
         userId,
+        channelId: options?.channelId,
+        messageTs: options?.messageTs,
+        threadTs: options?.threadTs,
       },
     })
     console.log(

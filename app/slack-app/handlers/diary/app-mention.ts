@@ -150,8 +150,13 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
     }
 
     // メモリ抽出を即時実行 (Workflowで非同期処理)
+    // channel/message info is passed so the workflow can fetch unfurl data
     if (entry && cleaned) {
-      triggerImmediateMemoryExtraction(event.user, entry.id).catch((error) => {
+      triggerImmediateMemoryExtraction(event.user, entry.id, {
+        channelId: event.channel,
+        messageTs: event.ts,
+        threadTs: 'thread_ts' in event ? event.thread_ts : undefined,
+      }).catch((error) => {
         console.error('Failed to trigger memory extraction:', error)
       })
     }

@@ -2,8 +2,8 @@
  * Cloudflare Workflow for extracting memories from diary entries
  *
  * This workflow handles the process of:
- * 1. Gathering context (current entry, recent entries, existing memories)
- * 2. Extracting new memories via AI
+ * 1. Gathering context (current entry, recent entries, existing memories, unfurls)
+ * 2. Extracting new memories via AI (including explicit memory request detection)
  * 3. Processing and storing extracted memories
  * 4. Invalidating the context cache
  *
@@ -12,14 +12,16 @@
  */
 
 import {
+  env,
   WorkflowEntrypoint,
   type WorkflowEvent,
   type WorkflowStep,
 } from 'cloudflare:workers'
+import { SlackAPIClient } from 'slack-edge'
 import {
   extractMemoriesFromEntry,
   validateExtractedMemory,
-  type ExtractedMemory,
+  type MemoryExtractionResult,
 } from '~/services/ai/memory-extraction'
 import { db } from '~/services/db'
 import {
@@ -31,11 +33,21 @@ import {
   markExtractionCompleted,
   supersedeMemory,
 } from '~/services/memory'
+import {
+  fetchUnfurlsFromMessage,
+  type UnfurlInfo,
+} from '~/slack-app/handlers/diary/unfurl-utils'
 
 export interface MemoryExtractionParams {
   extractionId: string
   entryId: string
   userId: string
+  /** Slack channel ID for fetching unfurl data */
+  channelId?: string
+  /** Slack message timestamp for fetching unfurl data */
+  messageTs?: string
+  /** Slack thread timestamp for fetching unfurl data */
+  threadTs?: string
 }
 
 export class MemoryExtractionWorkflow extends WorkflowEntrypoint<
@@ -49,7 +61,7 @@ export class MemoryExtractionWorkflow extends WorkflowEntrypoint<
     const params = event.payload
     console.log(`Starting memory extraction for entry ${params.entryId}`)
 
-    // Step 1: Gather context
+    // Step 1: Gather context (including unfurl data from Slack)
     const context = await step.do(
       'gather-context',
       {
@@ -80,6 +92,28 @@ export class MemoryExtractionWorkflow extends WorkflowEntrypoint<
         // Get existing memories
         const existingMemories = await getActiveMemories(params.userId)
 
+        // Fetch unfurl (link preview) data from the Slack message
+        let unfurlInfo: UnfurlInfo[] = []
+        if (params.channelId && params.messageTs) {
+          try {
+            const slackClient = new SlackAPIClient(env.SLACK_BOT_TOKEN)
+            unfurlInfo = await fetchUnfurlsFromMessage(
+              slackClient,
+              params.channelId,
+              params.messageTs,
+              params.threadTs,
+            )
+            if (unfurlInfo.length > 0) {
+              console.log(
+                `[Memory] Found ${unfurlInfo.length} unfurl(s) in message`,
+              )
+            }
+          } catch (error) {
+            // Unfurl fetch failure is non-critical — proceed without unfurl data
+            console.warn('[Memory] Failed to fetch unfurls:', error)
+          }
+        }
+
         return {
           entry: {
             id: entry.id,
@@ -93,24 +127,34 @@ export class MemoryExtractionWorkflow extends WorkflowEntrypoint<
             moodLabel: e.moodLabel,
           })),
           existingMemories,
+          unfurlInfo,
         }
       },
     )
 
     // Step 2: Extract memories via AI
-    const extractedMemories = await step.do(
+    const extractionResult = await step.do(
       'extract-memories',
       {
         retries: { limit: 2, delay: '10 seconds' },
       },
-      async (): Promise<ExtractedMemory[]> => {
+      async (): Promise<MemoryExtractionResult> => {
         return await extractMemoriesFromEntry({
           currentEntry: context.entry,
           recentEntries: context.recentEntries,
           existingMemories: context.existingMemories,
+          unfurlInfo: context.unfurlInfo,
         })
       },
     )
+
+    const { isExplicitRequest, memories: extractedMemories } = extractionResult
+
+    if (isExplicitRequest) {
+      console.log(
+        `[Memory] Explicit memory request detected for entry ${params.entryId}`,
+      )
+    }
 
     // Step 3: Process and store memories
     const processedCount = await step.do(
@@ -182,10 +226,20 @@ export class MemoryExtractionWorkflow extends WorkflowEntrypoint<
     // Step 4: Update extraction record and invalidate cache
     await step.do('finalize', async (): Promise<void> => {
       // Mark extraction as completed
+      const notes = [
+        `Processed ${processedCount} memories`,
+        isExplicitRequest ? 'explicit_request=true' : null,
+        context.unfurlInfo.length > 0
+          ? `unfurls=${context.unfurlInfo.length}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(', ')
+
       await markExtractionCompleted(
         params.extractionId,
         extractedMemories,
-        `Processed ${processedCount} memories`,
+        notes,
       )
 
       // Invalidate context cache if new memories were added

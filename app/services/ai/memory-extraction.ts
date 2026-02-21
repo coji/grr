@@ -3,12 +3,16 @@
  *
  * This analyzes diary text and extracts facts, preferences, patterns,
  * relationships, goals, and emotion triggers about the user.
+ *
+ * Also detects explicit memory requests (e.g., "覚えておいて") and
+ * incorporates Slack unfurl (link preview) information for richer context.
  */
 
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateObject } from 'ai'
 import { z } from 'zod'
 import type { UserMemory } from '~/services/memory'
+import type { UnfurlInfo } from '~/slack-app/handlers/diary/unfurl-utils'
 
 export type MemoryAction = 'new' | 'update' | 'confirm'
 
@@ -20,6 +24,11 @@ export interface ExtractedMemory {
   importance: number
   action: MemoryAction
   relatedMemoryId?: string
+}
+
+export interface MemoryExtractionResult {
+  isExplicitRequest: boolean
+  memories: ExtractedMemory[]
 }
 
 export interface MemoryExtractionContext {
@@ -35,9 +44,16 @@ export interface MemoryExtractionContext {
     moodLabel: string | null
   }>
   existingMemories: UserMemory[]
+  /** Unfurl (link preview) information from shared URLs in the message */
+  unfurlInfo?: UnfurlInfo[]
 }
 
 const extractedMemorySchema = z.object({
+  isExplicitRequest: z
+    .boolean()
+    .describe(
+      'ユーザーが「覚えておいて」「忘れないで」「メモして」等と明示的に記憶を依頼しているか',
+    ),
   memories: z.array(
     z.object({
       type: z
@@ -76,11 +92,11 @@ const extractedMemorySchema = z.object({
  */
 export async function extractMemoriesFromEntry(
   context: MemoryExtractionContext,
-): Promise<ExtractedMemory[]> {
+): Promise<MemoryExtractionResult> {
   const entryText = context.currentEntry.detail
   if (!entryText || entryText.trim().length < 10) {
     // Too short to extract meaningful memories
-    return []
+    return { isExplicitRequest: false, memories: [] }
   }
 
   try {
@@ -90,6 +106,7 @@ export async function extractMemoriesFromEntry(
       context.existingMemories,
     )
     const recentEntriesSummary = formatRecentEntries(context.recentEntries)
+    const unfurlSection = formatUnfurlInfo(context.unfurlInfo)
 
     const { object } = await generateObject({
       model,
@@ -122,6 +139,11 @@ work / health / hobby / family / personal / general
 3. 最大5件まで
 4. 確信度: 推測=0.5-0.7、明言=0.8-1.0
 5. 重要度: 日常的=1-4、中程度=5-7、重要=8-10
+6. 共有リンクの情報がある場合、リンク先の具体的な名称や情報を記憶に含める
+7. ユーザーが「覚えておいて」「忘れないで」「メモして」等と明示的に記憶を依頼している場合:
+   - isExplicitRequest=true を返す
+   - メッセージ内の情報を必ず1件以上抽出する
+   - 確信度は1.0、重要度は7以上に設定
 
 ## 既存記憶との照合
 - 同じ内容 → action="confirm" + relatedMemoryId
@@ -138,6 +160,8 @@ work / health / hobby / family / personal / general
 ${entryText}
 """
 
+${unfurlSection}
+
 ${recentEntriesSummary}
 
 ${existingMemoriesSummary}
@@ -146,11 +170,30 @@ ${existingMemoriesSummary}
       `.trim(),
     })
 
-    return object.memories as ExtractedMemory[]
+    return {
+      isExplicitRequest: object.isExplicitRequest,
+      memories: object.memories as ExtractedMemory[],
+    }
   } catch (error) {
     console.error('extractMemoriesFromEntry failed', error)
-    return []
+    return { isExplicitRequest: false, memories: [] }
   }
+}
+
+/**
+ * Format unfurl (link preview) information for the prompt
+ */
+function formatUnfurlInfo(unfurls?: UnfurlInfo[]): string {
+  if (!unfurls || unfurls.length === 0) return ''
+
+  const lines = unfurls
+    .map(
+      (u) =>
+        `- ${u.url}: ${u.title ?? '(タイトルなし)'}${u.description ? ` - ${u.description}` : ''}`,
+    )
+    .join('\n')
+
+  return `## 共有されたリンクの情報\n${lines}`
 }
 
 /**
