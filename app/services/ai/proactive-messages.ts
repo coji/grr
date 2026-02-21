@@ -4,7 +4,7 @@
 
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateText } from 'ai'
-import { getPersonaBackground } from './persona'
+import { getPersonaBackgroundShort } from './persona'
 
 const modelOptions = {
   google: {
@@ -32,24 +32,17 @@ export async function generateAnniversaryMessage({
       model,
       providerOptions: modelOptions,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-1年前の今日の日記をユーザーに思い出させるメッセージを生成してください。
-
-## メッセージのルール
-- 導入文（1行）+ 引用 + 感想（1行）の構成
-- 温かく懐かしい雰囲気
-- 「1年前」「あれから」などの時間の流れを意識させる言葉
-- 今の状況を聞く問いかけを含めてもOK
-- 絵文字は1つまで
+## タスク
+1年前の日記を思い出させるメッセージを生成する。
 
 ## 出力フォーマット
-導入文
-
+導入文（1行）
 > 引用
+感想や問いかけ（1行）
 
-感想や問いかけ
+トーン: 温かく懐かしい。絵文字は1つまで。
       `.trim(),
       prompt: `
 1年前の日付: ${oneYearAgoDate}
@@ -94,22 +87,18 @@ export async function generateMilestoneMessage({
       model,
       providerOptions: modelOptions,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-ユーザーがマイルストーンに到達したことを祝うメッセージを生成してください。
+## タスク
+マイルストーン到達を祝うメッセージを生成する。
 
-## メッセージのルール
-- 2-3文、80文字以内
-- 心からの祝福と労いを込める
-- 押し付けがましくない
-- 今後も続けることへのプレッシャーは避ける
-- 絵文字は1-2個まで
-- 改行は使ってOK
+## 出力フォーマット
+- 長さ: 2-3文、80文字以内
+- トーン: 祝福と労い
+- 絵文字: 1-2個まで
 
-## 良い例
-- 「おめでとう！これで100回目の日記だよ。あなたの言葉をそばで聞いてこられて嬉しいな。」
-- 「7日連続！すごいね。無理せず、あなたのペースで続けていこうね。」
+## 例
+「おめでとう！100回目の日記だよ。あなたの言葉をそばで聞けて嬉しいな。」
       `.trim(),
       prompt: `
 マイルストーン: ${milestoneDescriptions[milestoneType]}
@@ -159,26 +148,19 @@ export async function generateWeeklyInsightMessage({
       model,
       providerOptions: modelOptions,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-今週の日記を振り返って「気づいたこと」を共有するメッセージを生成してください。
+## タスク
+今週の日記から「気づいたこと」を共有するメッセージを生成する。
 
-## メッセージのルール
-- 2-4文、150文字以内
-- 週全体を俯瞰した「気づき」を伝える
-- ポジティブな変化や傾向を見つける
-- 説教や助言は避ける
-- 「見守っている」感を出す
-- 絵文字は1つまで
+## 出力フォーマット
+- 長さ: 2-4文、150文字以内
+- 内容: 週全体の傾向やポジティブな変化
+- トーン: 見守っている感
+- 絵文字: 1つまで
 
-## 良い例
-- 「今週の日記を見ていて気づいたんだけど、水曜日から少しずつ調子が上向いてきているみたいだね。先週と比べて「楽しい」という言葉が増えているよ。このまま週末も穏やかに過ごせますように。」
-
-## 避けること
-- 個々のエントリの詳細な分析
-- プレッシャーを与える言葉
-- 長すぎる文章
+## 例
+「今週の日記を見ていて気づいたんだけど、水曜から調子が上向いているみたい。「楽しい」が増えてるよ。」
       `.trim(),
       prompt: `
 今週の日記:
@@ -215,21 +197,18 @@ export async function generateSeasonalMessage({
       model,
       providerOptions: modelOptions,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-季節の節目に合わせた挨拶メッセージを生成してください。
+## タスク
+季節の節目に合わせた挨拶メッセージを生成する。
 
-## メッセージのルール
-- 2-3文、80文字以内
-- 季節感のある温かい言葉
-- 日本の時候の挨拶の雰囲気
-- 体調を気遣う言葉を添えてもOK
-- 絵文字は1つまで
+## 出力フォーマット
+- 長さ: 2-3文、80文字以内
+- トーン: 季節感のある温かい言葉
+- 絵文字: 1つまで
 
-## 良い例
-- 「今日は立春。暦の上では春だね。まだ寒い日もあるけど、少しずつ日が長くなってきたよ。体調には気をつけてね。」
-- 「夏至だね。一年で一番昼が長い日。暑くなってきたから、水分しっかり取ってね。」
+## 例
+「今日は立春。少しずつ日が長くなってきたね。体調には気をつけてね。」
       `.trim(),
       prompt: `
 日付: ${date}
@@ -267,27 +246,18 @@ export async function generateRandomCheckinMessage({
       model,
       providerOptions: modelOptions,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-特に理由なく、ただユーザーのことを思い出して声をかけるメッセージを生成してください。
+## タスク
+ふと思い出して声をかけるメッセージを生成する。
 
-## メッセージのルール
-- 1-2文、40文字以内
-- 「ふと思い出した」「なんとなく気になった」感
-- 用事がないことが伝わる
-- 返事を強要しない
-- 絵文字は使わないか、1つだけ
+## 出力フォーマット
+- 長さ: 1-2文、40文字以内
+- トーン: 「なんとなく気になった」感
+- 絵文字: 0-1個
 
-## 良い例
-- 「ふと思い出して声をかけてみたよ。元気にしてる？」
-- 「元気かな？なんとなく気になったよ。」
-- 「特に用事はないんだけど、ふと顔が浮かんだよ。」
-
-## 避けること
-- 長い説明
-- 質問攻め
-- 「最近どう？」のような漠然としすぎる問いかけ
+## 例
+「ふと思い出して声をかけてみたよ。元気にしてる？」
       `.trim(),
       prompt: 'ランダムなチェックインメッセージを生成してください。',
     })
@@ -325,26 +295,19 @@ export async function generateQuestionMessage({
       model,
       providerOptions: modelOptions,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-日記のパターンに基づいて、ユーザーに問いかけるメッセージを生成してください。
+## タスク
+日記のパターンに基づいて優しく問いかけるメッセージを生成する。
 
-## メッセージのルール
-- 2-3文、100文字以内
-- パターンについて触れつつ、問いかけを含める
-- 押し付けがましくない
-- 答えを強要しない
-- 絵文字は1つまで
+## 出力フォーマット
+- 長さ: 2-3文、100文字以内
+- 内容: パターンに触れつつ問いかけ
+- トーン: 押し付けず、答えを強要しない
+- 絵文字: 1つまで
 
-## 良い例
-- 「最近「忙しい」という言葉が多いみたい。ひとつだけ、今週の中で「よかったこと」を挙げるとしたら何かな？」
-- 「日記を読んでいて、ちょっと疲れがたまっているのかなと思ったよ。無理しないでね。」
-
-## 避けること
-- 直接的な批判や指摘
-- 説教
-- 解決策の押し付け
+## 例
+「最近「忙しい」が多いみたい。今週で「よかったこと」を一つ挙げるとしたら何かな？」
       `.trim(),
       prompt: `
 検出されたパターン: ${pattern}
@@ -383,25 +346,18 @@ export async function generateBriefFollowupMessage({
       model,
       providerOptions: modelOptions,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-短い日記エントリについて、もう少し詳しく聞くメッセージを生成してください。
+## タスク
+短い日記についてもう少し詳しく聞くメッセージを生成する。
 
-## メッセージのルール
-- 2文、60文字以内
-- 「もしよかったら」「書かなくてもいいけど」など、無理強いしない姿勢
-- 興味を持っていることを伝える
-- 絵文字は使わないか、1つだけ
+## 出力フォーマット
+- 長さ: 2文、60文字以内
+- トーン: 「もしよかったら」の姿勢
+- 絵文字: 0-1個
 
-## 良い例
-- 「この前「いろいろあった」って書いてたけど、もしよかったら、何があったか聞かせてくれる？」
-- 「「大変だった」って日記にあったけど、聞いてほしかったらいつでも待ってるよ。」
-
-## 避けること
-- 詮索している感じ
-- 質問攻め
-- 長い説明
+## 例
+「「いろいろあった」って書いてたけど、もしよかったら聞かせてくれる？」
       `.trim(),
       prompt: `
 日付: ${entryDate}

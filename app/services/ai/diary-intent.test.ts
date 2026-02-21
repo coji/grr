@@ -43,7 +43,7 @@ describe('inferDiaryReplyIntent', () => {
       expect.objectContaining({
         model: 'mock-model',
         schema: expect.any(Object),
-        system: expect.stringContaining('今回のタスク'),
+        system: expect.stringContaining('## タスク'),
         prompt: expect.stringContaining('U123'),
       }),
     )
