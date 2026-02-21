@@ -1,4 +1,3 @@
-import { env } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateFollowupMessage } from '~/services/ai'
@@ -13,11 +12,7 @@ import {
   recordMessageSent,
   type ProactiveMessageResult,
 } from '~/services/heartbeat-evaluators'
-import {
-  cleanupOldExtractions,
-  getPendingExtractions,
-  markExtractionProcessing,
-} from '~/services/memory'
+import { cleanupOldExtractions } from '~/services/memory'
 import {
   expireOldFollowups,
   getFollowupWithEntry,
@@ -91,12 +86,7 @@ export const heartbeatFollowups = async (env: Env) => {
   await processProactiveMessages(client, sentToUsers)
 
   // ============================================
-  // Phase 3: Process pending memory extractions
-  // ============================================
-  await processMemoryExtractions()
-
-  // ============================================
-  // Phase 4: Cleanup
+  // Phase 3: Cleanup
   // ============================================
   try {
     const expiredCount = await expireOldFollowups(7)
@@ -499,58 +489,6 @@ async function evaluateFollowup(
 
   // All checks passed
   return { send: true }
-}
-
-/**
- * Process pending memory extractions via Cloudflare Workflows
- */
-async function processMemoryExtractions(): Promise<void> {
-  try {
-    const pendingExtractions = await getPendingExtractions(10) // Process max 10 per heartbeat
-
-    if (pendingExtractions.length === 0) {
-      console.log('[HEARTBEAT] No pending memory extractions')
-      return
-    }
-
-    console.log(
-      `[HEARTBEAT] Found ${pendingExtractions.length} pending memory extractions`,
-    )
-
-    let startedCount = 0
-
-    for (const extraction of pendingExtractions) {
-      try {
-        // Mark as processing before starting workflow
-        await markExtractionProcessing(extraction.id)
-
-        // Start the memory extraction workflow
-        await env.MEMORY_EXTRACTION_WORKFLOW.create({
-          params: {
-            extractionId: extraction.id,
-            entryId: extraction.entryId,
-            userId: extraction.userId,
-          },
-        })
-
-        startedCount++
-        console.log(
-          `[HEARTBEAT] Started memory extraction workflow for entry ${extraction.entryId}`,
-        )
-      } catch (error) {
-        console.error(
-          `[HEARTBEAT] Failed to start memory extraction for entry ${extraction.entryId}:`,
-          error,
-        )
-      }
-    }
-
-    console.log(
-      `[HEARTBEAT] Started ${startedCount} memory extraction workflows`,
-    )
-  } catch (error) {
-    console.error('[HEARTBEAT] Failed to process memory extractions:', error)
-  }
 }
 
 // Keep the old function name as an alias for backwards compatibility

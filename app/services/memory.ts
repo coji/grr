@@ -6,6 +6,7 @@
  * that the AI learns about users over time.
  */
 
+import { env } from 'cloudflare:workers'
 import { sql } from 'kysely'
 import { nanoid } from 'nanoid'
 import dayjs from '~/lib/dayjs'
@@ -294,15 +295,19 @@ export async function getMemoryCount(userId: string): Promise<number> {
 // ============================================
 
 /**
- * Queue a diary entry for memory extraction
+ * Trigger immediate memory extraction via Cloudflare Workflow
+ *
+ * Unlike queueMemoryExtraction (which waits for HEARTBEAT), this function
+ * immediately starts a Workflow to extract memories from the diary entry.
+ * Cloudflare Workflows run independently once create() is called.
  */
-export async function queueMemoryExtraction(
+export async function triggerImmediateMemoryExtraction(
   userId: string,
   entryId: string,
-): Promise<MemoryExtraction> {
+): Promise<void> {
   const now = dayjs().utc().toISOString()
 
-  // Check if already queued
+  // Check if already processing
   const existing = await db
     .selectFrom('memoryExtractions')
     .select('id')
@@ -311,20 +316,18 @@ export async function queueMemoryExtraction(
     .executeTakeFirst()
 
   if (existing) {
-    // Return the existing extraction job
-    const job = await db
-      .selectFrom('memoryExtractions')
-      .selectAll()
-      .where('id', '=', existing.id)
-      .executeTakeFirst()
-    return job!
+    console.log(
+      `[Memory] Extraction already in progress for entry ${entryId}, skipping`,
+    )
+    return
   }
 
+  const extractionId = nanoid()
   const extraction: MemoryExtraction = {
-    id: nanoid(),
+    id: extractionId,
     userId,
     entryId,
-    status: 'pending',
+    status: 'processing', // Mark as processing immediately
     extractedMemories: null,
     processingNotes: null,
     createdAt: now,
@@ -333,7 +336,26 @@ export async function queueMemoryExtraction(
 
   await db.insertInto('memoryExtractions').values(extraction).execute()
 
-  return extraction
+  // Start the workflow immediately (Cloudflare Workflows run independently)
+  try {
+    await env.MEMORY_EXTRACTION_WORKFLOW.create({
+      params: {
+        extractionId,
+        entryId,
+        userId,
+      },
+    })
+    console.log(
+      `[Memory] Started immediate extraction workflow for entry ${entryId}`,
+    )
+  } catch (error) {
+    console.error(
+      `[Memory] Failed to start extraction workflow for entry ${entryId}:`,
+      error,
+    )
+    // Mark as failed if workflow creation fails
+    await markExtractionFailed(extractionId, String(error))
+  }
 }
 
 /**

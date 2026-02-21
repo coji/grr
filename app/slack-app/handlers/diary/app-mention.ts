@@ -4,7 +4,7 @@ import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { storeAttachments } from '~/services/attachments'
 import { db } from '~/services/db'
-import { queueMemoryExtraction } from '~/services/memory'
+import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { handleDiaryEntryMilestone } from '~/services/milestone-handler'
 import { detectAndStoreFutureEvents } from '~/services/pending-followups'
 import { DIARY_PERSONA_NAME } from '../diary-constants'
@@ -149,10 +149,10 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       })
     }
 
-    // メモリ抽出をキューに追加 (HEARTBEATで非同期処理)
+    // メモリ抽出を即時実行 (Workflowで非同期処理)
     if (entry && cleaned) {
-      queueMemoryExtraction(event.user, entry.id).catch((error) => {
-        console.error('Failed to queue memory extraction:', error)
+      triggerImmediateMemoryExtraction(event.user, entry.id).catch((error) => {
+        console.error('Failed to trigger memory extraction:', error)
       })
     }
 
