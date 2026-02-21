@@ -7,6 +7,7 @@ import {
   type DiaryReplyIntentType,
 } from './diary-intent'
 import { getPersonaBackground } from './persona'
+import { getUserPersonality, type Personality } from './personality'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -84,6 +85,18 @@ export async function generateDiaryReply({
     // Continue without memory context
   }
 
+  // Retrieve personality for the user
+  let personalityContext = ''
+  try {
+    const personality = await getUserPersonality(userId)
+    if (personality) {
+      personalityContext = formatPersonalityForPrompt(personality)
+    }
+  } catch (error) {
+    console.warn('Failed to retrieve personality:', error)
+    // Continue without personality context
+  }
+
   const detailSummary = [
     dateInfo,
     moodLabel ? `最近のきもち: ${moodLabel}` : undefined,
@@ -143,6 +156,7 @@ export async function generateDiaryReply({
       ],
       system: `
 ${getPersonaBackground(personaName)}
+${personalityContext ? `\n${personalityContext}\n` : ''}
 ${memoryContext ? `\n${memoryContext}\n` : ''}
 ## 今回のタスク
 Slackで日記を書いた相手に寄り添って返信してください。
@@ -201,4 +215,33 @@ ${intentGuidelines[intentAnalysis.intent]}
     console.error('generateDiaryReply failed', error)
     return String(error)
   }
+}
+
+/**
+ * Format personality for inclusion in the system prompt
+ */
+function formatPersonalityForPrompt(personality: Personality): string {
+  const parts: string[] = ['## あなたの個性']
+
+  parts.push(personality.summary)
+
+  if (personality.traits.length > 0) {
+    parts.push(`特徴: ${personality.traits.join('、')}`)
+  }
+
+  if (personality.interests.length > 0) {
+    parts.push(`興味: ${personality.interests.join('、')}`)
+  }
+
+  if (personality.expressions.length > 0) {
+    parts.push(
+      `よく使う表現: ${personality.expressions.map((e) => `「${e}」`).join(' ')}`,
+    )
+  }
+
+  parts.push(
+    '\nこの個性を自然に表現してください。ただし、押し付けがましくならないように。',
+  )
+
+  return parts.join('\n')
 }

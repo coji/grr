@@ -36,3 +36,13 @@ export {
   generateQuestionMessage,
   generateBriefFollowupMessage,
 } from './proactive-messages'
+export {
+  generatePersonality,
+  getUserPersonality,
+  updateUserPersonality,
+  shouldUpdatePersonality,
+  hasPersonalityChangePending,
+  getPersonalityChangeNote,
+  clearPersonalityChangePending,
+  type Personality,
+} from './personality'

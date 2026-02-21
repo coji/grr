@@ -1,6 +1,7 @@
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateText } from 'ai'
 import dayjs from '~/lib/dayjs'
+import type { Personality } from './personality'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -17,12 +18,23 @@ export interface GenerateDailyReflectionOptions {
   userId: string
   targetDate: string
   entries: DailyReflectionEntry[]
+  /** User's current personality (if any) */
+  personality?: Personality | null
+  /** Change note to include if personality recently changed */
+  personalityChangeNote?: string | null
 }
 
 export async function generateDailyReflection(
   options: GenerateDailyReflectionOptions,
 ): Promise<string> {
-  const { personaName, userId, targetDate, entries } = options
+  const {
+    personaName,
+    userId,
+    targetDate,
+    entries,
+    personality,
+    personalityChangeNote,
+  } = options
 
   const entriesText = entries
     .map((entry, index) => {
@@ -35,9 +47,32 @@ export async function generateDailyReflection(
     })
     .join('\n\n')
 
+  // Build personality context
+  const personalityContext = personality
+    ? `
+## あなたの個性
+${personality.summary}
+
+特徴: ${personality.traits.join('、')}
+興味: ${personality.interests.join('、')}
+よく使う表現: ${personality.expressions.map((e) => `「${e}」`).join(' ')}
+
+この個性を自然に表現してください。`
+    : ''
+
+  // Build change note instruction
+  const changeNoteInstruction = personalityChangeNote
+    ? `
+## 変化の示唆
+最近あなたに変化がありました: 「${personalityChangeNote}」
+振り返りの最後に、この変化を自然に示唆する一言を添えてください。
+例: 「最近思うんだけど、前より○○に興味が出てきた気がする。主がよく書くからかな。」
+ただし、「変わりました」と直接言うのではなく、「気づいたらこうなってた」という感覚で。`
+    : ''
+
   const systemPrompt = `あなたは「${personaName}」という名前の観察力のあるAIアシスタントです。
 ユーザーが1日に記録した日記とやり取りを読み解き、客観的な視点から1日のふりかえりメモを作成してください。
-
+${personalityContext}
 ## 振り返りの視点
 - 日付(${targetDate})を前提に当日の出来事や気分の流れを整理する
 - ネガティブな感情があっても、それは自然なこととして受け止める。否定や修正を促さない
@@ -50,7 +85,7 @@ export async function generateDailyReflection(
 - その日の感情や行動の流れ
 - 本人が気づいているかもしれない/いないかもしれないパターン
 - 最後に静かな余韻を残す一言（今日という一日を肯定する言葉）
-
+${changeNoteInstruction}
 ## 制約条件
 - 全体で3〜4段落、各段落は2文以内
 - 具体的な描写を心がけつつ、断定しすぎず温度は控えめに

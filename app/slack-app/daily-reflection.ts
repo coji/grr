@@ -1,7 +1,11 @@
 import { nanoid } from 'nanoid'
 import dayjs from '~/lib/dayjs'
 import {
+  clearPersonalityChangePending,
   generateDailyReflection,
+  getPersonalityChangeNote,
+  getUserPersonality,
+  updateUserPersonality,
   type DailyReflectionEntry,
 } from '~/services/ai'
 import { db } from '~/services/db'
@@ -77,11 +81,22 @@ export const generateDailyDiaryReflections = async () => {
         .where('userId', '=', userId)
         .executeTakeFirst()
 
+      // Try to update personality if conditions are met
+      await updateUserPersonality(userId).catch((error) => {
+        console.warn('Failed to update personality for user', userId, error)
+      })
+
+      // Get current personality and any pending change note
+      const personality = await getUserPersonality(userId)
+      const personalityChangeNote = await getPersonalityChangeNote(userId)
+
       const reflection = await generateDailyReflection({
         personaName: DIARY_PERSONA_NAME,
         userId,
         targetDate,
         entries: reflectionEntries,
+        personality,
+        personalityChangeNote,
       })
 
       const sourceEntryIds = JSON.stringify(
@@ -103,6 +118,11 @@ export const generateDailyDiaryReflections = async () => {
           updatedAt: now,
         })
         .execute()
+
+      // Clear the personality change pending flag after including it in reflection
+      if (personalityChangeNote) {
+        await clearPersonalityChangePending(userId)
+      }
 
       console.log('Stored reflection for', userId, targetDate)
     } catch (error) {

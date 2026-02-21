@@ -45,6 +45,9 @@ export interface Database {
     reminderEnabled: number
     skipWeekends: number
     diaryChannelId: string | null
+    personality: string | null
+    personalityUpdatedAt: string | null
+    personalityChangePending: number
     createdAt: string
     updatedAt: string
   }
