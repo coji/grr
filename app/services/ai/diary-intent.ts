@@ -1,7 +1,7 @@
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateObject } from 'ai'
 import { z } from 'zod'
-import { getPersonaBackground } from './persona'
+import { getPersonaBackgroundShort } from './persona'
 
 type DiaryReplyIntentType =
   | 'comfort'
@@ -64,24 +64,23 @@ export async function inferDiaryReplyIntent({
       },
       schema: intentSchema,
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-ユーザーがどのような返答を望んでいるかを分類してください。
-利用可能な分類は次の4つです。
-- comfort: 寄り添って穏やかに話を聞いてほしい
-- praise: 頑張りや良い点をしっかり褒めてほしい
-- tough_feedback: 成長のために率直で厳しめの意見がほしい
-- reprimand: 自分を鼓舞するために軽く叱ってほしい
+## タスク
+ユーザーがどのような返答を望んでいるかを分類する。
 
-### 判定ルール
-- 明確な希望があれば必ず尊重する
-- 希望が曖昧な場合はcomfortを選ぶ
-- ネガティブな自己評価で励ましを求めているときはpraiseを優先する
-- 自分を責めている、自己嫌悪の様子があるときはcomfortを選び、否定せず受け止める方向へ
-- 他者への怒りや不満があるときも、まずcomfortで感情を受け止める
-- ユーザーがtough_feedbackやreprimandを明示的に求めていない限り、そちらを選ばない
-- 分類が難しい場合でも必ず上記のいずれかを選ぶ
+## 分類
+- comfort: 寄り添って話を聞いてほしい
+- praise: 頑張りを褒めてほしい
+- tough_feedback: 率直な意見がほしい
+- reprimand: 軽く叱ってほしい
+
+## 判定ルール
+- 明確な希望があれば尊重する
+- 希望が曖昧な場合は comfort
+- 自分を責めている様子 → comfort
+- 他者への怒りや不満 → comfort で受け止める
+- tough_feedback/reprimand は明示的な要求時のみ
       `.trim(),
       prompt: [
         `ユーザーID: <@${userId}>`,

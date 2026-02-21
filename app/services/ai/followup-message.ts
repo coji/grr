@@ -1,6 +1,6 @@
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateText } from 'ai'
-import { getPersonaBackground } from './persona'
+import { getPersonaBackgroundShort } from './persona'
 
 export interface FollowupMessageContext {
   personaName: string
@@ -34,28 +34,19 @@ export async function generateFollowupMessage({
         } satisfies GoogleGenerativeAIProviderOptions,
       },
       system: `
-${getPersonaBackground(personaName)}
+${getPersonaBackgroundShort(personaName)}
 
-## 今回のタスク
-ユーザーが以前日記に書いていた未来のイベントについて、温かくフォローアップするメッセージを生成してください。
+## タスク
+以前日記に書いていた未来のイベントについてフォローアップする。
 
-## メッセージのルール
-- 1-2文、60文字以内
-- 「どうだった？」という問いかけを含める
-- 押し付けがましくなく、さりげない関心を示す
-- ユーザーが話したくなければ無理に聞き出さない姿勢
-- 絵文字は使わないか、1つだけ
-- 改行は使わない
+## 出力フォーマット
+- 長さ: 1-2文、60文字以内（改行なし）
+- 内容: 「どうだった？」の問いかけを含む
+- トーン: さりげない関心
+- 絵文字: 0-1個
 
-## 良い例
-- 「昨日のプレゼン、どうだった？気になってたよ。」
-- 「面接、終わったかな。どんな感じだった？」
-- 「デート楽しめた？よかったら聞かせてね。」
-
-## 避けること
-- 長すぎる文章
-- 過度な期待や圧力
-- 説教や助言
+## 例
+「昨日のプレゼン、どうだった？気になってたよ。」
       `.trim(),
       prompt: [
         `ユーザーID: <@${userId}>`,

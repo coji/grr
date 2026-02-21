@@ -61,6 +61,38 @@ const botToken = context.cloudflare.env.SLACK_BOT_TOKEN // Type error!
 - Encapsulate Block Kit structures in dedicated builder files inside `app/slack-app/handlers/views/` to keep handler logic concise.
 - Use the provided Slack Web API client (`context.client`) and respect Slack rate limits (queue async work via `context.cloudflare.ctx.waitUntil` if needed for long tasks).
 
+## AI prompting guidelines (Gemini 3 Flash)
+
+AIプロンプトを追加・編集する際は、**[docs/gemini-3-prompting-guide.md](docs/gemini-3-prompting-guide.md)** を必ず参照してください。
+
+### 重要なポイント
+
+1. **簡潔に**: Gemini 3はreasoning modelなので、冗長なプロンプトは逆効果
+2. **否定形を避ける**: 「〜するな」より「〜する」で指示
+3. **出力フォーマットを明示**: 長さ、形式、トーンを具体的に
+4. **ペルソナの使い分け**:
+   - `getPersonaBackgroundShort()`: 単純なタスク（フォローアップ、マイルストーンなど）
+   - `getPersonaBackground()`: 深い理解が必要なタスク（日記返信、振り返りなど）
+5. **thinkingLevelの調整**:
+   - `minimal`: 分類・抽出タスク
+   - `low`: 要約・フォローアップ
+   - `medium`: 日記返信・振り返り
+
+### プロンプト構造の統一
+
+```typescript
+## タスク
+[具体的な指示]
+
+## 出力フォーマット
+- 形式: [散文/箇条書きなど]
+- 長さ: [文字数/文数]
+- トーン: [温かい/簡潔など]
+
+## 例
+[良い例のみ]
+```
+
 ## File attachments in diary entries
 
 The diary app supports file attachments (images, videos, documents) in diary entries via Slack messages.
