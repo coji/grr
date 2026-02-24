@@ -10,7 +10,7 @@ import type {
   CharacterEmotion,
 } from '~/services/ai/character-generation'
 import {
-  generateCharacterMessage,
+  generateCharacterReaction,
   type CharacterMessageContext,
 } from '~/services/ai/character-generation'
 import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
@@ -793,32 +793,32 @@ async function handleCharacterInteractionModal(
   // Build rich context for varied responses
   const richContext = await buildRichContext(userId, character)
 
-  // Build flavor context for LLM
-  const flavorContext =
-    tier.name === 'legendary'
-      ? `超レア反応！${flavor.description}、最高に嬉しそう`
-      : tier.name === 'great'
-        ? `大成功！${flavor.description}`
-        : flavor.description
+  // Map tier name to reaction intensity
+  const reactionIntensity = tier.name as 'normal' | 'good' | 'great' | 'legendary'
 
-  // Generate message with rich context
-  const messageContext: CharacterMessageContext = {
+  // Generate reaction with LLM (message + title + emoji)
+  const reactionContext: CharacterMessageContext & {
+    reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
+  } = {
     concept,
     evolutionStage: character.evolutionStage,
     happiness: character.happiness,
     energy: character.energy,
     context: opts.messageContext,
-    additionalContext: flavorContext,
+    additionalContext: flavor.description,
     userId,
+    reactionIntensity,
     ...richContext,
   }
-  const message = await generateCharacterMessage(messageContext)
+  const reaction = await generateCharacterReaction(reactionContext)
 
-  // Pick random title from tier
+  // Use LLM-generated title, with emoji for special tiers
   const modalTitle =
-    opts.messageContext === 'pet'
-      ? pickRandom(tier.petTitles)
-      : pickRandom(tier.talkTitles)
+    tier.name === 'legendary'
+      ? `✨${reaction.reactionTitle}✨`
+      : tier.name === 'great'
+        ? `🎉${reaction.reactionTitle}`
+        : reaction.reactionTitle
 
   // Build reaction blocks
   // biome-ignore lint/suspicious/noExplicitAny: Slack block types
@@ -831,25 +831,21 @@ async function handleCharacterInteractionModal(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*${character.characterName}*\n「${message}」`,
+        text: `*${character.characterName}* ${reaction.reactionEmoji}\n「${reaction.message}」`,
       },
     },
   ]
 
-  // Add tier celebration for good reactions
-  if (tier.name !== 'normal' && tier.emoji) {
-    const tierLabel =
-      tier.name === 'legendary'
-        ? '🌟 超レア！'
-        : tier.name === 'great'
-          ? '🎉 大成功！'
-          : '💫 いい感じ！'
+  // Add tier celebration for good reactions (using LLM-generated text)
+  if (tier.name !== 'normal' && reaction.tierCelebration) {
+    const celebrationEmoji =
+      tier.name === 'legendary' ? '🌟' : tier.name === 'great' ? '🎉' : '💫'
     blocks.push({
       type: 'context',
       elements: [
         {
           type: 'mrkdwn',
-          text: `${tier.emoji} *${tierLabel}* ${tier.emoji} ポイント${tier.multiplier}倍！`,
+          text: `${celebrationEmoji} *${reaction.tierCelebration}* ${celebrationEmoji} ポイント${tier.multiplier}倍！`,
         },
       ],
     })
