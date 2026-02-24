@@ -29,10 +29,6 @@ export function getCharacterImageUrl(userId: string, seed?: string): string {
   return `${base}?d=${seed}`
 }
 
-export function getDailySeed(): string {
-  return new Date().toISOString().split('T')[0]
-}
-
 export function getCacheBuster(): string {
   return Date.now().toString()
 }
@@ -53,7 +49,7 @@ export function buildCharacterImageBlock(
 ): ImageBlock {
   return {
     type: 'image',
-    image_url: getCharacterImageUrl(userId, getDailySeed()),
+    image_url: getCharacterImageUrl(userId, getCacheBuster()),
     alt_text: altText,
   }
 }

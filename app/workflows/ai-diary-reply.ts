@@ -36,7 +36,7 @@ import {
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import {
   CHARACTER_IMAGE_BASE_URL,
-  getDailySeed,
+  getCacheBuster,
   MESSAGE_CHARACTER_STYLES,
 } from '~/slack-app/character-blocks'
 
@@ -214,7 +214,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
         const character = await getCharacter(params.userId)
         if (!character) return null
 
-        const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?d=${getDailySeed()}`
+        const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?d=${getCacheBuster()}`
 
         // Check daily generation cap
         const todayCount = await countTodayGenerations(params.userId)
