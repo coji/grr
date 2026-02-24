@@ -5,6 +5,7 @@ import { registerHomeTabHandler } from './home-tab'
 import { registerLinkUnfurlHandler } from './link-unfurl'
 import { registerMessageHandler } from './message'
 import { registerModalSubmissionHandlers } from './modal-submission'
+import { registerOnboardingHandlers } from './onboarding'
 import { registerReactionAddedHandler } from './reaction-added'
 import { registerReactionRemovedHandler } from './reaction-removed'
 import { registerShortcutsHandler } from './shortcuts'
@@ -17,6 +18,7 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   registerAppMentionHandler(app)
   registerHomeTabHandler(app)
   registerModalSubmissionHandlers(app)
+  registerOnboardingHandlers(app)
   registerSlashCommandHandler(app)
   registerShortcutsHandler(app)
   registerButtonActionHandlers(app)

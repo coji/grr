@@ -12,6 +12,58 @@ import { DIARY_PERSONA_NAME } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { TOKYO_TZ, sanitizeText } from './utils'
 
+/**
+ * diaryChannelIdが設定されていない場合、現在のチャンネルを設定する
+ * (オンボーディング時: 既存チャンネルでメンションされた場合の自動設定)
+ */
+async function ensureDiaryChannelSet(
+  userId: string,
+  channelId: string,
+): Promise<void> {
+  const now = dayjs().utc().toISOString()
+
+  // 既存の設定を確認
+  const settings = await db
+    .selectFrom('userDiarySettings')
+    .selectAll()
+    .where('userId', '=', userId)
+    .executeTakeFirst()
+
+  if (settings?.diaryChannelId) {
+    // 既に設定済み
+    return
+  }
+
+  if (settings) {
+    // 設定レコードはあるがdiaryChannelIdが未設定 → 更新
+    await db
+      .updateTable('userDiarySettings')
+      .set({
+        diaryChannelId: channelId,
+        updatedAt: now,
+      })
+      .where('userId', '=', userId)
+      .execute()
+  } else {
+    // 設定レコードがない → 新規作成
+    await db
+      .insertInto('userDiarySettings')
+      .values({
+        userId,
+        reminderEnabled: 1,
+        reminderHour: 21,
+        skipWeekends: 0,
+        diaryChannelId: channelId,
+        personalityChangePending: 0,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .execute()
+  }
+
+  console.log(`Auto-set diary channel for user ${userId}: ${channelId}`)
+}
+
 export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('app_mention', async ({ payload, context }) => {
     const event = payload
@@ -25,6 +77,9 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
         name: 'eyes',
       })
       .catch(() => {}) // リアクション追加失敗は無視
+
+    // 新規ユーザーの場合、diaryChannelIdを自動設定（オンボーディング）
+    await ensureDiaryChannelSet(event.user, event.channel)
 
     const cleaned = sanitizeText(event.text)
     const hasFiles = 'files' in event && event.files && event.files.length > 0
