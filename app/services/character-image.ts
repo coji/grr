@@ -102,35 +102,38 @@ export async function getRandomPoolImage(
 
 /**
  * Count how many images were generated today for this user (across all stages).
+ * Iterates stage prefixes 1-5 and uses startAfter to only list today's keys.
  */
 export async function countTodayGenerations(userId: string): Promise<number> {
   const today = new Date().toISOString().split('T')[0]
-  const prefix = `character/${userId}/pool/`
-  const listed = await env.CHARACTER_IMAGES.list({ prefix })
+  let count = 0
 
-  return listed.objects.filter((obj) => {
-    const date = extractDateFromPoolKey(obj.key)
-    return date === today
-  }).length
+  for (let stage = 1; stage <= 5; stage++) {
+    const prefix = buildStagePoolPrefix(userId, stage)
+    const startAfter = `${prefix}${today}`
+    const listed = await env.CHARACTER_IMAGES.list({ prefix, startAfter })
+    count += listed.objects.length
+  }
+
+  return count
 }
 
 /**
  * List pool keys within the active window for a specific stage.
+ * Uses R2 startAfter to skip old keys efficiently.
  */
 async function listActivePoolKeys(
   userId: string,
   stage: number,
 ): Promise<string[]> {
   const prefix = buildStagePoolPrefix(userId, stage)
-  const listed = await env.CHARACTER_IMAGES.list({ prefix })
   const cutoff = getActiveCutoffDate()
+  // Keys sort lexicographically: {prefix}{date}-{id}.png
+  // startAfter skips everything before the cutoff date
+  const startAfter = `${prefix}${cutoff}`
+  const listed = await env.CHARACTER_IMAGES.list({ prefix, startAfter })
 
-  return listed.objects
-    .filter((obj) => {
-      const date = extractDateFromPoolKey(obj.key)
-      return date !== null && date >= cutoff
-    })
-    .map((obj) => obj.key)
+  return listed.objects.map((obj) => obj.key)
 }
 
 // ============================================
