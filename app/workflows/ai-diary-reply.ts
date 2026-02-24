@@ -27,7 +27,7 @@ import { generateCharacterImage } from '~/services/ai/character-generation'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
 import { characterToConcept, getCharacter } from '~/services/character'
-import { buildR2Key } from '~/services/character-image'
+import { buildR2Key, getCharacterImageFromR2 } from '~/services/character-image'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import {
   CHARACTER_IMAGE_BASE_URL,
@@ -227,12 +227,19 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
 
         try {
           const concept = characterToConcept(character)
+
+          // Fetch base image for visual consistency
+          const baseR2Key = buildR2Key(params.userId)
+          const baseImage =
+            (await getCharacterImageFromR2(baseR2Key)) ?? undefined
+
           const pngData = await generateCharacterImage({
             userId: params.userId,
             concept,
             evolutionStage: character.evolutionStage,
             emotion: style.emotion,
             action: style.action,
+            baseImage,
           })
 
           await env.CHARACTER_IMAGES.put(r2Key, pngData, {

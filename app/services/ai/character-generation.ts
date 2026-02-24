@@ -269,6 +269,8 @@ const CHARACTER_IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
 /**
  * Generate a character PNG image using Gemini's native image generation.
+ * When baseImage is provided, it's used as a visual reference to maintain
+ * character consistency across multiple generations.
  * Returns a PNG ArrayBuffer.
  */
 export async function generateCharacterImage(input: {
@@ -277,6 +279,7 @@ export async function generateCharacterImage(input: {
   evolutionStage: number
   emotion?: CharacterEmotion
   action?: CharacterAction
+  baseImage?: ArrayBuffer
 }): Promise<ArrayBuffer> {
   const memories = await getActiveMemories(input.userId)
   const memoryHighlights = extractMemoryHighlights(memories)
@@ -301,7 +304,18 @@ export async function generateCharacterImage(input: {
       }[input.action]
     : 'standing naturally'
 
-  const prompt = `
+  const isVariant = !!input.baseImage
+
+  const prompt = isVariant
+    ? `
+Same character as the reference image. Keep the exact same appearance,
+colors, art style, proportions, and design details.
+Change only the expression and pose.
+
+Expression: ${emotionDesc}
+Pose: ${actionDesc}
+    `.trim()
+    : `
 Small character icon, simple flat illustration, 64x64 pixel size.
 Soft pastel background color that matches the character's theme.
 
@@ -317,12 +331,23 @@ ${memoryHighlights}
 
 Style: Compact, expressive, with personality. Not generic cute.
 One surprising detail that gives character.
-  `.trim()
+    `.trim()
+
+  // Build contents: reference image (if variant) + text prompt
+  // biome-ignore lint/suspicious/noExplicitAny: Google GenAI SDK content types
+  const contents: any[] = []
+  if (input.baseImage) {
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(input.baseImage)))
+    contents.push({
+      inlineData: { mimeType: 'image/png', data: base64 },
+    })
+  }
+  contents.push(prompt)
 
   const genai = new GoogleGenAI({ apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY })
   const response = await genai.models.generateContent({
     model: CHARACTER_IMAGE_MODEL,
-    contents: prompt,
+    contents,
     config: {
       responseModalities: ['image', 'text'],
     },
@@ -347,6 +372,7 @@ One surprising detail that gives character.
         outputTokens: usage?.candidatesTokenCount ?? 0,
         thinkingTokens: usage?.thoughtsTokenCount ?? 0,
         metadata: {
+          variant: isVariant,
           emotion: input.emotion,
           action: input.action,
           evolutionStage: input.evolutionStage,

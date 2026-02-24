@@ -117,12 +117,21 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
   if (character) {
     try {
       const concept = characterToConcept(character)
+
+      // Fetch base image for visual consistency (only for variants)
+      let baseImage: ArrayBuffer | undefined
+      if (emotion || action) {
+        baseImage =
+          (await getCharacterImageFromR2(buildR2Key(userId))) ?? undefined
+      }
+
       const pngData = await generateCharacterImage({
         userId,
         concept,
         evolutionStage: character.evolutionStage,
         emotion,
         action,
+        baseImage,
       })
 
       // Store in R2 for future requests

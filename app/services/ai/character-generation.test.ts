@@ -344,8 +344,9 @@ describe('generateCharacterImage', () => {
     })
 
     const call = mockGenerateContent.mock.calls[0][0]
-    const contents = call.contents as string
-    expect(contents).toContain('heart eyes')
-    expect(contents).toContain('being petted')
+    // contents is an array; the last element is the text prompt
+    const prompt = call.contents[call.contents.length - 1] as string
+    expect(prompt).toContain('heart eyes')
+    expect(prompt).toContain('being petted')
   })
 })
