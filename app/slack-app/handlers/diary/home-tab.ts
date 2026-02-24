@@ -603,6 +603,9 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   // キャラクターインタラクション: なでる
   app.action('character_pet', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
+    // Pick a random spot to pet for variety
+    const petFlavor = pickRandom(PET_FLAVORS)
+
     await handleCharacterInteractionModal(
       action.user.id,
       action.trigger_id,
@@ -612,7 +615,9 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
         messageContext: 'pet',
         emotion: 'love',
         action: 'pet',
-        altText: (name) => `${name}が撫でられている`,
+        altText: (name) => `${name}の${petFlavor.spot}をなでている`,
+        flavorDescription: petFlavor.description,
+        flavorSpot: petFlavor.spot,
       },
     )
   })
@@ -620,6 +625,8 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   // キャラクターインタラクション: 話しかける
   app.action('character_talk', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
+    // Pick a random conversation topic for variety
+    const talkFlavor = pickRandom(TALK_FLAVORS)
     const talkEmotions: CharacterEmotion[] = ['happy', 'excited', 'shy']
     const randomEmotion = pickRandom(talkEmotions)
 
@@ -632,7 +639,9 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
         messageContext: 'talk',
         emotion: randomEmotion,
         action: 'talk',
-        altText: (name) => `${name}が話している`,
+        altText: (name) => `${name}と会話している`,
+        flavorDescription: talkFlavor.description,
+        flavorTopic: talkFlavor.topic,
       },
     )
   })
@@ -657,24 +666,72 @@ const REACTION_TIERS: ReactionTier[] = [
   { name: 'legendary', probability: 0.05, multiplier: 3 },
 ]
 
-// Pet reaction flavors for LLM context
+// Pet reaction flavors for LLM context - physical/sensory reactions
 const PET_FLAVORS = [
-  { mood: 'happy', description: '喜んでいる、嬉しそう' },
-  { mood: 'shy', description: '照れている、恥ずかしそう' },
-  { mood: 'ticklish', description: 'くすぐったがっている' },
-  { mood: 'sleepy', description: '眠くなってきた、うとうと' },
-  { mood: 'loving', description: '甘えている、大好き' },
-  { mood: 'playful', description: 'はしゃいでいる、遊びたい' },
+  {
+    mood: 'headpat',
+    description: '頭をなでられている。気持ちよさそう、目を細めている',
+    spot: '頭',
+  },
+  {
+    mood: 'cheek',
+    description: 'ほっぺをなでられている。ぷにぷに、照れて赤くなる',
+    spot: 'ほっぺ',
+  },
+  {
+    mood: 'chin',
+    description: 'あごの下をなでられている。うっとり、ゴロゴロ言いそう',
+    spot: 'あご',
+  },
+  {
+    mood: 'back',
+    description: '背中をなでられている。安心してリラックス',
+    spot: '背中',
+  },
+  {
+    mood: 'belly',
+    description: 'おなかをなでられている。くすぐったいけど嬉しい',
+    spot: 'おなか',
+  },
+  {
+    mood: 'fluffy',
+    description: 'ふわふわの部分をもふもふされている。幸せそう',
+    spot: 'ふわふわ',
+  },
 ]
 
-// Talk reaction flavors for LLM context
+// Talk reaction flavors for LLM context - conversation starters
 const TALK_FLAVORS = [
-  { mood: 'curious', description: '興味津々、もっと聞きたい' },
-  { mood: 'excited', description: 'テンション高い、わくわく' },
-  { mood: 'thoughtful', description: '考え込んでいる、なるほど' },
-  { mood: 'cheerful', description: '明るい、楽しそう' },
-  { mood: 'supportive', description: '励ましてくれる、応援' },
-  { mood: 'gossipy', description: '内緒話っぽい、ひそひそ' },
+  {
+    mood: 'greeting',
+    description: '挨拶から始まる会話。時間帯に合わせた声かけ',
+    topic: '挨拶',
+  },
+  {
+    mood: 'question',
+    description: 'ユーザーに質問したい。今日のこと、最近のこと',
+    topic: '質問',
+  },
+  {
+    mood: 'share',
+    description: '自分のことを話したい。今日見つけたこと、考えたこと',
+    topic: 'シェア',
+  },
+  {
+    mood: 'encourage',
+    description: '応援・励まし。ユーザーの頑張りを認める',
+    topic: '応援',
+  },
+  {
+    mood: 'playful',
+    description: 'なぞなぞやクイズを出したい。遊び心',
+    topic: '遊び',
+  },
+  {
+    mood: 'memory',
+    description: 'ユーザーの過去の日記や思い出について話す',
+    topic: '思い出',
+  },
 ]
 
 function pickReactionTier(): ReactionTier {
@@ -717,6 +774,9 @@ async function handleCharacterInteractionModal(
     emotion: CharacterEmotion
     action: CharacterAction
     altText: (characterName: string) => string
+    flavorDescription?: string
+    flavorSpot?: string
+    flavorTopic?: string
   },
 ): Promise<void> {
   // Quick check for character existence (fast, no AI call)
@@ -743,11 +803,23 @@ async function handleCharacterInteractionModal(
   }
 
   // Open a loading modal immediately to avoid 3-second timeout
-  const loadingEmoji = opts.messageContext === 'pet' ? '🤚' : '💬'
-  const loadingText =
-    opts.messageContext === 'pet'
-      ? `${character.characterName}をなでています...`
-      : `${character.characterName}に話しかけています...`
+  const isPet = opts.messageContext === 'pet'
+  const loadingEmoji = isPet ? '🤚' : '💬'
+
+  // More engaging loading states
+  const petLoadingTexts = [
+    `${character.characterName}の${opts.flavorSpot || '頭'}をなでなで...`,
+    `${opts.flavorSpot || '頭'}に手を伸ばして...`,
+    `そーっとなでてみる...`,
+  ]
+  const talkLoadingTexts = [
+    `${character.characterName}がこっちを見てる...`,
+    `${character.characterName}の方を向いて...`,
+    `おーい、${character.characterName}...`,
+  ]
+  const loadingText = isPet
+    ? pickRandom(petLoadingTexts)
+    : pickRandom(talkLoadingTexts)
 
   const openResult = await client.views.open({
     trigger_id: triggerId,
@@ -814,7 +886,7 @@ async function handleCharacterInteractionModal(
       happiness: character.happiness,
       energy: character.energy,
       context: opts.messageContext,
-      additionalContext: flavor.description,
+      additionalContext: opts.flavorDescription || flavor.description,
       userId,
       reactionIntensity: tier.name,
       ...richContext,
@@ -829,32 +901,54 @@ async function handleCharacterInteractionModal(
           ? `🎉${reaction.reactionTitle}`
           : reaction.reactionTitle
 
-    // Build reaction blocks
+    // Build reaction blocks - different layout for pet vs talk
     // biome-ignore lint/suspicious/noExplicitAny: Slack block types
     const blocks: any[] = [
       buildInteractiveCharacterImageBlock(
         userId,
         opts.altText(character.characterName),
       ),
-      {
+    ]
+
+    if (opts.messageContext === 'pet') {
+      // Pet: emphasize physical sensation and sound
+      blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*${character.characterName}* ${reaction.reactionEmoji}\n「${reaction.message}」`,
+          text: `*${character.characterName}* ${reaction.reactionEmoji}\n\n> ${reaction.message}`,
         },
-      },
-    ]
+      })
+    } else {
+      // Talk: more conversational with speech bubble style
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${character.characterName}* ${reaction.reactionEmoji}`,
+        },
+      })
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `💬 「${reaction.message}」`,
+        },
+      })
+    }
 
     // Add tier celebration for good reactions (using LLM-generated text)
     if (tier.name !== 'normal' && reaction.tierCelebration) {
       const celebrationEmoji =
         tier.name === 'legendary' ? '🌟' : tier.name === 'great' ? '🎉' : '💫'
+      const multiplierText =
+        tier.multiplier > 1 ? ` (${tier.multiplier}倍ボーナス！)` : ''
       blocks.push({
         type: 'context',
         elements: [
           {
             type: 'mrkdwn',
-            text: `${celebrationEmoji} *${reaction.tierCelebration}* ${celebrationEmoji} ポイント${tier.multiplier}倍！`,
+            text: `${celebrationEmoji} *${reaction.tierCelebration}*${multiplierText}`,
           },
         ],
       })
