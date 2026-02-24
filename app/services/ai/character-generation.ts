@@ -126,13 +126,17 @@ const characterReactionSchema = z.object({
   reactionTitle: z
     .string()
     .max(12)
-    .describe('反応のタイトル（擬音語や短い表現、例: もふもふ、うっとり、わくわく）'),
+    .describe(
+      '反応のタイトル（擬音語や短い表現、例: もふもふ、うっとり、わくわく）',
+    ),
   reactionEmoji: z.string().max(4).describe('反応を表す絵文字1つ'),
   tierCelebration: z
     .string()
     .max(20)
     .optional()
-    .describe('特別な反応時の祝福テキスト（大成功時のみ、例: やったね！、最高！、奇跡だ！）'),
+    .describe(
+      '特別な反応時の祝福テキスト（大成功時のみ、例: やったね！、最高！、奇跡だ！）',
+    ),
 })
 
 /**
@@ -199,7 +203,9 @@ export async function generateCharacterMessage(
   }
 
   const richContext =
-    contextSections.length > 0 ? `\n\n## 追加コンテキスト\n${contextSections.join('\n')}` : ''
+    contextSections.length > 0
+      ? `\n\n## 追加コンテキスト\n${contextSections.join('\n')}`
+      : ''
 
   const { object, usage } = await generateObject({
     model,
@@ -267,7 +273,7 @@ export async function generateCharacterReaction(
     reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
   },
 ): Promise<CharacterReaction> {
-  const reactionModel = 'gemini-2.0-flash-lite'
+  const reactionModel = 'gemini-2.5-flash-lite'
   const model = google(reactionModel)
 
   // Build rich context sections
@@ -288,10 +294,13 @@ export async function generateCharacterReaction(
   }
 
   if (input.userMemories && input.userMemories.length > 0) {
-    contextSections.push(`ユーザーの情報: ${input.userMemories.slice(0, 2).join('、')}`)
+    contextSections.push(
+      `ユーザーの情報: ${input.userMemories.slice(0, 2).join('、')}`,
+    )
   }
 
-  const richContext = contextSections.length > 0 ? contextSections.join(' / ') : ''
+  const richContext =
+    contextSections.length > 0 ? contextSections.join(' / ') : ''
 
   const intensityHint = {
     normal: 'ふつうの反応',
@@ -300,7 +309,8 @@ export async function generateCharacterReaction(
     legendary: '超レア！最高に嬉しい、特別な瞬間',
   }[input.reactionIntensity]
 
-  const interactionType = input.context === 'pet' ? '撫でられた' : '話しかけられた'
+  const interactionType =
+    input.context === 'pet' ? '撫でられた' : '話しかけられた'
 
   // Only request tierCelebration for special reactions
   const needsCelebration = input.reactionIntensity !== 'normal'
