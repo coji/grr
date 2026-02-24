@@ -23,7 +23,7 @@ import {
   getCharacterImageFromR2,
   svgToPng,
 } from '~/services/character-image'
-import type { Route } from './+types/character.$userId.png'
+import type { Route } from './+types/character.$userId[.png]'
 
 // Default fallback SVG for when character doesn't exist
 const FALLBACK_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
