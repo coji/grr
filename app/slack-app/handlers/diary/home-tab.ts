@@ -620,8 +620,8 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   // キャラクターインタラクション: 話しかける
   app.action('character_talk', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
-    const emotions: CharacterEmotion[] = ['happy', 'excited', 'shy']
-    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)]
+    const talkEmotions: CharacterEmotion[] = ['happy', 'excited', 'shy']
+    const randomEmotion = pickRandom(talkEmotions)
 
     await handleCharacterInteractionModal(
       action.user.id,
@@ -805,16 +805,9 @@ async function handleCharacterInteractionModal(
     // Build rich context for varied responses
     const richContext = await buildRichContext(userId, character)
 
-    // Map tier name to reaction intensity
-    const reactionIntensity = tier.name as
-      | 'normal'
-      | 'good'
-      | 'great'
-      | 'legendary'
-
     // Generate reaction with LLM (message + title + emoji)
     const reactionContext: CharacterMessageContext & {
-      reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
+      reactionIntensity: ReactionTier['name']
     } = {
       concept,
       evolutionStage: character.evolutionStage,
@@ -823,7 +816,7 @@ async function handleCharacterInteractionModal(
       context: opts.messageContext,
       additionalContext: flavor.description,
       userId,
-      reactionIntensity,
+      reactionIntensity: tier.name,
       ...richContext,
     }
     const reaction = await generateCharacterReaction(reactionContext)
