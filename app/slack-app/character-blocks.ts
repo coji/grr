@@ -31,7 +31,8 @@ export function getCharacterImageUrl(
     seed?: string
   },
 ): string {
-  const base = `${CHARACTER_IMAGE_BASE_URL}/character/${userId}.svg`
+  // Use PNG format for Slack compatibility (Slack Block Kit doesn't support SVG)
+  const base = `${CHARACTER_IMAGE_BASE_URL}/character/${userId}.png`
   if (!options) return base
 
   const params = new URLSearchParams()
