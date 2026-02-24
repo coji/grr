@@ -4,7 +4,6 @@ import type {
   SlackApp,
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
-import type { Respond } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import type {
   CharacterAction,
@@ -600,13 +599,18 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   // キャラクターインタラクション: なでる
   app.action('character_pet', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
-    await handleCharacterInteraction(action.user.id, context.respond, {
-      interactionType: 'pet',
-      messageContext: 'pet',
-      emotion: 'love',
-      action: 'pet',
-      altText: (name) => `${name}が撫でられている`,
-    })
+    await handleCharacterInteractionModal(
+      action.user.id,
+      action.trigger_id,
+      context.client,
+      {
+        interactionType: 'pet',
+        messageContext: 'pet',
+        emotion: 'love',
+        action: 'pet',
+        altText: (name) => `${name}が撫でられている`,
+      },
+    )
   })
 
   // キャラクターインタラクション: 話しかける
@@ -615,23 +619,43 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const emotions: CharacterEmotion[] = ['happy', 'excited', 'shy']
     const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)]
 
-    await handleCharacterInteraction(action.user.id, context.respond, {
-      interactionType: 'talk',
-      messageContext: 'talk',
-      emotion: randomEmotion,
-      action: 'talk',
-      altText: (name) => `${name}が話している`,
-    })
+    await handleCharacterInteractionModal(
+      action.user.id,
+      action.trigger_id,
+      context.client,
+      {
+        interactionType: 'talk',
+        messageContext: 'talk',
+        emotion: randomEmotion,
+        action: 'talk',
+        altText: (name) => `${name}が話している`,
+      },
+    )
   })
 }
 
 // ============================================
-// Interaction Handler Helper
+// Interaction Handler Helper (Modal version for Home Tab)
 // ============================================
 
-async function handleCharacterInteraction(
+// Rare reaction chance (10%)
+const RARE_REACTION_CHANCE = 0.1
+const BONUS_POINTS_MULTIPLIER = 3
+
+interface SlackClient {
+  views: {
+    open: (params: {
+      trigger_id: string
+      // biome-ignore lint/suspicious/noExplicitAny: Slack view type
+      view: any
+    }) => Promise<unknown>
+  }
+}
+
+async function handleCharacterInteractionModal(
   userId: string,
-  respond: Respond | undefined,
+  triggerId: string,
+  client: SlackClient,
   opts: {
     interactionType: InteractionType
     messageContext: 'pet' | 'talk'
@@ -642,55 +666,123 @@ async function handleCharacterInteraction(
 ): Promise<void> {
   const character = await getCharacter(userId)
   if (!character) {
-    if (respond) {
-      await respond({
-        text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
-        response_type: 'ephemeral',
-      })
-    }
+    await client.views.open({
+      trigger_id: triggerId,
+      view: {
+        type: 'modal',
+        title: { type: 'plain_text', text: 'あれ？' },
+        close: { type: 'plain_text', text: '閉じる' },
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '🥚 まだキャラクターがいないよ。\n日記を書いて育ててみよう！',
+            },
+          },
+        ],
+      },
+    })
     return
   }
+
+  // Check for rare reaction
+  const isRare = Math.random() < RARE_REACTION_CHANCE
+  const pointsMultiplier = isRare ? BONUS_POINTS_MULTIPLIER : 1
 
   const { pointsEarned } = await recordInteraction({
     userId,
     interactionType: opts.interactionType,
   })
 
+  // Apply bonus points for rare reactions (record extra interactions)
+  if (isRare) {
+    for (let i = 1; i < BONUS_POINTS_MULTIPLIER; i++) {
+      await recordInteraction({
+        userId,
+        interactionType: opts.interactionType,
+        metadata: { bonus: true },
+      })
+    }
+  }
+
+  const totalPoints = pointsEarned * pointsMultiplier
   const concept = characterToConcept(character)
+
+  // Generate message with rare context if applicable
   const message = await generateCharacterMessage({
     concept,
     evolutionStage: character.evolutionStage,
     happiness: character.happiness,
     energy: character.energy,
     context: opts.messageContext,
+    additionalContext: isRare ? '特別に嬉しそう！レアな反応' : undefined,
   })
 
-  if (respond) {
-    await respond({
-      text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
-      response_type: 'ephemeral',
-      blocks: [
-        buildInteractiveCharacterImageBlock(
-          userId,
-          opts.altText(character.characterName),
-        ),
+  // Build modal title based on interaction type
+  const modalTitle =
+    opts.messageContext === 'pet'
+      ? isRare
+        ? 'なでなで大成功！'
+        : 'なでなで'
+      : isRare
+        ? '会話が弾んだ！'
+        : 'おしゃべり'
+
+  // Build reaction blocks
+  // biome-ignore lint/suspicious/noExplicitAny: Slack block types
+  const blocks: any[] = [
+    buildInteractiveCharacterImageBlock(
+      userId,
+      opts.altText(character.characterName),
+    ),
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*${character.characterName}*\n「${message}」`,
+      },
+    },
+  ]
+
+  // Add rare reaction celebration
+  if (isRare) {
+    blocks.push({
+      type: 'context',
+      elements: [
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*${character.characterName}*: ${message}`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: `_+${pointsEarned}ポイント獲得！_`,
-            },
-          ],
+          type: 'mrkdwn',
+          text: `✨ *レア反応！* ✨ ポイント${BONUS_POINTS_MULTIPLIER}倍！`,
         },
       ],
     })
   }
+
+  // Add points and stats
+  const updatedCharacter = await getCharacter(userId)
+  const happiness = updatedCharacter?.happiness ?? character.happiness
+  const energy = updatedCharacter?.energy ?? character.energy
+
+  blocks.push(
+    { type: 'divider' },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `🎁 *+${totalPoints}ポイント*　　💗 ${happiness}%　　⚡ ${energy}%`,
+        },
+      ],
+    },
+  )
+
+  await client.views.open({
+    trigger_id: triggerId,
+    view: {
+      type: 'modal',
+      title: { type: 'plain_text', text: modalTitle },
+      close: { type: 'plain_text', text: '閉じる' },
+      blocks,
+    },
+  })
 }
