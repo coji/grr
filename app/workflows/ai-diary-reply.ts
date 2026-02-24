@@ -32,6 +32,7 @@ import {
   countTodayGenerations,
   DAILY_GENERATION_CAP,
   getBaseImage,
+  putBaseImage,
 } from '~/services/character-image'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import {
@@ -238,6 +239,12 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             action: style.action,
             baseImage,
           })
+
+          // Store as base image if none exists (e.g. pre-pool-system characters)
+          if (!baseImage) {
+            await putBaseImage(params.userId, pngData)
+            console.log(`Stored base image for ${params.userId}`)
+          }
 
           const poolKey = await addToPool(
             params.userId,
