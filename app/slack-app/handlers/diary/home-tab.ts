@@ -9,7 +9,10 @@ import type {
   CharacterAction,
   CharacterEmotion,
 } from '~/services/ai/character-generation'
-import { generateCharacterMessage } from '~/services/ai/character-generation'
+import {
+  generateCharacterMessage,
+  type CharacterMessageContext,
+} from '~/services/ai/character-generation'
 import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
 import {
   characterToConcept,
@@ -20,6 +23,7 @@ import {
   type InteractionType,
 } from '~/services/character'
 import { db } from '~/services/db'
+import { getActiveMemories } from '~/services/memory'
 import {
   buildCharacterImageBlock,
   buildInteractiveCharacterImageBlock,
@@ -709,15 +713,21 @@ async function handleCharacterInteractionModal(
   const totalPoints = pointsEarned * pointsMultiplier
   const concept = characterToConcept(character)
 
-  // Generate message with rare context if applicable
-  const message = await generateCharacterMessage({
+  // Build rich context for varied responses
+  const richContext = await buildRichContext(userId, character)
+
+  // Generate message with rich context
+  const messageContext: CharacterMessageContext = {
     concept,
     evolutionStage: character.evolutionStage,
     happiness: character.happiness,
     energy: character.energy,
     context: opts.messageContext,
     additionalContext: isRare ? '特別に嬉しそう！レアな反応' : undefined,
-  })
+    userId,
+    ...richContext,
+  }
+  const message = await generateCharacterMessage(messageContext)
 
   // Build modal title based on interaction type
   const modalTitle =
@@ -785,4 +795,68 @@ async function handleCharacterInteractionModal(
       blocks,
     },
   })
+}
+
+// ============================================
+// Rich Context Builder for Varied Responses
+// ============================================
+
+type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night'
+
+function getTimeOfDay(): TimeOfDay {
+  const hour = dayjs().tz(TOKYO_TZ).hour()
+  if (hour >= 5 && hour < 12) return 'morning'
+  if (hour >= 12 && hour < 17) return 'afternoon'
+  if (hour >= 17 && hour < 21) return 'evening'
+  return 'night'
+}
+
+interface RichContext {
+  timeOfDay: TimeOfDay
+  recentMood?: string
+  daysSinceLastInteraction?: number
+  userMemories?: string[]
+}
+
+async function buildRichContext(
+  userId: string,
+  character: { lastInteractedAt: string | null },
+): Promise<RichContext> {
+  const context: RichContext = {
+    timeOfDay: getTimeOfDay(),
+  }
+
+  // Get recent diary mood
+  const recentEntry = await db
+    .selectFrom('diaryEntries')
+    .select(['moodLabel', 'moodEmoji'])
+    .where('userId', '=', userId)
+    .orderBy('entryDate', 'desc')
+    .limit(1)
+    .executeTakeFirst()
+
+  if (recentEntry?.moodLabel) {
+    context.recentMood = `${recentEntry.moodEmoji || ''} ${recentEntry.moodLabel}`.trim()
+  }
+
+  // Calculate days since last interaction
+  if (character.lastInteractedAt) {
+    const lastInteraction = dayjs(character.lastInteractedAt)
+    const now = dayjs().tz(TOKYO_TZ)
+    const daysSince = now.diff(lastInteraction, 'day')
+    if (daysSince > 0) {
+      context.daysSinceLastInteraction = daysSince
+    }
+  }
+
+  // Get user memories for personalization
+  const memories = await getActiveMemories(userId)
+  if (memories.length > 0) {
+    context.userMemories = memories
+      .filter((m) => ['preference', 'fact', 'pattern'].includes(m.memoryType))
+      .slice(0, 5)
+      .map((m) => m.content)
+  }
+
+  return context
 }

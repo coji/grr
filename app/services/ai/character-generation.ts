@@ -121,18 +121,70 @@ const characterMessageSchema = z.object({
 })
 
 /**
- * Generate a message from the character to the user
+ * Rich context for character message generation
  */
-export async function generateCharacterMessage(input: {
+export interface CharacterMessageContext {
   concept: CharacterConcept
   evolutionStage: number
   happiness: number
   energy: number
   context: 'greeting' | 'pet' | 'talk' | 'evolution' | 'diary_response'
   additionalContext?: string
-}): Promise<string> {
+  // Rich context for varied responses
+  userId?: string
+  timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night'
+  recentMood?: string
+  daysSinceLastInteraction?: number
+  userMemories?: string[]
+}
+
+/**
+ * Generate a message from the character to the user
+ */
+export async function generateCharacterMessage(
+  input: CharacterMessageContext,
+): Promise<string> {
   const messageModel = 'gemini-3-flash-preview'
   const model = google(messageModel)
+
+  // Build rich context sections
+  const contextSections: string[] = []
+
+  if (input.timeOfDay) {
+    const timeGreeting = {
+      morning: '朝の時間帯',
+      afternoon: '昼の時間帯',
+      evening: '夕方の時間帯',
+      night: '夜の時間帯',
+    }[input.timeOfDay]
+    contextSections.push(`時間帯: ${timeGreeting}`)
+  }
+
+  if (input.recentMood) {
+    contextSections.push(`ユーザーの最近の気分: ${input.recentMood}`)
+  }
+
+  if (
+    input.daysSinceLastInteraction !== undefined &&
+    input.daysSinceLastInteraction > 0
+  ) {
+    if (input.daysSinceLastInteraction >= 3) {
+      contextSections.push(
+        `${input.daysSinceLastInteraction}日ぶりの再会！久しぶりで嬉しい`,
+      )
+    } else if (input.daysSinceLastInteraction === 1) {
+      contextSections.push('昨日ぶりの再会')
+    }
+  }
+
+  if (input.userMemories && input.userMemories.length > 0) {
+    contextSections.push(
+      `ユーザーについて知っていること:\n${input.userMemories.slice(0, 3).join('\n')}`,
+    )
+  }
+
+  const richContext =
+    contextSections.length > 0 ? `\n\n## 追加コンテキスト\n${contextSections.join('\n')}` : ''
 
   const { object, usage } = await generateObject({
     model,
@@ -150,12 +202,15 @@ export async function generateCharacterMessage(input: {
 - 口癖: ${input.concept.catchphrase}
 - 進化段階: ${input.evolutionStage}/5
 - 幸福度: ${input.happiness}/100、元気度: ${input.energy}/100
+${richContext}
 
 ## 出力フォーマット
 - 長さ: 1-2文、50文字以内
 - トーン: キャラクターの性格と口癖を反映
 - 絵文字を1つ含める（${input.concept.emoji}など）
 - 幸福度/元気度が低いほど寂しそうなトーンに
+- 追加コンテキストがあれば自然に反映（無理に全部入れない）
+- 毎回違う表現を使う、ワンパターンにならない
     `.trim(),
     prompt: `
 状況: ${getContextDescription(input.context)}
