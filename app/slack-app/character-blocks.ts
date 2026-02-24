@@ -55,16 +55,17 @@ export function buildCharacterImageBlock(
 }
 
 /**
- * Build a Slack image block with a cache buster for fresh images.
- * Used for interactive moments (pet, talk) where each tap should feel unique.
+ * Build a Slack image block with a specific seed.
+ * Use this when you need consistent images across multiple modal updates.
  */
-export function buildInteractiveCharacterImageBlock(
+export function buildCharacterImageBlockWithSeed(
   userId: string,
-  altText: string,
+  seed: string,
+  altText = 'キャラクターの画像',
 ): ImageBlock {
   return {
     type: 'image',
-    image_url: getCharacterImageUrl(userId, getCacheBuster()),
+    image_url: getCharacterImageUrl(userId, seed),
     alt_text: altText,
   }
 }
