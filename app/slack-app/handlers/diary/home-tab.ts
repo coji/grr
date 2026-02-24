@@ -6,6 +6,12 @@ import type {
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
+import {
+  CHARACTER_TYPES,
+  getBondLevelDisplay,
+  getCharacter,
+  getProgressBar,
+} from '~/services/character'
 import { db } from '~/services/db'
 import { getFileTypeEmoji } from './file-utils'
 import { TOKYO_TZ } from './utils'
@@ -60,8 +66,12 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
             .join(' | ')
         : '今週はまだ記録がありません'
 
+    // ユーザーのキャラクターを取得
+    const character = await getCharacter(userId)
+
     // Home Tab のビューを構築
-    const blocks = [
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
+    const blocks: any[] = [
       {
         type: 'header',
         text: {
@@ -77,6 +87,72 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
           text: `こんにちは！\n今週の気分: ${moodStats}`,
         },
       },
+    ]
+
+    // キャラクターセクション
+    if (character) {
+      const typeConfig = CHARACTER_TYPES[character.characterType]
+      const characterName = character.characterName ?? typeConfig.name
+      const happinessBar = getProgressBar(character.happiness)
+      const energyBar = getProgressBar(character.energy)
+      const bondLevel = getBondLevelDisplay(character.bondLevel)
+
+      // Base URL for character SVG images
+      const baseUrl = 'https://grr.coji.dev'
+
+      blocks.push(
+        {
+          type: 'divider',
+        },
+        {
+          type: 'image',
+          image_url: `${baseUrl}/character/${userId}.svg`,
+          alt_text: `${characterName}の画像`,
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*あなたの相棒* ${character.characterEmoji}\n*${characterName}* (${typeConfig.description})`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `💗 ${happinessBar} ${character.happiness}% | ⚡ ${energyBar} ${character.energy}% | 🤝 絆 Lv.${bondLevel}`,
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: 'なでる 🤚',
+                emoji: true,
+              },
+              action_id: 'character_pet',
+            },
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: '話しかける 💬',
+                emoji: true,
+              },
+              action_id: 'character_talk',
+            },
+          ],
+        },
+      )
+    }
+
+    // メインアクションセクション
+    blocks.push(
       {
         type: 'divider',
       },
@@ -116,7 +192,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
           emoji: true,
         },
       },
-    ]
+    )
 
     // 最近のエントリをリスト表示
     if (recentEntries.length === 0) {
@@ -173,8 +249,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       user_id: userId,
       view: {
         type: 'home',
-        // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
-        blocks: blocks as any,
+        blocks: blocks,
       },
     })
   })
@@ -497,5 +572,108 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
         blocks: blocks as any,
       },
     })
+  })
+
+  // キャラクターインタラクション: なでる
+  app.action('character_pet', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+
+    // Import dynamically to avoid circular dependency
+    const {
+      recordInteraction,
+      getCharacter: getChar,
+      CHARACTER_TYPES: types,
+    } = await import('~/services/character')
+    const { generateCharacterMessage } =
+      await import('~/services/ai/character-generation')
+
+    const character = await getChar(userId)
+    if (!character) {
+      if (context.respond) {
+        await context.respond({
+          text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
+          response_type: 'ephemeral',
+        })
+      }
+      return
+    }
+
+    // Record the interaction
+    const { pointsEarned } = await recordInteraction({
+      userId,
+      interactionType: 'pet',
+    })
+
+    // Generate a response from the character
+    const message = await generateCharacterMessage({
+      characterType: character.characterType,
+      characterName: character.characterName,
+      evolutionStage: character.evolutionStage,
+      happiness: character.happiness,
+      energy: character.energy,
+      context: 'pet',
+    })
+
+    const typeConfig = types[character.characterType]
+    const name = character.characterName ?? typeConfig.name
+
+    if (context.respond) {
+      await context.respond({
+        text: `*${name}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
+        response_type: 'ephemeral',
+      })
+    }
+  })
+
+  // キャラクターインタラクション: 話しかける
+  app.action('character_talk', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+
+    const {
+      recordInteraction,
+      getCharacter: getChar,
+      CHARACTER_TYPES: types,
+    } = await import('~/services/character')
+    const { generateCharacterMessage } =
+      await import('~/services/ai/character-generation')
+
+    const character = await getChar(userId)
+    if (!character) {
+      if (context.respond) {
+        await context.respond({
+          text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
+          response_type: 'ephemeral',
+        })
+      }
+      return
+    }
+
+    // Record the interaction
+    const { pointsEarned } = await recordInteraction({
+      userId,
+      interactionType: 'talk',
+    })
+
+    // Generate a response from the character
+    const message = await generateCharacterMessage({
+      characterType: character.characterType,
+      characterName: character.characterName,
+      evolutionStage: character.evolutionStage,
+      happiness: character.happiness,
+      energy: character.energy,
+      context: 'talk',
+    })
+
+    const typeConfig = types[character.characterType]
+    const name = character.characterName ?? typeConfig.name
+
+    if (context.respond) {
+      await context.respond({
+        text: `*${name}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
+        response_type: 'ephemeral',
+      })
+    }
   })
 }

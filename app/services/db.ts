@@ -185,6 +185,34 @@ export interface Database {
     lastUpdatedAt: string
     invalidatedAt: string | null
   }
+
+  userCharacters: {
+    userId: string
+    characterType: 'firefly' | 'moon_rabbit' | 'cloud_sprite' | 'forest_spirit'
+    characterName: string | null
+    characterEmoji: string
+    characterSvg: string | null
+    evolutionStage: number // 1-5
+    evolutionPoints: number
+    happiness: number // 0-100
+    energy: number // 0-100
+    bondLevel: number // 0-100
+    lastInteractedAt: string | null
+    daysWithoutDiary: number
+    characterTraits: string | null // JSON
+    favoriteTopics: string | null // JSON
+    createdAt: string
+    updatedAt: string
+  }
+
+  characterInteractions: {
+    id: string
+    userId: string
+    interactionType: 'pet' | 'talk' | 'diary_entry' | 'mood_recorded'
+    pointsEarned: number
+    metadata: string | null // JSON
+    createdAt: string
+  }
 }
 
 export const createDb = (database: D1Database) =>
