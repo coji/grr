@@ -4,7 +4,7 @@
  * Serves character images from the R2 image pool.
  *
  * Flow:
- * 1. Try to serve a random image from the pool
+ * 1. Try to serve a random image from the current stage's pool
  * 2. If pool is empty but under daily cap, generate a new one and add to pool
  * 3. If over daily cap, serve the base image
  * 4. Fallback placeholder if nothing exists
@@ -42,8 +42,18 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
     })
   }
 
-  // 1. Try pool (random selection)
-  const poolImage = await getRandomPoolImage(userId)
+  const character = await getCharacter(userId)
+  if (!character) {
+    return new Response(FALLBACK_PNG, {
+      status: 404,
+      headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache' },
+    })
+  }
+
+  const { evolutionStage } = character
+
+  // 1. Try pool (random selection from current stage)
+  const poolImage = await getRandomPoolImage(userId, evolutionStage)
   if (poolImage) {
     return new Response(poolImage, {
       headers: {
@@ -54,53 +64,50 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
   }
 
   // 2. Pool is empty — check if we can generate
-  const character = await getCharacter(userId)
-  if (character) {
-    const todayCount = await countTodayGenerations(userId)
-    if (todayCount < DAILY_GENERATION_CAP) {
-      try {
-        const concept = characterToConcept(character)
-        const baseImage = (await getBaseImage(userId)) ?? undefined
+  const todayCount = await countTodayGenerations(userId)
+  if (todayCount < DAILY_GENERATION_CAP) {
+    try {
+      const concept = characterToConcept(character)
+      const baseImage = (await getBaseImage(userId)) ?? undefined
 
-        const pngData = await generateCharacterImage({
-          userId,
-          concept,
-          evolutionStage: character.evolutionStage,
-          baseImage,
-        })
+      const pngData = await generateCharacterImage({
+        userId,
+        concept,
+        evolutionStage,
+        baseImage,
+      })
 
-        // Store as base if none exists, also add to pool
-        if (!baseImage) {
-          await putBaseImage(userId, pngData)
-        }
-        await addToPool(userId, pngData)
-
-        return new Response(pngData, {
-          headers: {
-            'Content-Type': 'image/png',
-            'Cache-Control': 'public, max-age=60',
-          },
-        })
-      } catch (error) {
-        console.error('Failed to generate character image:', error)
+      // Store as base if none exists, also add to pool
+      if (!baseImage) {
+        await putBaseImage(userId, pngData)
       }
-    }
+      await addToPool(userId, evolutionStage, pngData)
 
-    // 3. Over daily cap or generation failed — serve base image
-    const baseImage = await getBaseImage(userId)
-    if (baseImage) {
-      return new Response(baseImage, {
+      return new Response(pngData, {
         headers: {
           'Content-Type': 'image/png',
-          'Cache-Control': 'public, max-age=3600',
+          'Cache-Control': 'public, max-age=60',
         },
       })
+    } catch (error) {
+      console.error('Failed to generate character image:', error)
     }
+  }
+
+  // 3. Over daily cap or generation failed — serve base image
+  const baseImage = await getBaseImage(userId)
+  if (baseImage) {
+    return new Response(baseImage, {
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    })
   }
 
   // 4. Final fallback
   return new Response(FALLBACK_PNG, {
-    status: character ? 500 : 404,
+    status: 500,
     headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache' },
   })
 }

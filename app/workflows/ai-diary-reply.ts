@@ -239,7 +239,11 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             baseImage,
           })
 
-          const poolKey = await addToPool(params.userId, pngData)
+          const poolKey = await addToPool(
+            params.userId,
+            character.evolutionStage,
+            pngData,
+          )
           console.log(
             `Added character image to pool: ${poolKey} (${pngData.byteLength} bytes)`,
           )

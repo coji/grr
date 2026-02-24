@@ -12,7 +12,7 @@ import {
   generateCharacterImage,
   type CharacterConcept,
 } from './ai/character-generation'
-import { addToPool, clearPool, putBaseImage } from './character-image'
+import { addToPool, putBaseImage } from './character-image'
 import type { Database } from './db'
 import { db } from './db'
 
@@ -296,9 +296,9 @@ export async function updateCharacterOnDiaryEntry(
           evolutionStage: 1,
         })
         await putBaseImage(userId, pngData)
-        await addToPool(userId, pngData)
+        await addToPool(userId, 1, pngData)
         console.log(
-          `Stored base character image and added to pool for ${userId}`,
+          `Stored base character image and added to pool (stage 1) for ${userId}`,
         )
       } catch (imageError) {
         console.error('Failed to generate character image:', imageError)
@@ -337,20 +337,17 @@ export async function updateCharacterOnDiaryEntry(
           console.log(
             `Character evolved for user ${userId}: stage ${result.newStage}`,
           )
-          // Clear old pool and generate new base image for evolved form
+          // Generate new base image for evolved form (old stage images preserved)
           try {
-            const cleared = await clearPool(userId)
-            console.log(`Cleared ${cleared} pool images on evolution`)
-
             const pngData = await generateCharacterImage({
               userId,
               concept,
               evolutionStage: newStage,
             })
             await putBaseImage(userId, pngData)
-            await addToPool(userId, pngData)
+            await addToPool(userId, newStage, pngData)
             console.log(
-              `Stored evolved base image and added to pool for ${userId}`,
+              `Stored evolved base image and added to pool (stage ${newStage}) for ${userId}`,
             )
           } catch (imageError) {
             console.error('Failed to generate evolved image:', imageError)

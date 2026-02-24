@@ -10,7 +10,6 @@ vi.mock('~/services/ai/character-generation', () => ({
 }))
 vi.mock('~/services/character-image', () => ({
   addToPool: vi.fn(),
-  clearPool: vi.fn(),
   putBaseImage: vi.fn(),
 }))
 
