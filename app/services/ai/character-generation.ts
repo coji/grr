@@ -121,18 +121,17 @@ const characterMessageSchema = z.object({
 })
 
 // Extended schema for interactive reactions (pet/talk)
+// Note: Remove strict max constraints to avoid validation failures
 const characterReactionSchema = z.object({
-  message: z.string().max(100).describe('キャラクターからのセリフ'),
+  message: z.string().describe('キャラクターからのセリフ（50文字以内推奨）'),
   reactionTitle: z
     .string()
-    .max(12)
     .describe(
       '反応のタイトル（擬音語や短い表現、例: もふもふ、うっとり、わくわく）',
     ),
-  reactionEmoji: z.string().max(4).describe('反応を表す絵文字1つ'),
+  reactionEmoji: z.string().describe('反応を表す絵文字1つ'),
   tierCelebration: z
     .string()
-    .max(20)
     .optional()
     .describe(
       '特別な反応時の祝福テキスト（大成功時のみ、例: やったね！、最高！、奇跡だ！）',
@@ -263,10 +262,49 @@ export interface CharacterReaction {
   tierCelebration?: string
 }
 
+// Fallback reactions for when AI generation fails
+const FALLBACK_PET_REACTIONS: CharacterReaction[] = [
+  {
+    message: 'きもちいい〜 ✨',
+    reactionTitle: 'もふもふ',
+    reactionEmoji: '😊',
+  },
+  {
+    message: 'えへへ、くすぐったい 💕',
+    reactionTitle: 'ふにふに',
+    reactionEmoji: '🥰',
+  },
+  {
+    message: 'もっとなでて〜 ✨',
+    reactionTitle: 'ゴロゴロ',
+    reactionEmoji: '😌',
+  },
+  { message: 'しあわせ〜 💖', reactionTitle: 'ぽかぽか', reactionEmoji: '☺️' },
+]
+
+const FALLBACK_TALK_REACTIONS: CharacterReaction[] = [
+  {
+    message: '今日はどんな日だった？ ✨',
+    reactionTitle: 'わくわく',
+    reactionEmoji: '😊',
+  },
+  {
+    message: 'お話しよう！ 💬',
+    reactionTitle: 'にこにこ',
+    reactionEmoji: '🙂',
+  },
+  {
+    message: '会えてうれしいな 💕',
+    reactionTitle: 'きらきら',
+    reactionEmoji: '✨',
+  },
+  { message: 'なになに？ 🎵', reactionTitle: 'ふむふむ', reactionEmoji: '🤔' },
+]
+
 /**
  * Generate a full reaction for pet/talk interactions.
  * Returns both the character's message and a creative reaction title.
- * Uses flash-lite for speed and cost efficiency.
+ * Has fallback reactions in case AI generation fails.
  */
 export async function generateCharacterReaction(
   input: CharacterMessageContext & {
@@ -274,7 +312,6 @@ export async function generateCharacterReaction(
   },
 ): Promise<CharacterReaction> {
   const reactionModel = 'gemini-3-flash-preview'
-  const model = google(reactionModel)
 
   // Build rich context sections
   const contextSections: string[] = []
@@ -345,47 +382,78 @@ ${richContext}
 ${input.additionalContext || '撫でられている'}
 ${intensityHint}
 
-## 出力
-- reactionTitle: 触感や状態を表す擬音語（もふもふ、ふにふに、ゴロゴロ、ほわほわ、ぽかぽか、とろーん、むにゅむにゅ等）
-- message: 撫でられた反応のセリフ（${input.concept.emoji}を含む、感覚的な表現で）
-- reactionEmoji: 反応に合う絵文字
-${needsCelebration ? '- tierCelebration: 特別な喜びを表す短い言葉' : ''}
+## 出力（JSON形式で返す）
+- reactionTitle: 触感や状態を表す擬音語（もふもふ、ふにふに、ゴロゴロ、ほわほわ、ぽかぽか、とろーん、むにゅむにゅ等、12文字以内）
+- message: 撫でられた反応のセリフ（${input.concept.emoji}を含む、感覚的な表現で、50文字以内）
+- reactionEmoji: 反応に合う絵文字（1つだけ）
+${needsCelebration ? '- tierCelebration: 特別な喜びを表す短い言葉（10文字以内）' : ''}
     `.trim()
     : `
 ${input.additionalContext || '話しかけられた'}
 ${intensityHint}
 
-## 出力
-- reactionTitle: 会話の雰囲気を表す言葉（わくわく、ふむふむ、にこにこ、そわそわ、きらきら、うんうん等）
-- message: 会話のセリフ（${input.concept.emoji}を含む。質問、感想、提案など会話らしく）
-- reactionEmoji: 会話の雰囲気に合う絵文字
-${needsCelebration ? '- tierCelebration: 嬉しさを表す短い言葉' : ''}
+## 出力（JSON形式で返す）
+- reactionTitle: 会話の雰囲気を表す言葉（わくわく、ふむふむ、にこにこ、そわそわ、きらきら、うんうん等、12文字以内）
+- message: 会話のセリフ（${input.concept.emoji}を含む。質問、感想、提案など会話らしく、50文字以内）
+- reactionEmoji: 会話の雰囲気に合う絵文字（1つだけ）
+${needsCelebration ? '- tierCelebration: 嬉しさを表す短い言葉（10文字以内）' : ''}
     `.trim()
 
-  const { object, usage } = await generateObject({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'low' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
-    schema: characterReactionSchema,
-    system: systemPrompt,
-    prompt: promptText,
-  })
+  try {
+    const model = google(reactionModel)
+    const { object, usage } = await generateObject({
+      model,
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: 'low' },
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
+      schema: characterReactionSchema,
+      system: systemPrompt,
+      prompt: promptText,
+    })
 
-  logAiCost({
-    operation: 'character_reaction',
-    model: reactionModel,
-    inputTokens: usage.inputTokens ?? 0,
-    outputTokens: usage.outputTokens ?? 0,
-    metadata: {
-      context: input.context,
-      intensity: input.reactionIntensity,
-    },
-  })
+    logAiCost({
+      operation: 'character_reaction',
+      model: reactionModel,
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      metadata: {
+        context: input.context,
+        intensity: input.reactionIntensity,
+      },
+    })
 
-  return object
+    // Truncate fields if too long (for Slack modal title limit)
+    return {
+      message: object.message.slice(0, 100),
+      reactionTitle: object.reactionTitle.slice(0, 12),
+      reactionEmoji: object.reactionEmoji.slice(0, 4),
+      tierCelebration: object.tierCelebration?.slice(0, 20),
+    }
+  } catch (error) {
+    // Log the error but return a fallback reaction
+    console.error(
+      'Character reaction generation failed, using fallback:',
+      error,
+    )
+
+    // Pick a random fallback reaction based on context
+    const fallbacks = isPet ? FALLBACK_PET_REACTIONS : FALLBACK_TALK_REACTIONS
+    const fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)]
+
+    // Add character emoji to the fallback message if we have it
+    const messageWithEmoji = input.concept.emoji
+      ? fallback.message.replace('✨', input.concept.emoji)
+      : fallback.message
+
+    return {
+      ...fallback,
+      message: messageWithEmoji,
+      tierCelebration:
+        input.reactionIntensity !== 'normal' ? 'やったね！' : undefined,
+    }
+  }
 }
 
 // ============================================
