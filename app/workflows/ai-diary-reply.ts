@@ -220,44 +220,6 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
           },
         })
 
-        // Add user's diary images to the reply
-        try {
-          const attachments = await getEntryAttachments(params.entryId)
-          const images = attachments.filter((a) => a.fileType === 'image')
-
-          for (const image of images) {
-            if (image.slackUrlPrivate) {
-              // Fetch fresh URL from Slack API (stored URLs may become stale)
-              try {
-                const fileInfo = await slackClient.files.info({
-                  file: image.slackFileId,
-                })
-                if (fileInfo.ok && fileInfo.file?.url_private) {
-                  blocks.push({
-                    type: 'image',
-                    image_url: fileInfo.file.url_private,
-                    alt_text: image.fileName,
-                  })
-                }
-              } catch (error) {
-                console.warn(
-                  `Failed to fetch fresh URL for ${image.slackFileId}:`,
-                  error,
-                )
-                // Fallback to stored URL
-                blocks.push({
-                  type: 'image',
-                  image_url: image.slackUrlPrivate,
-                  alt_text: image.fileName,
-                })
-              }
-            }
-          }
-        } catch (error) {
-          console.warn('Failed to fetch attachments for reply:', error)
-          // Continue without images
-        }
-
         const result = await slackClient.chat.postMessage({
           channel: params.channel,
           thread_ts: params.threadTs ?? params.messageTs,
