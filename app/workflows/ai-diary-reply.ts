@@ -3,9 +3,10 @@
  *
  * This workflow handles the time-intensive process of:
  * 1. Downloading image attachments and generating AI replies (combined step)
- * 2. Posting the reply back to Slack
- * 3. Removing processing reaction
- * 4. Adding supportive reaction
+ * 2. Generating character image and uploading to R2
+ * 3. Posting the reply back to Slack
+ * 4. Removing processing reaction
+ * 5. Adding supportive reaction
  *
  * Using Workflows allows us to exceed the 30-second waitUntil limit
  * and provides automatic retry logic for each step.
@@ -22,11 +23,17 @@ import {
 } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
+import { generateMessageSvg } from '~/services/ai/character-generation'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
-import { getCharacter } from '~/services/character'
+import { characterToConcept, getCharacter } from '~/services/character'
+import { buildR2Key, svgToPng } from '~/services/character-image'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
-import { buildCharacterImageBlockForContext } from '~/slack-app/character-blocks'
+import {
+  CHARACTER_IMAGE_BASE_URL,
+  getDailySeed,
+  MESSAGE_CHARACTER_STYLES,
+} from '~/slack-app/character-blocks'
 
 // Import constants directly to avoid path issues
 const DIARY_PERSONA_NAME = 'ほたる'
@@ -187,7 +194,66 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       },
     )
 
-    // Step 2: Post message to Slack (with character image if available)
+    // Step 2: Generate character image and upload to R2
+    // This pre-generates the image so the PNG route can serve it instantly
+    // when Slack fetches the image_url from the block.
+    const characterImageUrl = await step.do(
+      'generate-character-image',
+      {
+        retries: {
+          limit: 2,
+          delay: '5 seconds',
+        },
+      },
+      async (): Promise<string | null> => {
+        const character = await getCharacter(params.userId)
+        if (!character) return null
+
+        const style = MESSAGE_CHARACTER_STYLES.diary_reply
+        const date = getDailySeed()
+        const r2Key = buildR2Key(params.userId, {
+          emotion: style.emotion,
+          action: style.action,
+          date,
+        })
+
+        // Check if already generated today (skip regeneration)
+        const existing = await env.CHARACTER_IMAGES.head(r2Key)
+        if (existing) {
+          console.log(`Character image already exists in R2: ${r2Key}`)
+          const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?emotion=${style.emotion}&action=${style.action}&d=${date}`
+          return imageUrl
+        }
+
+        try {
+          const concept = characterToConcept(character)
+          const svg = await generateMessageSvg({
+            concept,
+            evolutionStage: character.evolutionStage,
+            emotion: style.emotion,
+            action: style.action,
+          })
+
+          const pngData = await svgToPng(svg)
+          await env.CHARACTER_IMAGES.put(r2Key, pngData, {
+            httpMetadata: { contentType: 'image/png' },
+          })
+
+          console.log(
+            `Uploaded character image to R2: ${r2Key} (${pngData.byteLength} bytes)`,
+          )
+
+          const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?emotion=${style.emotion}&action=${style.action}&d=${date}`
+          return imageUrl
+        } catch (error) {
+          console.error('Failed to generate character image:', error)
+          // Fall back to static URL (PNG route will handle it)
+          return `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png`
+        }
+      },
+    )
+
+    // Step 3: Post message to Slack (with character image if available)
     await step.do(
       'post-slack-message',
       {
@@ -199,16 +265,15 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       async (): Promise<void> => {
         const message = `${params.mention} ${aiReply}`.trim()
 
-        // Check if user has a character for image attachment
-        const character = await getCharacter(params.userId)
-
         // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
         const blocks: any[] = []
 
-        if (character) {
-          blocks.push(
-            buildCharacterImageBlockForContext(params.userId, 'diary_reply'),
-          )
+        if (characterImageUrl) {
+          blocks.push({
+            type: 'image',
+            image_url: characterImageUrl,
+            alt_text: 'キャラクターの画像',
+          })
         }
 
         blocks.push({
@@ -234,7 +299,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       },
     )
 
-    // Step 3: Remove processing reaction
+    // Step 4: Remove processing reaction
     await step.do('remove-processing-reaction', async (): Promise<void> => {
       try {
         const result = await slackClient.reactions.remove({
@@ -252,7 +317,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       }
     })
 
-    // Step 4: Add supportive reaction
+    // Step 5: Add supportive reaction
     await step.do('add-supportive-reaction', async (): Promise<void> => {
       try {
         const reactionName = await generateSupportiveReaction({

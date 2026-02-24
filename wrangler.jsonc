@@ -56,6 +56,12 @@
    * Note: SLACK_* vars are declared here for type generation.
    * Actual values are set as Cloudflare secrets in production.
    */
+  "r2_buckets": [
+    {
+      "binding": "CHARACTER_IMAGES",
+      "bucket_name": "grr-character-images"
+    }
+  ],
   "vars": {
     "SLACK_LOGGING_LEVEL": "INFO"
   }
