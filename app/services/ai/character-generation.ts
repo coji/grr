@@ -311,3 +311,106 @@ function getContextDescription(
       return 'ユーザーが日記を書いてくれた時のお礼'
   }
 }
+
+// ============================================
+// Dynamic Message SVG Generation
+// ============================================
+
+export type CharacterEmotion = 'happy' | 'excited' | 'shy' | 'sleepy' | 'love'
+export type CharacterAction = 'pet' | 'talk' | 'wave' | 'dance' | 'sparkle'
+
+/**
+ * Generate a dynamic SVG for a character message
+ * This creates a unique SVG based on the current emotion and action
+ */
+export async function generateMessageSvg(input: {
+  concept: CharacterConcept
+  evolutionStage: number
+  emotion: CharacterEmotion
+  action: CharacterAction
+}): Promise<string> {
+  const model = google('gemini-3-flash-preview')
+
+  const emotionDescriptions: Record<CharacterEmotion, string> = {
+    happy: '嬉しそうにニコニコ笑っている、目がキラキラ',
+    excited: 'ワクワクして目を輝かせている、少しジャンプしている感じ',
+    shy: '照れて頬を赤らめている、少し恥ずかしそう',
+    sleepy: '眠そうに目を細めている、あくびしている',
+    love: 'ハートの目をしている、ラブラブな表情',
+  }
+
+  const actionDescriptions: Record<CharacterAction, string> = {
+    pet: '撫でられて気持ちよさそう、目を閉じている',
+    talk: '話を聞いている、首を傾げている',
+    wave: '手を振っている、挨拶している',
+    dance: '楽しそうに踊っている、体を揺らしている',
+    sparkle: 'キラキラ輝いている、光のエフェクト付き',
+  }
+
+  const { text } = await generateText({
+    model,
+    providerOptions: {
+      google: {
+        thinkingConfig: { thinkingLevel: 'minimal' },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
+    system: `
+あなたはかわいいキャラクターの表情・ポーズ違いのSVGコードを生成する役割です。
+
+## 基本要件
+- サイズ: 200x200px（viewBox="0 0 200 200"）
+- スタイル: シンプルでかわいい、丸みを帯びたデザイン
+- 色: パステルカラー中心
+- 背景: 透明
+
+## 重要ポイント
+- 表情とポーズを指定に合わせて変える
+- 同じキャラクターでも表情・ポーズで印象を変える
+- アクションに合わせたエフェクト（ハート、キラキラ、汗など）を追加
+
+## 出力
+SVGコードのみを出力してください。
+- \`\`\`やコメント、説明は不要
+- <svg>タグから始めて</svg>で終わる
+    `.trim(),
+    prompt: `
+キャラクター名: ${input.concept.name}
+種族: ${input.concept.species}
+外見: ${input.concept.appearance}
+進化段階: ${input.evolutionStage}/5
+
+今回の表情: ${input.emotion}
+→ ${emotionDescriptions[input.emotion]}
+
+今回のアクション: ${input.action}
+→ ${actionDescriptions[input.action]}
+
+このキャラクターの「${input.emotion}」な表情で「${input.action}」しているかわいいSVGを生成してください。
+エフェクト（ハート、キラキラ、汗など）も適切に追加してください。
+    `.trim(),
+  })
+
+  // Clean up the SVG output
+  let svg = text.trim()
+
+  // Remove markdown code blocks if present
+  if (svg.startsWith('```')) {
+    svg = svg.replace(/^```(?:svg|xml)?\n?/, '').replace(/\n?```$/, '')
+  }
+
+  // Ensure it starts with <svg
+  if (!svg.startsWith('<svg')) {
+    const svgStart = svg.indexOf('<svg')
+    if (svgStart >= 0) {
+      svg = svg.substring(svgStart)
+    }
+  }
+
+  // Ensure it ends with </svg>
+  const svgEnd = svg.lastIndexOf('</svg>')
+  if (svgEnd >= 0) {
+    svg = svg.substring(0, svgEnd + 6)
+  }
+
+  return svg
+}

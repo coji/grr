@@ -612,10 +612,39 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       context: 'pet',
     })
 
+    // Base URL for character SVG images with dynamic expression
+    const baseUrl = 'https://grr.coji.dev'
+    // Use random variation to prevent caching same expression
+    const cacheBuster = Date.now()
+    const imageUrl = `${baseUrl}/character/${userId}.svg?emotion=love&action=pet&t=${cacheBuster}`
+
     if (context.respond) {
       await context.respond({
-        text: `*${character.characterName}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
+        text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
         response_type: 'ephemeral',
+        blocks: [
+          {
+            type: 'image',
+            image_url: imageUrl,
+            alt_text: `${character.characterName}が撫でられている`,
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*${character.characterName}*: ${message}`,
+            },
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `_+${pointsEarned}ポイント獲得！_`,
+              },
+            ],
+          },
+        ],
       })
     }
   })
@@ -660,10 +689,42 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       context: 'talk',
     })
 
+    // Base URL for character SVG images with dynamic expression
+    const baseUrl = 'https://grr.coji.dev'
+    // Randomly select emotion for variety
+    const emotions = ['happy', 'excited', 'shy'] as const
+    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)]
+    // Use random variation to prevent caching same expression
+    const cacheBuster = Date.now()
+    const imageUrl = `${baseUrl}/character/${userId}.svg?emotion=${randomEmotion}&action=talk&t=${cacheBuster}`
+
     if (context.respond) {
       await context.respond({
-        text: `*${character.characterName}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
+        text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
         response_type: 'ephemeral',
+        blocks: [
+          {
+            type: 'image',
+            image_url: imageUrl,
+            alt_text: `${character.characterName}が話している`,
+          },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*${character.characterName}*: ${message}`,
+            },
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `_+${pointsEarned}ポイント獲得！_`,
+              },
+            ],
+          },
+        ],
       })
     }
   })
