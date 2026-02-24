@@ -643,48 +643,18 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
 // ============================================
 
 // Reaction tiers with probabilities and multipliers
+// Titles are now LLM-generated, so we only store probability/multiplier
 interface ReactionTier {
-  name: string
+  name: 'normal' | 'good' | 'great' | 'legendary'
   probability: number
   multiplier: number
-  petTitles: string[]
-  talkTitles: string[]
-  emoji: string
 }
 
 const REACTION_TIERS: ReactionTier[] = [
-  {
-    name: 'normal',
-    probability: 0.5,
-    multiplier: 1,
-    petTitles: ['なでなで', 'よしよし', 'いいこいいこ'],
-    talkTitles: ['おしゃべり', 'ふむふむ', 'うんうん'],
-    emoji: '',
-  },
-  {
-    name: 'good',
-    probability: 0.3,
-    multiplier: 1.5,
-    petTitles: ['気持ちいい〜', 'うっとり', 'ほわわ〜ん'],
-    talkTitles: ['話が弾む！', '楽しいね', 'わくわく'],
-    emoji: '💫',
-  },
-  {
-    name: 'great',
-    probability: 0.15,
-    multiplier: 2,
-    petTitles: ['ご機嫌MAX！', 'しあわせ〜', 'とろける〜'],
-    talkTitles: ['大盛り上がり！', '最高の会話！', 'すごく楽しい！'],
-    emoji: '🎉',
-  },
-  {
-    name: 'legendary',
-    probability: 0.05,
-    multiplier: 3,
-    petTitles: ['✨奇跡のなでなで✨', '💖運命の瞬間💖', '🌟伝説のもふもふ🌟'],
-    talkTitles: ['✨心が通じた✨', '💫魂の会話💫', '🌟運命の出会い🌟'],
-    emoji: '✨',
-  },
+  { name: 'normal', probability: 0.5, multiplier: 1 },
+  { name: 'good', probability: 0.3, multiplier: 1.5 },
+  { name: 'great', probability: 0.15, multiplier: 2 },
+  { name: 'legendary', probability: 0.05, multiplier: 3 },
 ]
 
 // Pet reaction flavors for LLM context
