@@ -5,17 +5,16 @@
  * Slack Block Kit's image blocks don't support SVG, so this route
  * provides PNG versions using resvg-wasm for conversion.
  *
- * Supports the same query parameters as the SVG route:
- *   ?emotion=happy&action=pet&d=2026-02-24
+ * Note: Dynamic SVG generation via AI is disabled because Slack's image
+ * download timeout (~3-5 seconds) is too short for AI generation.
+ * All requests return the stored static character SVG converted to PNG.
+ *
+ * Query parameters (emotion, action, d) are accepted but currently ignored.
+ * A future improvement could pre-generate and cache emotion variants.
  */
 
 import { Resvg, initWasm } from '@resvg/resvg-wasm'
-import {
-  generateCharacterSvg,
-  generateMessageSvg,
-  type CharacterAction,
-  type CharacterEmotion,
-} from '~/services/ai/character-generation'
+import { generateCharacterSvg } from '~/services/ai/character-generation'
 import { characterToConcept, getCharacter } from '~/services/character'
 import type { Route } from './+types/character.$userId.png'
 
@@ -50,25 +49,8 @@ const FALLBACK_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/s
   <text x="100" y="110" text-anchor="middle" font-size="40">🥚</text>
 </svg>`
 
-// Valid emotions and actions for validation
-const VALID_EMOTIONS: CharacterEmotion[] = [
-  'happy',
-  'excited',
-  'shy',
-  'sleepy',
-  'love',
-]
-const VALID_ACTIONS: CharacterAction[] = [
-  'pet',
-  'talk',
-  'wave',
-  'dance',
-  'sparkle',
-]
-
 // PNG output size (Slack recommends images between 500-1500px)
 const PNG_WIDTH = 400
-const PNG_HEIGHT = 400
 
 function svgToPng(svgString: string): ArrayBuffer {
   const resvg = new Resvg(svgString, {
@@ -86,13 +68,8 @@ function svgToPng(svgString: string): ArrayBuffer {
   ) as ArrayBuffer
 }
 
-export const loader = async ({ params, request }: Route.LoaderArgs) => {
+export const loader = async ({ params }: Route.LoaderArgs) => {
   const userId = params.userId
-  const url = new URL(request.url)
-
-  // Parse query parameters for dynamic SVG generation
-  const emotionParam = url.searchParams.get('emotion')
-  const actionParam = url.searchParams.get('action')
 
   // Initialize WASM
   await ensureWasmInitialized()
@@ -121,42 +98,9 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
     })
   }
 
-  const concept = characterToConcept(character)
-
-  // Check if dynamic SVG is requested
-  if (emotionParam || actionParam) {
-    const emotion =
-      emotionParam && VALID_EMOTIONS.includes(emotionParam as CharacterEmotion)
-        ? (emotionParam as CharacterEmotion)
-        : 'happy'
-    const action =
-      actionParam && VALID_ACTIONS.includes(actionParam as CharacterAction)
-        ? (actionParam as CharacterAction)
-        : 'wave'
-
-    try {
-      const svg = await generateMessageSvg({
-        concept,
-        evolutionStage: character.evolutionStage,
-        emotion,
-        action,
-      })
-
-      const pngData = svgToPng(svg)
-      return new Response(pngData, {
-        headers: {
-          'Content-Type': 'image/png',
-          // Short cache for dynamic PNGs - they change with each request
-          'Cache-Control': 'public, max-age=60',
-        },
-      })
-    } catch (error) {
-      console.error('Failed to generate dynamic character PNG:', error)
-      // Fall back to static SVG on error
-    }
-  }
-
-  // If character has SVG, convert and serve it (static version)
+  // Use stored SVG if available (fast path)
+  // Note: We skip dynamic AI generation because Slack's image download
+  // timeout (~3-5 seconds) is too short for AI to generate SVGs on-the-fly.
   if (character.characterSvg) {
     try {
       const pngData = svgToPng(character.characterSvg)
@@ -171,8 +115,11 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
     }
   }
 
-  // Generate SVG on-the-fly if none exists, then convert to PNG
+  // Generate SVG on-the-fly only if none exists in DB
+  // This should be rare - only happens for newly created characters
+  // before their SVG has been saved
   try {
+    const concept = characterToConcept(character)
     const svg = await generateCharacterSvg({
       concept,
       evolutionStage: character.evolutionStage,
