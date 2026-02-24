@@ -7,6 +7,7 @@
     "app/**/.client/**/*",
     "workers/**/*",
     "env.d.ts",
+    "wasm.d.ts",
     "worker-configuration.d.ts"
   ],
   "exclude": ["app/**/*.integration.test.ts"],

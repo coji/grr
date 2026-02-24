@@ -12,11 +12,10 @@ import type {
   CharacterAction,
   CharacterEmotion,
 } from '~/services/ai/character-generation'
+// Static import of WASM binary (Cloudflare Workers disallows dynamic WASM instantiation)
+import resvgWasm from '../vendor/resvg.wasm'
 
-// WASM file URL from CDN (using specific version for stability)
-const RESVG_WASM_URL = 'https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm'
-
-// Track WASM initialization state
+// Track WASM initialization state (resvg-wasm throws on repeated init)
 let wasmInitialized = false
 let wasmInitPromise: Promise<void> | null = null
 
@@ -25,12 +24,7 @@ async function ensureWasmInitialized() {
   if (wasmInitPromise) return wasmInitPromise
 
   wasmInitPromise = (async () => {
-    const wasmResponse = await fetch(RESVG_WASM_URL)
-    if (!wasmResponse.ok) {
-      throw new Error(`Failed to fetch resvg WASM: ${wasmResponse.status}`)
-    }
-    const wasmBytes = await wasmResponse.arrayBuffer()
-    await initWasm(wasmBytes)
+    await initWasm(resvgWasm)
     wasmInitialized = true
   })()
 

@@ -10,7 +10,7 @@ import type {
   CharacterEmotion,
 } from '~/services/ai/character-generation'
 
-export const CHARACTER_IMAGE_BASE_URL = 'https://grr.coji.dev'
+export const CHARACTER_IMAGE_BASE_URL = 'https://grr.techtalkjp.workers.dev'
 
 // ============================================
 // URL Builders

@@ -13,11 +13,12 @@
  *   ?emotion=happy&action=wave&d=2026-02-24
  */
 
-import type {
-  CharacterAction,
-  CharacterEmotion,
+import {
+  generateMessageSvg,
+  type CharacterAction,
+  type CharacterEmotion,
 } from '~/services/ai/character-generation'
-import { getCharacter } from '~/services/character'
+import { characterToConcept, getCharacter } from '~/services/character'
 import {
   buildR2Key,
   getCharacterImageFromR2,
@@ -89,6 +90,32 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
           'Cache-Control': 'public, max-age=3600',
         },
       })
+    }
+
+    // R2 miss: generate dynamic SVG via AI and convert to PNG
+    // Note: This is slow (several seconds) and may timeout for Slack.
+    // Production should rely on R2 pre-generation via the workflow.
+    const character = await getCharacter(userId)
+    if (character) {
+      try {
+        const concept = characterToConcept(character)
+        const svg = await generateMessageSvg({
+          concept,
+          evolutionStage: character.evolutionStage,
+          emotion,
+          action,
+        })
+        const pngData = await svgToPng(svg)
+        return new Response(pngData, {
+          headers: {
+            'Content-Type': 'image/png',
+            'Cache-Control': 'public, max-age=60',
+          },
+        })
+      } catch (error) {
+        console.error('Failed to generate dynamic character PNG:', error)
+        // Fall through to static fallbacks
+      }
     }
   }
 
