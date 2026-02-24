@@ -15,7 +15,7 @@ import {
   type CharacterEmotion,
 } from '~/services/ai/character-generation'
 import { characterToConcept, getCharacter } from '~/services/character'
-import type { Route } from './+types/character.$userId.svg'
+import type { Route } from './+types/character.$userId[.svg]'
 
 // Default fallback SVG for when character doesn't exist
 const FALLBACK_SVG = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
