@@ -85,6 +85,7 @@ export async function addToPool(
 /**
  * Get a random image from the pool for the given evolution stage.
  * Only considers images within the active window (POOL_ACTIVE_DAYS).
+ * Avoids serving the same image consecutively by tracking the last served key.
  * Returns null if no active images exist.
  */
 export async function getRandomPoolImage(
@@ -94,9 +95,17 @@ export async function getRandomPoolImage(
   const keys = await listActivePoolKeys(userId, stage)
   if (keys.length === 0) return null
 
-  const randomKey = keys[Math.floor(Math.random() * keys.length)]
+  // Avoid repeating the last served image
+  const lastKey = await getLastServedKey(userId)
+  const candidates = keys.length > 1 ? keys.filter((k) => k !== lastKey) : keys
+
+  const randomKey = candidates[Math.floor(Math.random() * candidates.length)]
   const object = await env.CHARACTER_IMAGES.get(randomKey)
   if (!object) return null
+
+  // Remember this key (fire-and-forget)
+  setLastServedKey(userId, randomKey).catch(() => {})
+
   return await object.arrayBuffer()
 }
 
@@ -144,4 +153,21 @@ function getActiveCutoffDate(): string {
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - POOL_ACTIVE_DAYS)
   return cutoff.toISOString().split('T')[0]
+}
+
+function buildLastServedKey(userId: string): string {
+  return `character/${userId}/last-pool-key.txt`
+}
+
+async function getLastServedKey(userId: string): Promise<string | null> {
+  const object = await env.CHARACTER_IMAGES.get(buildLastServedKey(userId))
+  if (!object) return null
+  return await object.text()
+}
+
+async function setLastServedKey(
+  userId: string,
+  poolKey: string,
+): Promise<void> {
+  await env.CHARACTER_IMAGES.put(buildLastServedKey(userId), poolKey)
 }
