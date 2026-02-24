@@ -20,6 +20,9 @@ importers:
       '@react-router/remix-routes-option-adapter':
         specifier: 7.12.0
         version: 7.12.0(@react-router/dev@7.12.0(@types/node@25.0.6)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)(vite@7.3.1(@types/node@25.0.6)(jiti@2.6.1)(lightningcss@1.30.2))(wrangler@4.58.0(@cloudflare/workers-types@4.20260111.0)))(typescript@5.9.3)
+      '@resvg/resvg-wasm':
+        specifier: ^2.6.2
+        version: 2.6.2
       ai:
         specifier: 6.0.27
         version: 6.0.27(zod@4.3.5)
@@ -1250,6 +1253,10 @@ packages:
 
   '@remix-run/node-fetch-server@0.9.0':
     resolution: {integrity: sha512-SoLMv7dbH+njWzXnOY6fI08dFMI5+/dQ+vY3n8RnnbdG7MdJEgiP28Xj/xWlnRnED/aB6SFw56Zop+LbmaaKqA==}
+
+  '@resvg/resvg-wasm@2.6.2':
+    resolution: {integrity: sha512-FqALmHI8D4o6lk/LRWDnhw95z5eO+eAa6ORjVg09YRR7BkcM6oPHU9uyC0gtQG5vpFLvgpeU4+zEAz2H8APHNw==}
+    engines: {node: '>= 10'}
 
   '@rollup/rollup-android-arm-eabi@4.55.1':
     resolution: {integrity: sha512-9R0DM/ykwfGIlNu6+2U09ga0WXeZ9MRC2Ter8jnz8415VbuIykVuc6bhdrbORFZANDmTDvq26mJrEVTl8TdnDg==}
@@ -3463,6 +3470,8 @@ snapshots:
   '@remix-run/node-fetch-server@0.8.1': {}
 
   '@remix-run/node-fetch-server@0.9.0': {}
+
+  '@resvg/resvg-wasm@2.6.2': {}
 
   '@rollup/rollup-android-arm-eabi@4.55.1':
     optional: true
