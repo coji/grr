@@ -642,9 +642,84 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
 // Interaction Handler Helper (Modal version for Home Tab)
 // ============================================
 
-// Rare reaction chance (10%)
-const RARE_REACTION_CHANCE = 0.1
-const BONUS_POINTS_MULTIPLIER = 3
+// Reaction tiers with probabilities and multipliers
+interface ReactionTier {
+  name: string
+  probability: number
+  multiplier: number
+  petTitles: string[]
+  talkTitles: string[]
+  emoji: string
+}
+
+const REACTION_TIERS: ReactionTier[] = [
+  {
+    name: 'normal',
+    probability: 0.5,
+    multiplier: 1,
+    petTitles: ['なでなで', 'よしよし', 'いいこいいこ'],
+    talkTitles: ['おしゃべり', 'ふむふむ', 'うんうん'],
+    emoji: '',
+  },
+  {
+    name: 'good',
+    probability: 0.3,
+    multiplier: 1.5,
+    petTitles: ['気持ちいい〜', 'うっとり', 'ほわわ〜ん'],
+    talkTitles: ['話が弾む！', '楽しいね', 'わくわく'],
+    emoji: '💫',
+  },
+  {
+    name: 'great',
+    probability: 0.15,
+    multiplier: 2,
+    petTitles: ['ご機嫌MAX！', 'しあわせ〜', 'とろける〜'],
+    talkTitles: ['大盛り上がり！', '最高の会話！', 'すごく楽しい！'],
+    emoji: '🎉',
+  },
+  {
+    name: 'legendary',
+    probability: 0.05,
+    multiplier: 3,
+    petTitles: ['✨奇跡のなでなで✨', '💖運命の瞬間💖', '🌟伝説のもふもふ🌟'],
+    talkTitles: ['✨心が通じた✨', '💫魂の会話💫', '🌟運命の出会い🌟'],
+    emoji: '✨',
+  },
+]
+
+// Pet reaction flavors for LLM context
+const PET_FLAVORS = [
+  { mood: 'happy', description: '喜んでいる、嬉しそう' },
+  { mood: 'shy', description: '照れている、恥ずかしそう' },
+  { mood: 'ticklish', description: 'くすぐったがっている' },
+  { mood: 'sleepy', description: '眠くなってきた、うとうと' },
+  { mood: 'loving', description: '甘えている、大好き' },
+  { mood: 'playful', description: 'はしゃいでいる、遊びたい' },
+]
+
+// Talk reaction flavors for LLM context
+const TALK_FLAVORS = [
+  { mood: 'curious', description: '興味津々、もっと聞きたい' },
+  { mood: 'excited', description: 'テンション高い、わくわく' },
+  { mood: 'thoughtful', description: '考え込んでいる、なるほど' },
+  { mood: 'cheerful', description: '明るい、楽しそう' },
+  { mood: 'supportive', description: '励ましてくれる、応援' },
+  { mood: 'gossipy', description: '内緒話っぽい、ひそひそ' },
+]
+
+function pickReactionTier(): ReactionTier {
+  const roll = Math.random()
+  let cumulative = 0
+  for (const tier of REACTION_TIERS) {
+    cumulative += tier.probability
+    if (roll < cumulative) return tier
+  }
+  return REACTION_TIERS[0]
+}
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
 
 interface SlackClient {
   views: {
@@ -690,31 +765,41 @@ async function handleCharacterInteractionModal(
     return
   }
 
-  // Check for rare reaction
-  const isRare = Math.random() < RARE_REACTION_CHANCE
-  const pointsMultiplier = isRare ? BONUS_POINTS_MULTIPLIER : 1
+  // Pick reaction tier and flavor
+  const tier = pickReactionTier()
+  const flavor =
+    opts.messageContext === 'pet'
+      ? pickRandom(PET_FLAVORS)
+      : pickRandom(TALK_FLAVORS)
 
   const { pointsEarned } = await recordInteraction({
     userId,
     interactionType: opts.interactionType,
   })
 
-  // Apply bonus points for rare reactions (record extra interactions)
-  if (isRare) {
-    for (let i = 1; i < BONUS_POINTS_MULTIPLIER; i++) {
-      await recordInteraction({
-        userId,
-        interactionType: opts.interactionType,
-        metadata: { bonus: true },
-      })
-    }
+  // Apply bonus points based on tier multiplier
+  const bonusInteractions = Math.floor(tier.multiplier) - 1
+  for (let i = 0; i < bonusInteractions; i++) {
+    await recordInteraction({
+      userId,
+      interactionType: opts.interactionType,
+      metadata: { bonus: true, tier: tier.name },
+    })
   }
 
-  const totalPoints = pointsEarned * pointsMultiplier
+  const totalPoints = Math.floor(pointsEarned * tier.multiplier)
   const concept = characterToConcept(character)
 
   // Build rich context for varied responses
   const richContext = await buildRichContext(userId, character)
+
+  // Build flavor context for LLM
+  const flavorContext =
+    tier.name === 'legendary'
+      ? `超レア反応！${flavor.description}、最高に嬉しそう`
+      : tier.name === 'great'
+        ? `大成功！${flavor.description}`
+        : flavor.description
 
   // Generate message with rich context
   const messageContext: CharacterMessageContext = {
@@ -723,21 +808,17 @@ async function handleCharacterInteractionModal(
     happiness: character.happiness,
     energy: character.energy,
     context: opts.messageContext,
-    additionalContext: isRare ? '特別に嬉しそう！レアな反応' : undefined,
+    additionalContext: flavorContext,
     userId,
     ...richContext,
   }
   const message = await generateCharacterMessage(messageContext)
 
-  // Build modal title based on interaction type
+  // Pick random title from tier
   const modalTitle =
     opts.messageContext === 'pet'
-      ? isRare
-        ? 'なでなで大成功！'
-        : 'なでなで'
-      : isRare
-        ? '会話が弾んだ！'
-        : 'おしゃべり'
+      ? pickRandom(tier.petTitles)
+      : pickRandom(tier.talkTitles)
 
   // Build reaction blocks
   // biome-ignore lint/suspicious/noExplicitAny: Slack block types
@@ -755,14 +836,20 @@ async function handleCharacterInteractionModal(
     },
   ]
 
-  // Add rare reaction celebration
-  if (isRare) {
+  // Add tier celebration for good reactions
+  if (tier.name !== 'normal' && tier.emoji) {
+    const tierLabel =
+      tier.name === 'legendary'
+        ? '🌟 超レア！'
+        : tier.name === 'great'
+          ? '🎉 大成功！'
+          : '💫 いい感じ！'
     blocks.push({
       type: 'context',
       elements: [
         {
           type: 'mrkdwn',
-          text: `✨ *レア反応！* ✨ ポイント${BONUS_POINTS_MULTIPLIER}倍！`,
+          text: `${tier.emoji} *${tierLabel}* ${tier.emoji} ポイント${tier.multiplier}倍！`,
         },
       ],
     })
