@@ -11,63 +11,223 @@ import { detectAndStoreFutureEvents } from '~/services/pending-followups'
 import { DIARY_PERSONA_NAME } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { TOKYO_TZ, sanitizeText } from './utils'
+import { buildReferralWelcomeMessage, buildWelcomeMessage } from './welcome'
+
+type OnboardingStatus = 'none' | 'welcomed' | 'completed'
 
 /**
- * diaryChannelIdが設定されていない場合、現在のチャンネルを設定する
- * (オンボーディング時: 既存チャンネルでメンションされた場合の自動設定)
+ * ユーザーのオンボーディング状態を取得または初期化
  */
-async function ensureDiaryChannelSet(
+async function getOrCreateUserSettings(
   userId: string,
   channelId: string,
-): Promise<void> {
+): Promise<{
+  onboardingStatus: OnboardingStatus
+  isNewUser: boolean
+}> {
   const now = dayjs().utc().toISOString()
 
-  // 既存の設定を確認
   const settings = await db
     .selectFrom('userDiarySettings')
     .selectAll()
     .where('userId', '=', userId)
     .executeTakeFirst()
 
-  if (settings?.diaryChannelId) {
-    // 既に設定済み
-    return
-  }
-
   if (settings) {
-    // 設定レコードはあるがdiaryChannelIdが未設定 → 更新
-    await db
-      .updateTable('userDiarySettings')
-      .set({
-        diaryChannelId: channelId,
-        updatedAt: now,
-      })
-      .where('userId', '=', userId)
-      .execute()
-  } else {
-    // 設定レコードがない → 新規作成
-    await db
-      .insertInto('userDiarySettings')
-      .values({
-        userId,
-        reminderEnabled: 1,
-        reminderHour: 21,
-        skipWeekends: 0,
-        diaryChannelId: channelId,
-        personalityChangePending: 0,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .execute()
+    // 既存ユーザー: onboardingStatusを確認
+    // diaryChannelIdが設定されていなければ更新
+    if (!settings.diaryChannelId) {
+      await db
+        .updateTable('userDiarySettings')
+        .set({
+          diaryChannelId: channelId,
+          updatedAt: now,
+        })
+        .where('userId', '=', userId)
+        .execute()
+    }
+
+    return {
+      onboardingStatus:
+        (settings.onboardingStatus as OnboardingStatus) || 'none',
+      isNewUser: false,
+    }
   }
 
-  console.log(`Auto-set diary channel for user ${userId}: ${channelId}`)
+  // 新規ユーザー: 設定レコードを作成
+  await db
+    .insertInto('userDiarySettings')
+    .values({
+      userId,
+      reminderEnabled: 1,
+      reminderHour: 21,
+      skipWeekends: 0,
+      diaryChannelId: channelId,
+      personalityChangePending: 0,
+      onboardingStatus: 'none',
+      createdAt: now,
+      updatedAt: now,
+    })
+    .execute()
+
+  return {
+    onboardingStatus: 'none',
+    isNewUser: true,
+  }
+}
+
+/**
+ * オンボーディング状態を更新
+ */
+async function updateOnboardingStatus(
+  userId: string,
+  status: OnboardingStatus,
+): Promise<void> {
+  const now = dayjs().utc().toISOString()
+
+  await db
+    .updateTable('userDiarySettings')
+    .set({
+      onboardingStatus: status,
+      updatedAt: now,
+    })
+    .where('userId', '=', userId)
+    .execute()
+}
+
+/**
+ * メッセージテキストから紹介パターンを検出
+ * 例: "@ほたる @田中さん に案内して"
+ * Returns: { isReferral: true, newUserId: 'U12345', referrerId: 'U67890' }
+ */
+function detectReferralPattern(
+  text: string,
+  senderId: string,
+  botUserId: string,
+): {
+  isReferral: boolean
+  newUserId?: string
+} {
+  // テキスト内のユーザーメンションを抽出 (<@U12345> 形式)
+  const userMentions = text.match(/<@([A-Z0-9]+)>/g) || []
+  const mentionedUserIds = userMentions
+    .map((m) => m.replace(/<@|>/g, ''))
+    .filter((id) => id !== botUserId) // ボット自身を除外
+
+  // 送信者以外のユーザーがメンションされていれば紹介パターン
+  const otherUsers = mentionedUserIds.filter((id) => id !== senderId)
+
+  if (otherUsers.length > 0) {
+    return {
+      isReferral: true,
+      newUserId: otherUsers[0], // 最初にメンションされたユーザーを対象
+    }
+  }
+
+  return { isReferral: false }
+}
+
+/**
+ * ユーザー名を取得
+ */
+async function getUserDisplayName(
+  userId: string,
+  // biome-ignore lint/suspicious/noExplicitAny: Slack client type
+  client: any,
+): Promise<string> {
+  try {
+    const result = await client.users.info({ user: userId })
+    if (result.ok && result.user) {
+      return (
+        result.user.profile?.display_name ||
+        result.user.profile?.real_name ||
+        result.user.name ||
+        'ユーザー'
+      )
+    }
+  } catch (error) {
+    console.error('Failed to get user info:', error)
+  }
+  return 'ユーザー'
 }
 
 export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('app_mention', async ({ payload, context }) => {
     const event = payload
     if (!event.user) return
+
+    // ボットのユーザーIDを取得（紹介パターン検出用）
+    let botUserId = ''
+    try {
+      const authResult = await context.client.auth.test()
+      botUserId = authResult.user_id || ''
+    } catch {
+      // 無視
+    }
+
+    // 紹介パターンの検出
+    const referral = detectReferralPattern(event.text, event.user, botUserId)
+
+    // 対象ユーザーを決定（紹介の場合は紹介された人、通常は送信者）
+    const targetUserId =
+      referral.isReferral && referral.newUserId
+        ? referral.newUserId
+        : event.user
+
+    // オンボーディング状態を取得
+    const { onboardingStatus } = await getOrCreateUserSettings(
+      targetUserId,
+      event.channel,
+    )
+
+    // 紹介パターンの場合: 新しいユーザーに歓迎メッセージを送信
+    if (referral.isReferral && referral.newUserId) {
+      const newUserName = await getUserDisplayName(
+        referral.newUserId,
+        context.client,
+      )
+      const referrerName = await getUserDisplayName(event.user, context.client)
+      const welcomeMessage = buildReferralWelcomeMessage(
+        newUserName,
+        referrerName,
+      )
+
+      await context.client.chat.postMessage({
+        channel: event.channel,
+        text: welcomeMessage.text,
+        blocks: welcomeMessage.blocks,
+      })
+
+      // 新しいユーザーのステータスを welcomed に更新
+      await updateOnboardingStatus(referral.newUserId, 'welcomed')
+
+      console.log(
+        `Referral onboarding: ${event.user} introduced ${referral.newUserId}`,
+      )
+      return
+    }
+
+    // 初回ユーザー: 歓迎メッセージを送信して終了
+    if (onboardingStatus === 'none') {
+      const userName = await getUserDisplayName(event.user, context.client)
+      const welcomeMessage = buildWelcomeMessage(userName)
+
+      await context.client.chat.postMessage({
+        channel: event.channel,
+        text: welcomeMessage.text,
+        blocks: welcomeMessage.blocks,
+        thread_ts: event.ts,
+      })
+
+      await updateOnboardingStatus(event.user, 'welcomed')
+
+      console.log(`First contact onboarding for user ${event.user}`)
+      return
+    }
+
+    // welcomed 状態: 2回目のメッセージでキャラ生成 + 日記処理
+    // completed 状態: 通常の日記処理
+    // どちらも以下の処理を実行
 
     // 処理中であることを控えめに伝える
     await context.client.reactions
@@ -77,9 +237,6 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
         name: 'eyes',
       })
       .catch(() => {}) // リアクション追加失敗は無視
-
-    // 新規ユーザーの場合、diaryChannelIdを自動設定（オンボーディング）
-    await ensureDiaryChannelSet(event.user, event.channel)
 
     const cleaned = sanitizeText(event.text)
     const hasFiles = 'files' in event && event.files && event.files.length > 0
@@ -240,6 +397,12 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       }
     }
 
+    // welcomed 状態だった場合、completed に更新
+    if (onboardingStatus === 'welcomed') {
+      await updateOnboardingStatus(event.user, 'completed')
+      console.log(`Onboarding completed for user ${event.user}`)
+    }
+
     // 前回のエントリを取得（当日より前の最新エントリ）
     const previousEntry = entry
       ? await db
@@ -271,6 +434,7 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
           previousEntry: previousDetail,
           mentionMessage: cleaned || null,
           mention,
+          isFirstDiary: onboardingStatus === 'welcomed',
         },
       })
 

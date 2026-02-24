@@ -48,6 +48,7 @@ export interface Database {
     personality: string | null
     personalityUpdatedAt: string | null
     personalityChangePending: number
+    onboardingStatus: 'none' | 'welcomed' | 'completed' | null
     createdAt: string
     updatedAt: string
   }
