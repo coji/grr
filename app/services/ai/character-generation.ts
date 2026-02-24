@@ -273,7 +273,7 @@ export async function generateCharacterReaction(
     reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
   },
 ): Promise<CharacterReaction> {
-  const reactionModel = 'gemini-2.5-flash-lite'
+  const reactionModel = 'gemini-3-flash-preview'
   const model = google(reactionModel)
 
   // Build rich context sections
@@ -303,36 +303,75 @@ export async function generateCharacterReaction(
     contextSections.length > 0 ? contextSections.join(' / ') : ''
 
   const intensityHint = {
-    normal: 'ふつうの反応',
-    good: 'いい感じの反応、少し嬉しそう',
-    great: '大成功！とても嬉しそう、テンション高め',
-    legendary: '超レア！最高に嬉しい、特別な瞬間',
+    normal: '',
+    good: '嬉しさが伝わる反応',
+    great: 'とても嬉しい！テンション高め',
+    legendary: '最高に嬉しい特別な瞬間！',
   }[input.reactionIntensity]
-
-  const interactionType =
-    input.context === 'pet' ? '撫でられた' : '話しかけられた'
 
   // Only request tierCelebration for special reactions
   const needsCelebration = input.reactionIntensity !== 'normal'
 
-  const { object, usage } = await generateObject({
-    model,
-    schema: characterReactionSchema,
-    system: `
-「${input.concept.name}」（${input.concept.species}）の反応を生成。
+  // Build context-specific prompts
+  const isPet = input.context === 'pet'
+  const systemPrompt = isPet
+    ? `
+「${input.concept.name}」（${input.concept.species}）が撫でられた時の反応。
+性格: ${input.concept.personality}
+${richContext}
+
+## 反応のバリエーション
+- 触られた場所によって反応が変わる（頭→気持ちいい、ほっぺ→照れる、おなか→くすぐったい）
+- 擬音語を積極的に使う（もふもふ、ふにふに、ゴロゴロ、すりすり、ぽかぽか）
+- 身体的な反応を描写（目を細める、しっぽを振る、ごろんとする）
+    `.trim()
+    : `
+「${input.concept.name}」（${input.concept.species}）との会話。
 性格: ${input.concept.personality}
 口癖: ${input.concept.catchphrase}
 ${richContext}
-    `.trim(),
-    prompt: `
-${interactionType}時の反応。${intensityHint}。
-${input.additionalContext || ''}
 
-reactionTitle: 擬音語や短い感情表現（例: もふもふ、うっとり、きゅん、わくわく、ぽかぽか、ほわほわ）
-message: キャラらしい一言（${input.concept.emoji}を含む、50文字以内）
-reactionEmoji: 反応に合う絵文字1つ
-${needsCelebration ? `tierCelebration: 特別な瞬間を祝う短い言葉（例: やったね！、最高だよ！、奇跡だ！、すごいすごい！）` : ''}
-    `.trim(),
+## 会話のバリエーション
+- 挨拶：時間帯に合わせた声かけ
+- 質問：ユーザーの今日のこと、好きなものについて聞く
+- シェア：自分が見つけたこと、考えたことを話す
+- 応援：ユーザーの頑張りを認める、元気づける
+- 遊び：なぞなぞ、しりとり、クイズを提案
+- 思い出：ユーザーの過去の日記に触れる
+    `.trim()
+
+  const promptText = isPet
+    ? `
+${input.additionalContext || '撫でられている'}
+${intensityHint}
+
+## 出力
+- reactionTitle: 触感や状態を表す擬音語（もふもふ、ふにふに、ゴロゴロ、ほわほわ、ぽかぽか、とろーん、むにゅむにゅ等）
+- message: 撫でられた反応のセリフ（${input.concept.emoji}を含む、感覚的な表現で）
+- reactionEmoji: 反応に合う絵文字
+${needsCelebration ? '- tierCelebration: 特別な喜びを表す短い言葉' : ''}
+    `.trim()
+    : `
+${input.additionalContext || '話しかけられた'}
+${intensityHint}
+
+## 出力
+- reactionTitle: 会話の雰囲気を表す言葉（わくわく、ふむふむ、にこにこ、そわそわ、きらきら、うんうん等）
+- message: 会話のセリフ（${input.concept.emoji}を含む。質問、感想、提案など会話らしく）
+- reactionEmoji: 会話の雰囲気に合う絵文字
+${needsCelebration ? '- tierCelebration: 嬉しさを表す短い言葉' : ''}
+    `.trim()
+
+  const { object, usage } = await generateObject({
+    model,
+    providerOptions: {
+      google: {
+        thinkingConfig: { thinkingLevel: 'low' },
+      } satisfies GoogleGenerativeAIProviderOptions,
+    },
+    schema: characterReactionSchema,
+    system: systemPrompt,
+    prompt: promptText,
   })
 
   logAiCost({
