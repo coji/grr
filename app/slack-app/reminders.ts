@@ -3,12 +3,14 @@ import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import type { DiaryReminderMoodOption } from '~/services/ai'
 import { generateDiaryReminder } from '~/services/ai'
+import { getCharacter } from '~/services/character'
 import { db } from '~/services/db'
 import { getUserMilestones } from '~/services/proactive-messages'
 import {
   DIARY_MOOD_CHOICES,
   DIARY_PERSONA_NAME,
 } from './handlers/diary-constants'
+import { buildCharacterImageBlockForContext } from './handlers/diary/character-blocks'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -189,11 +191,19 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         context: reminderContext,
       })
 
+      // Build character image block if user has a character
+      const character = await getCharacter(userId)
+      // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+      const characterBlocks: any[] = character
+        ? [buildCharacterImageBlockForContext(userId, 'daily_reminder')]
+        : []
+
       // ユーザーのチャンネルにメンション付き＆ボタン付きでメッセージを送信
       const message = await client.chat.postMessage({
         channel: channelId,
         text: `<@${userId}> ${reminderText}`,
         blocks: [
+          ...characterBlocks,
           {
             type: 'section',
             text: {

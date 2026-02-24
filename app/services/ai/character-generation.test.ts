@@ -130,6 +130,8 @@ describe('generateCharacterConcept', () => {
       summary: 'クリエイティブな性格',
       traits: ['創造的', '好奇心旺盛'],
       interests: ['プログラミング', '音楽'],
+      expressions: ['なるほど〜', 'わくわく！'],
+      changeNote: null,
     })
     // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(

@@ -612,10 +612,9 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       context: 'pet',
     })
 
-    // Base URL for character SVG images with dynamic expression
-    const baseUrl = 'https://grr.coji.dev'
-    // Use random variation to prevent caching same expression
+    // Use cache buster for interactive moments to get fresh expressions
     const cacheBuster = Date.now()
+    const baseUrl = 'https://grr.coji.dev'
     const imageUrl = `${baseUrl}/character/${userId}.svg?emotion=love&action=pet&t=${cacheBuster}`
 
     if (context.respond) {

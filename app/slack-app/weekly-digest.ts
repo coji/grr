@@ -1,8 +1,10 @@
 import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateWeeklyDigest } from '~/services/ai'
+import { getCharacter } from '~/services/character'
 import { db } from '~/services/db'
 import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
+import { buildCharacterImageBlockForContext } from './handlers/diary/character-blocks'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -57,11 +59,19 @@ export const sendWeeklyDigest = async (env: Env) => {
       // ユーザーの日記チャンネルを取得
       const channelId = entries[0].channelId
 
+      // Build character image block if user has a character
+      const character = await getCharacter(userId)
+      // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+      const characterBlocks: any[] = character
+        ? [buildCharacterImageBlockForContext(userId, 'weekly_digest')]
+        : []
+
       // ダイジェストメッセージを送信
       await client.chat.postMessage({
         channel: channelId,
         text: `<@${userId}> ${digestMessage}`,
         blocks: [
+          ...characterBlocks,
           {
             type: 'header',
             text: {
