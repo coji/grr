@@ -188,19 +188,24 @@ export interface Database {
 
   userCharacters: {
     userId: string
-    characterType: 'firefly' | 'moon_rabbit' | 'cloud_sprite' | 'forest_spirit'
-    characterName: string | null
+    // Character identity (all AI-generated, unique per user)
+    characterName: string
+    characterSpecies: string
     characterEmoji: string
+    characterAppearance: string | null
+    characterPersonality: string | null
+    characterCatchphrase: string | null
     characterSvg: string | null
+    // Evolution state
     evolutionStage: number // 1-5
     evolutionPoints: number
+    // Status
     happiness: number // 0-100
     energy: number // 0-100
     bondLevel: number // 0-100
+    // Activity tracking
     lastInteractedAt: string | null
     daysWithoutDiary: number
-    characterTraits: string | null // JSON
-    favoriteTopics: string | null // JSON
     createdAt: string
     updatedAt: string
   }

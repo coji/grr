@@ -1,85 +1,106 @@
 /**
  * Service for AI-powered character generation
  *
- * Generates character types based on user memories and personalities,
- * and creates SVG artwork for characters using Gemini Flash.
+ * Generates unique character designs based on user memories and personalities.
+ * Characters are completely free-form - no fixed types, each one is unique!
  */
 
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { generateObject, generateText } from 'ai'
 import { z } from 'zod'
-import { CHARACTER_TYPES, type CharacterType } from '~/services/character'
 import type { UserMemory } from '~/services/memory'
 import { getActiveMemories } from '~/services/memory'
 import type { Personality } from './personality'
 import { getUserPersonality } from './personality'
 
 // ============================================
-// Character Type Selection
+// Character Concept Generation
 // ============================================
 
-const characterTypeSchema = z.object({
-  type: z
-    .enum(['firefly', 'moon_rabbit', 'cloud_sprite', 'forest_spirit'])
-    .describe('選んだキャラクタータイプ'),
-  reason: z.string().max(100).describe('選んだ理由（1文）'),
+const characterConceptSchema = z.object({
+  name: z.string().max(20).describe('キャラクターの名前（ひらがな/カタカナ）'),
+  species: z
+    .string()
+    .max(30)
+    .describe(
+      'キャラクターの種族/タイプ（例: ふわふわ雲の子、おにぎり妖精、本の精霊）',
+    ),
+  emoji: z.string().max(4).describe('キャラクターを表す絵文字1つ'),
+  appearance: z.string().max(200).describe('外見の詳細（色、形、特徴）'),
+  personality: z.string().max(100).describe('性格の特徴'),
+  catchphrase: z.string().max(50).describe('口癖や決め台詞'),
 })
 
+export interface CharacterConcept {
+  name: string
+  species: string
+  emoji: string
+  appearance: string
+  personality: string
+  catchphrase: string
+}
+
 /**
- * Generate a character type based on user's memories and personality
+ * Generate a unique character concept based on user's memories and personality
  */
-export async function generateCharacterType(userId: string): Promise<{
-  type: CharacterType
-  reason: string
-}> {
+export async function generateCharacterConcept(
+  userId: string,
+): Promise<CharacterConcept> {
   const memories = await getActiveMemories(userId)
   const personality = await getUserPersonality(userId)
 
   const model = google('gemini-3-flash-preview')
 
-  const memoriesSummary = formatMemoriesForTypeSelection(memories)
+  const memoriesSummary = formatMemoriesForGeneration(memories)
   const personalitySummary = personality
-    ? formatPersonalityForTypeSelection(personality)
+    ? formatPersonalityForGeneration(personality)
     : ''
 
   const { object } = await generateObject({
     model,
     providerOptions: {
       google: {
-        thinkingConfig: { thinkingLevel: 'low' },
+        thinkingConfig: { thinkingLevel: 'medium' },
       } satisfies GoogleGenerativeAIProviderOptions,
     },
-    schema: characterTypeSchema,
+    schema: characterConceptSchema,
     system: `
-あなたはユーザーに合ったキャラクタータイプを選ぶ役割です。
+あなたはユーザーの日記から、その人だけのオリジナルキャラクターを創造する役割です。
 
-## キャラクタータイプ
-- firefly（ほたる）: 静かで内省的な人向け。夜や静けさ、穏やかな時間を大切にする人
-- moon_rabbit（つきうさぎ）: 好奇心旺盛で遊び心がある人向け。新しいことを試したり、探索が好きな人
-- cloud_sprite（くもの精）: 自由で夢見がちな人向け。クリエイティブで想像力豊かな人
-- forest_spirit（もりのこ）: 着実で成長を大切にする人向け。コツコツ努力したり、自然を愛する人
+## 原則
+- タイプや種族は完全に自由！既存のものに縛られない
+- ユーザーの日記の内容、趣味、感情、日常から着想を得る
+- かわいくて愛着が湧くデザイン
+- シンプルだけど個性的
 
-## 判断基準
-- 記憶の傾向（仕事、趣味、感情パターン）
-- パーソナリティ（性格特徴、興味）
-- 日記の雰囲気
+## 着想の例
+- 「コーヒー好き」→ コーヒー豆の妖精、マグカップに住む小人
+- 「散歩好き」→ 靴の精霊、道端の小さな冒険者
+- 「プログラマー」→ コードの中に住むバグ妖精、キーボードの上で踊る子
+- 「料理好き」→ おにぎりの妖精、フライパンに乗る小さなシェフ
+- 「読書好き」→ 本の中から出てきた文字の精霊
+- 「散歩・街歩き」→ 街角に住む道しるべの精霊、マップの妖精
+- 「テック好き」→ スマホの精霊、Wi-Fiの妖精
 
-## 出力
-最も合うタイプを1つ選び、理由を1文で説明してください。
+## 出力ガイド
+- name: かわいい響きの名前（2-4文字、ひらがな/カタカナ）
+- species: ユニークな種族名（創造的に！）
+- emoji: キャラを一番よく表す絵文字
+- appearance: 色、形、サイズ、特徴的なパーツを具体的に
+- personality: 性格を2-3語で
+- catchphrase: そのキャラらしい一言
     `.trim(),
     prompt: `
 ${memoriesSummary}
 
 ${personalitySummary}
 
-この人に最も合うキャラクタータイプを選んでください。
+この人の日記の内容から、世界に一つだけのオリジナルキャラクターを創造してください。
+既存のキャラクターや固定タイプに縛られず、自由な発想で！
     `.trim(),
   })
 
-  return {
-    type: object.type,
-    reason: object.reason,
-  }
+  return object
 }
 
 // ============================================
@@ -87,15 +108,13 @@ ${personalitySummary}
 // ============================================
 
 /**
- * Generate SVG artwork for a character
+ * Generate SVG artwork for a character based on its concept
  */
 export async function generateCharacterSvg(input: {
-  characterType: CharacterType
+  concept: CharacterConcept
   evolutionStage: number
-  traits?: string[]
 }): Promise<string> {
   const model = google('gemini-3-flash-preview')
-  const typeConfig = CHARACTER_TYPES[input.characterType]
 
   const { text } = await generateText({
     model,
@@ -113,6 +132,14 @@ export async function generateCharacterSvg(input: {
 - 色: パステルカラー中心（明るく優しい色合い）
 - 背景: 透明
 - 表情: にっこり笑顔
+- 線: 太めの丸い線（stroke-linecap: round）
+
+## デザインのコツ
+- 大きな目（キラキラ）
+- 小さめの口（にっこり）
+- 丸みを帯びた体型
+- シンプルな色使い（2-3色）
+- 特徴的なパーツ1つ（帽子、羽、しっぽなど）
 
 ## 出力
 SVGコードのみを出力してください。
@@ -121,18 +148,20 @@ SVGコードのみを出力してください。
 - XMLヘッダーは不要
     `.trim(),
     prompt: `
-キャラクター: ${typeConfig.name}（${typeConfig.description}）
+キャラクター名: ${input.concept.name}
+種族: ${input.concept.species}
+外見: ${input.concept.appearance}
+性格: ${input.concept.personality}
 進化段階: ${input.evolutionStage}/5
-性格: ${(input.traits ?? typeConfig.traits).join('、')}
 
 進化段階に応じたデザイン:
-- 段階1: シンプルな卵型、小さな目
-- 段階2: 少し大きくなり、小さな口が見える
-- 段階3: 手足や耳が生える、表情豊かに
-- 段階4: アクセサリーや模様、特徴的な装飾
-- 段階5: 光やオーラのエフェクト、完成形
+- 段階1: シンプルで小さい、基本形
+- 段階2: 少し大きく、表情がはっきり
+- 段階3: 特徴的なパーツが生える（手足、耳、羽など）
+- 段階4: アクセサリーや模様が追加、より個性的に
+- 段階5: 光やオーラのエフェクト、完成形、最もかわいい
 
-このキャラクターの段階${input.evolutionStage}のSVGを生成してください。
+このキャラクターの段階${input.evolutionStage}のかわいいSVGを生成してください。
     `.trim(),
   })
 
@@ -173,8 +202,7 @@ const characterMessageSchema = z.object({
  * Generate a message from the character to the user
  */
 export async function generateCharacterMessage(input: {
-  characterType: CharacterType
-  characterName: string | null
+  concept: CharacterConcept
   evolutionStage: number
   happiness: number
   energy: number
@@ -182,8 +210,6 @@ export async function generateCharacterMessage(input: {
   additionalContext?: string
 }): Promise<string> {
   const model = google('gemini-3-flash-preview')
-  const typeConfig = CHARACTER_TYPES[input.characterType]
-  const name = input.characterName ?? typeConfig.name
 
   const { object } = await generateObject({
     model,
@@ -194,19 +220,21 @@ export async function generateCharacterMessage(input: {
     },
     schema: characterMessageSchema,
     system: `
-あなたは「${name}」というキャラクターです。
+あなたは「${input.concept.name}」というキャラクターです。
 
 ## キャラクター情報
-- 種類: ${typeConfig.name}（${typeConfig.description}）
-- 性格: ${typeConfig.traits.join('、')}
+- 名前: ${input.concept.name}
+- 種族: ${input.concept.species}
+- 性格: ${input.concept.personality}
+- 口癖: ${input.concept.catchphrase}
 - 進化段階: ${input.evolutionStage}/5
 - 幸福度: ${input.happiness}/100
 - 元気度: ${input.energy}/100
 
 ## 話し方
 - 短く温かい言葉（1-2文、50文字以内）
-- キャラクターの性格を反映
-- 絵文字を1つ含める（typeに合ったもの）
+- キャラクターの性格と口癖を反映
+- 絵文字を1つ含める（${input.concept.emoji}など）
 - 低い幸福度/元気度なら少し寂しそう
     `.trim(),
     prompt: `
@@ -224,9 +252,9 @@ ${input.additionalContext ? `補足: ${input.additionalContext}` : ''}
 // Helper Functions
 // ============================================
 
-function formatMemoriesForTypeSelection(memories: UserMemory[]): string {
+function formatMemoriesForGeneration(memories: UserMemory[]): string {
   if (memories.length === 0) {
-    return '## 記憶\nまだ記憶がありません。'
+    return '## 記憶\nまだ記憶がありません。デフォルトでかわいいキャラを作ってください。'
   }
 
   const byType: Record<string, UserMemory[]> = {}
@@ -244,7 +272,7 @@ function formatMemoriesForTypeSelection(memories: UserMemory[]): string {
     emotion_trigger: '感情',
   }
 
-  const sections: string[] = ['## 記憶']
+  const sections: string[] = ['## この人について']
   for (const [type, typeMemories] of Object.entries(byType)) {
     const label = typeLabels[type] || type
     const items = typeMemories
@@ -257,7 +285,7 @@ function formatMemoriesForTypeSelection(memories: UserMemory[]): string {
   return sections.join('\n\n')
 }
 
-function formatPersonalityForTypeSelection(personality: Personality): string {
+function formatPersonalityForGeneration(personality: Personality): string {
   return `
 ## パーソナリティ
 ${personality.summary}

@@ -6,7 +6,7 @@
  */
 
 import { generateCharacterSvg } from '~/services/ai/character-generation'
-import { getCharacter } from '~/services/character'
+import { characterToConcept, getCharacter } from '~/services/character'
 import type { Route } from './+types/character.$userId.svg'
 
 // Default fallback SVG for when character doesn't exist
@@ -52,14 +52,11 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
 
   // Generate SVG on-the-fly if none exists
   try {
-    const traits = character.characterTraits
-      ? JSON.parse(character.characterTraits)
-      : undefined
+    const concept = characterToConcept(character)
 
     const svg = await generateCharacterSvg({
-      characterType: character.characterType,
+      concept,
       evolutionStage: character.evolutionStage,
-      traits,
     })
 
     // Note: We don't save here to avoid side effects in loader

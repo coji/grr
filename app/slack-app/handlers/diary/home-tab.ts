@@ -7,7 +7,6 @@ import type {
 import dayjs from '~/lib/dayjs'
 import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
 import {
-  CHARACTER_TYPES,
   getBondLevelDisplay,
   getCharacter,
   getProgressBar,
@@ -91,8 +90,6 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
     // キャラクターセクション
     if (character) {
-      const typeConfig = CHARACTER_TYPES[character.characterType]
-      const characterName = character.characterName ?? typeConfig.name
       const happinessBar = getProgressBar(character.happiness)
       const energyBar = getProgressBar(character.energy)
       const bondLevel = getBondLevelDisplay(character.bondLevel)
@@ -107,13 +104,13 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
         {
           type: 'image',
           image_url: `${baseUrl}/character/${userId}.svg`,
-          alt_text: `${characterName}の画像`,
+          alt_text: `${character.characterName}の画像`,
         },
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*あなたの相棒* ${character.characterEmoji}\n*${characterName}* (${typeConfig.description})`,
+            text: `*あなたの相棒* ${character.characterEmoji}\n*${character.characterName}* (${character.characterSpecies})`,
           },
         },
         {
@@ -583,7 +580,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const {
       recordInteraction,
       getCharacter: getChar,
-      CHARACTER_TYPES: types,
+      characterToConcept,
     } = await import('~/services/character')
     const { generateCharacterMessage } =
       await import('~/services/ai/character-generation')
@@ -606,21 +603,18 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     })
 
     // Generate a response from the character
+    const concept = characterToConcept(character)
     const message = await generateCharacterMessage({
-      characterType: character.characterType,
-      characterName: character.characterName,
+      concept,
       evolutionStage: character.evolutionStage,
       happiness: character.happiness,
       energy: character.energy,
       context: 'pet',
     })
 
-    const typeConfig = types[character.characterType]
-    const name = character.characterName ?? typeConfig.name
-
     if (context.respond) {
       await context.respond({
-        text: `*${name}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
+        text: `*${character.characterName}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
         response_type: 'ephemeral',
       })
     }
@@ -634,7 +628,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const {
       recordInteraction,
       getCharacter: getChar,
-      CHARACTER_TYPES: types,
+      characterToConcept,
     } = await import('~/services/character')
     const { generateCharacterMessage } =
       await import('~/services/ai/character-generation')
@@ -657,21 +651,18 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     })
 
     // Generate a response from the character
+    const concept = characterToConcept(character)
     const message = await generateCharacterMessage({
-      characterType: character.characterType,
-      characterName: character.characterName,
+      concept,
       evolutionStage: character.evolutionStage,
       happiness: character.happiness,
       energy: character.energy,
       context: 'talk',
     })
 
-    const typeConfig = types[character.characterType]
-    const name = character.characterName ?? typeConfig.name
-
     if (context.respond) {
       await context.respond({
-        text: `*${name}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
+        text: `*${character.characterName}*: ${message}\n_（+${pointsEarned}ポイント獲得！）_`,
         response_type: 'ephemeral',
       })
     }

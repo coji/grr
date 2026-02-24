@@ -1,14 +1,20 @@
 -- Migration: Diary Character System
 -- Adds character data to track user's personal companion (Tamagotchi-style)
+-- Characters are free-form and unique to each user!
 
 CREATE TABLE IF NOT EXISTS user_characters (
   user_id TEXT PRIMARY KEY,
 
-  -- Character identity
-  character_type TEXT NOT NULL,    -- 'firefly' | 'moon_rabbit' | 'cloud_sprite' | 'forest_spirit'
-  character_name TEXT,             -- User-given name (optional)
-  character_emoji TEXT NOT NULL,   -- Current display emoji based on evolution stage
-  character_svg TEXT,              -- Gemini-generated SVG code
+  -- Character identity (all AI-generated, unique per user)
+  character_name TEXT NOT NULL,      -- AI-generated name (e.g., "ぽぽ", "もこ")
+  character_species TEXT NOT NULL,   -- AI-generated species (e.g., "コーヒー豆の妖精")
+  character_emoji TEXT NOT NULL,     -- Representative emoji
+  character_appearance TEXT,         -- Description of appearance
+  character_personality TEXT,        -- Personality traits
+  character_catchphrase TEXT,        -- Catchphrase
+
+  -- Visual
+  character_svg TEXT,                -- Gemini-generated SVG code
 
   -- Evolution state
   evolution_stage INTEGER DEFAULT 1,  -- 1=egg, 2=baby, 3=child, 4=adult, 5=mature
@@ -22,10 +28,6 @@ CREATE TABLE IF NOT EXISTS user_characters (
   -- Activity tracking
   last_interacted_at TEXT,
   days_without_diary INTEGER DEFAULT 0,
-
-  -- Personality derived from diary
-  character_traits TEXT,           -- JSON: traits derived from diary content
-  favorite_topics TEXT,            -- JSON: topics character likes (from memories)
 
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

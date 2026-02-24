@@ -3,12 +3,13 @@ import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import {
+  generateCharacterConcept,
   generateCharacterSvg,
-  generateCharacterType,
 } from '~/services/ai/character-generation'
 import { storeAttachments } from '~/services/attachments'
 import {
   EVOLUTION_THRESHOLDS,
+  characterToConcept,
   createCharacter,
   evolveCharacter,
   getCharacter,
@@ -256,22 +257,24 @@ async function updateCharacterOnDiaryEntry(
   // Create character if it doesn't exist
   if (!character) {
     try {
-      // Generate character type based on user's memories/personality
-      const { type } = await generateCharacterType(userId)
+      // Generate unique character concept based on user's memories/personality
+      const concept = await generateCharacterConcept(userId)
 
       // Generate initial SVG
       const svg = await generateCharacterSvg({
-        characterType: type,
+        concept,
         evolutionStage: 1,
       })
 
       character = await createCharacter({
         userId,
-        characterType: type,
+        concept,
         characterSvg: svg,
       })
 
-      console.log(`Created new character for user ${userId}: ${type}`)
+      console.log(
+        `Created new character for user ${userId}: ${concept.name} (${concept.species})`,
+      )
     } catch (error) {
       console.error('Failed to create character:', error)
       return
@@ -301,8 +304,9 @@ async function updateCharacterOnDiaryEntry(
     if (updatedCharacter.evolutionPoints >= threshold) {
       try {
         // Generate new SVG for evolved form
+        const concept = characterToConcept(updatedCharacter)
         const newSvg = await generateCharacterSvg({
-          characterType: updatedCharacter.characterType,
+          concept,
           evolutionStage: updatedCharacter.evolutionStage + 1,
         })
 

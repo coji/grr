@@ -2,47 +2,19 @@
  * Service for managing user characters (Tamagotchi-style companions)
  *
  * This handles CRUD operations for user characters generated from diary entries.
- * Characters evolve and change based on user's diary activity and interactions.
+ * Characters are completely unique to each user - no fixed types!
  */
 
 import { nanoid } from 'nanoid'
 import dayjs from '~/lib/dayjs'
+import type { CharacterConcept } from './ai/character-generation'
 import type { Database } from './db'
 import { db } from './db'
 
 export type UserCharacter = Database['userCharacters']
 export type CharacterInteraction = Database['characterInteractions']
 
-export type CharacterType = UserCharacter['characterType']
 export type InteractionType = CharacterInteraction['interactionType']
-
-// Character type definitions with evolution paths
-export const CHARACTER_TYPES = {
-  firefly: {
-    name: 'ほたる',
-    description: '静かに寄り添う光の精',
-    emojis: ['🥚', '✨', '🌟', '💫', '🌙'],
-    traits: ['穏やか', '観察好き', '内省的'],
-  },
-  moon_rabbit: {
-    name: 'つきうさぎ',
-    description: '月から見守る小さな友達',
-    emojis: ['🥚', '🐰', '🐇', '🌕', '🎑'],
-    traits: ['好奇心旺盛', '遊び心', '思いやり'],
-  },
-  cloud_sprite: {
-    name: 'くもの精',
-    description: 'ふわふわ漂う夢見る存在',
-    emojis: ['🥚', '☁️', '🌤️', '⛅', '🌈'],
-    traits: ['自由', '夢見がち', '穏やか'],
-  },
-  forest_spirit: {
-    name: 'もりのこ',
-    description: '木々と共に育つ小さな命',
-    emojis: ['🌱', '🌿', '🌳', '🍀', '🌲'],
-    traits: ['着実', '成長重視', '温かい'],
-  },
-} as const
 
 // Points earned for different interactions
 export const INTERACTION_POINTS = {
@@ -81,21 +53,23 @@ export async function getCharacter(
 }
 
 /**
- * Create a new character for a user
+ * Create a new character for a user from AI-generated concept
  */
 export async function createCharacter(input: {
   userId: string
-  characterType: CharacterType
+  concept: CharacterConcept
   characterSvg?: string | null
 }): Promise<UserCharacter> {
   const now = dayjs().utc().toISOString()
-  const typeConfig = CHARACTER_TYPES[input.characterType]
 
   const character: UserCharacter = {
     userId: input.userId,
-    characterType: input.characterType,
-    characterName: null,
-    characterEmoji: typeConfig.emojis[0],
+    characterName: input.concept.name,
+    characterSpecies: input.concept.species,
+    characterEmoji: input.concept.emoji,
+    characterAppearance: input.concept.appearance,
+    characterPersonality: input.concept.personality,
+    characterCatchphrase: input.concept.catchphrase,
     characterSvg: input.characterSvg ?? null,
     evolutionStage: 1,
     evolutionPoints: 0,
@@ -104,8 +78,6 @@ export async function createCharacter(input: {
     bondLevel: 0,
     lastInteractedAt: now,
     daysWithoutDiary: 0,
-    characterTraits: JSON.stringify(typeConfig.traits),
-    favoriteTopics: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -123,8 +95,6 @@ export async function updateCharacter(
   updates: Partial<
     Pick<
       UserCharacter,
-      | 'characterName'
-      | 'characterEmoji'
       | 'characterSvg'
       | 'evolutionStage'
       | 'evolutionPoints'
@@ -133,8 +103,6 @@ export async function updateCharacter(
       | 'bondLevel'
       | 'lastInteractedAt'
       | 'daysWithoutDiary'
-      | 'characterTraits'
-      | 'favoriteTopics'
     >
   >,
 ): Promise<void> {
@@ -216,7 +184,7 @@ function checkAndApplyEvolution(
 
   const threshold = EVOLUTION_THRESHOLDS[currentStage]
   if (newPoints >= threshold) {
-    // Will evolve - update in separate call with new emoji and SVG
+    // Will evolve - update in separate call with new SVG
     return true
   }
 
@@ -224,28 +192,25 @@ function checkAndApplyEvolution(
 }
 
 /**
- * Apply evolution to a character (updates emoji and triggers SVG regeneration)
+ * Apply evolution to a character (updates stage and triggers SVG regeneration)
  */
 export async function evolveCharacter(
   userId: string,
   newSvg?: string,
-): Promise<{ newStage: number; newEmoji: string } | null> {
+): Promise<{ newStage: number } | null> {
   const character = await getCharacter(userId)
   if (!character || character.evolutionStage >= 5) {
     return null
   }
 
   const newStage = character.evolutionStage + 1
-  const typeConfig = CHARACTER_TYPES[character.characterType]
-  const newEmoji = typeConfig.emojis[newStage - 1]
 
   await updateCharacter(userId, {
     evolutionStage: newStage,
-    characterEmoji: newEmoji,
     characterSvg: newSvg ?? character.characterSvg,
   })
 
-  return { newStage, newEmoji }
+  return { newStage }
 }
 
 /**
@@ -266,41 +231,9 @@ export async function applyDailyDecay(userId: string): Promise<void> {
   })
 }
 
-/**
- * Get character or create one if it doesn't exist
- */
-export async function getOrCreateCharacter(
-  userId: string,
-  characterType: CharacterType,
-  characterSvg?: string | null,
-): Promise<UserCharacter> {
-  const existing = await getCharacter(userId)
-  if (existing) {
-    return existing
-  }
-
-  return createCharacter({
-    userId,
-    characterType,
-    characterSvg,
-  })
-}
-
 // ============================================
 // Helper Functions
 // ============================================
-
-/**
- * Get emoji for a specific evolution stage
- */
-export function getEmojiForStage(
-  characterType: CharacterType,
-  stage: number,
-): string {
-  const typeConfig = CHARACTER_TYPES[characterType]
-  const index = Math.min(stage - 1, typeConfig.emojis.length - 1)
-  return typeConfig.emojis[Math.max(0, index)]
-}
 
 /**
  * Generate a progress bar string
@@ -316,4 +249,18 @@ export function getProgressBar(value: number): string {
  */
 export function getBondLevelDisplay(bondLevel: number): number {
   return Math.floor(bondLevel / 10) + 1
+}
+
+/**
+ * Convert UserCharacter to CharacterConcept for AI functions
+ */
+export function characterToConcept(character: UserCharacter): CharacterConcept {
+  return {
+    name: character.characterName,
+    species: character.characterSpecies,
+    emoji: character.characterEmoji,
+    appearance: character.characterAppearance ?? '',
+    personality: character.characterPersonality ?? '',
+    catchphrase: character.characterCatchphrase ?? '',
+  }
 }
