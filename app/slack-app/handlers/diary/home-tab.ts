@@ -4,13 +4,15 @@ import type {
   SlackApp,
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
-import type { Respond } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import type {
   CharacterAction,
   CharacterEmotion,
 } from '~/services/ai/character-generation'
-import { generateCharacterMessage } from '~/services/ai/character-generation'
+import {
+  generateCharacterReaction,
+  type CharacterMessageContext,
+} from '~/services/ai/character-generation'
 import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
 import {
   characterToConcept,
@@ -21,6 +23,7 @@ import {
   type InteractionType,
 } from '~/services/character'
 import { db } from '~/services/db'
+import { getActiveMemories } from '~/services/memory'
 import {
   buildCharacterImageBlock,
   buildInteractiveCharacterImageBlock,
@@ -600,13 +603,18 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   // キャラクターインタラクション: なでる
   app.action('character_pet', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
-    await handleCharacterInteraction(action.user.id, context.respond, {
-      interactionType: 'pet',
-      messageContext: 'pet',
-      emotion: 'love',
-      action: 'pet',
-      altText: (name) => `${name}が撫でられている`,
-    })
+    await handleCharacterInteractionModal(
+      action.user.id,
+      action.trigger_id,
+      context.client,
+      {
+        interactionType: 'pet',
+        messageContext: 'pet',
+        emotion: 'love',
+        action: 'pet',
+        altText: (name) => `${name}が撫でられている`,
+      },
+    )
   })
 
   // キャラクターインタラクション: 話しかける
@@ -615,23 +623,88 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const emotions: CharacterEmotion[] = ['happy', 'excited', 'shy']
     const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)]
 
-    await handleCharacterInteraction(action.user.id, context.respond, {
-      interactionType: 'talk',
-      messageContext: 'talk',
-      emotion: randomEmotion,
-      action: 'talk',
-      altText: (name) => `${name}が話している`,
-    })
+    await handleCharacterInteractionModal(
+      action.user.id,
+      action.trigger_id,
+      context.client,
+      {
+        interactionType: 'talk',
+        messageContext: 'talk',
+        emotion: randomEmotion,
+        action: 'talk',
+        altText: (name) => `${name}が話している`,
+      },
+    )
   })
 }
 
 // ============================================
-// Interaction Handler Helper
+// Interaction Handler Helper (Modal version for Home Tab)
 // ============================================
 
-async function handleCharacterInteraction(
+// Reaction tiers with probabilities and multipliers
+// Titles are now LLM-generated, so we only store probability/multiplier
+interface ReactionTier {
+  name: 'normal' | 'good' | 'great' | 'legendary'
+  probability: number
+  multiplier: number
+}
+
+const REACTION_TIERS: ReactionTier[] = [
+  { name: 'normal', probability: 0.5, multiplier: 1 },
+  { name: 'good', probability: 0.3, multiplier: 1.5 },
+  { name: 'great', probability: 0.15, multiplier: 2 },
+  { name: 'legendary', probability: 0.05, multiplier: 3 },
+]
+
+// Pet reaction flavors for LLM context
+const PET_FLAVORS = [
+  { mood: 'happy', description: '喜んでいる、嬉しそう' },
+  { mood: 'shy', description: '照れている、恥ずかしそう' },
+  { mood: 'ticklish', description: 'くすぐったがっている' },
+  { mood: 'sleepy', description: '眠くなってきた、うとうと' },
+  { mood: 'loving', description: '甘えている、大好き' },
+  { mood: 'playful', description: 'はしゃいでいる、遊びたい' },
+]
+
+// Talk reaction flavors for LLM context
+const TALK_FLAVORS = [
+  { mood: 'curious', description: '興味津々、もっと聞きたい' },
+  { mood: 'excited', description: 'テンション高い、わくわく' },
+  { mood: 'thoughtful', description: '考え込んでいる、なるほど' },
+  { mood: 'cheerful', description: '明るい、楽しそう' },
+  { mood: 'supportive', description: '励ましてくれる、応援' },
+  { mood: 'gossipy', description: '内緒話っぽい、ひそひそ' },
+]
+
+function pickReactionTier(): ReactionTier {
+  const roll = Math.random()
+  let cumulative = 0
+  for (const tier of REACTION_TIERS) {
+    cumulative += tier.probability
+    if (roll < cumulative) return tier
+  }
+  return REACTION_TIERS[0]
+}
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+interface SlackClient {
+  views: {
+    open: (params: {
+      trigger_id: string
+      // biome-ignore lint/suspicious/noExplicitAny: Slack view type
+      view: any
+    }) => Promise<unknown>
+  }
+}
+
+async function handleCharacterInteractionModal(
   userId: string,
-  respond: Respond | undefined,
+  triggerId: string,
+  client: SlackClient,
   opts: {
     interactionType: InteractionType
     messageContext: 'pet' | 'talk'
@@ -642,55 +715,201 @@ async function handleCharacterInteraction(
 ): Promise<void> {
   const character = await getCharacter(userId)
   if (!character) {
-    if (respond) {
-      await respond({
-        text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
-        response_type: 'ephemeral',
-      })
-    }
+    await client.views.open({
+      trigger_id: triggerId,
+      view: {
+        type: 'modal',
+        title: { type: 'plain_text', text: 'あれ？' },
+        close: { type: 'plain_text', text: '閉じる' },
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: '🥚 まだキャラクターがいないよ。\n日記を書いて育ててみよう！',
+            },
+          },
+        ],
+      },
+    })
     return
   }
+
+  // Pick reaction tier and flavor
+  const tier = pickReactionTier()
+  const flavor =
+    opts.messageContext === 'pet'
+      ? pickRandom(PET_FLAVORS)
+      : pickRandom(TALK_FLAVORS)
 
   const { pointsEarned } = await recordInteraction({
     userId,
     interactionType: opts.interactionType,
   })
 
+  // Apply bonus points based on tier multiplier
+  const bonusInteractions = Math.floor(tier.multiplier) - 1
+  for (let i = 0; i < bonusInteractions; i++) {
+    await recordInteraction({
+      userId,
+      interactionType: opts.interactionType,
+      metadata: { bonus: true, tier: tier.name },
+    })
+  }
+
+  const totalPoints = Math.floor(pointsEarned * tier.multiplier)
   const concept = characterToConcept(character)
-  const message = await generateCharacterMessage({
+
+  // Build rich context for varied responses
+  const richContext = await buildRichContext(userId, character)
+
+  // Map tier name to reaction intensity
+  const reactionIntensity = tier.name as 'normal' | 'good' | 'great' | 'legendary'
+
+  // Generate reaction with LLM (message + title + emoji)
+  const reactionContext: CharacterMessageContext & {
+    reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
+  } = {
     concept,
     evolutionStage: character.evolutionStage,
     happiness: character.happiness,
     energy: character.energy,
     context: opts.messageContext,
-  })
+    additionalContext: flavor.description,
+    userId,
+    reactionIntensity,
+    ...richContext,
+  }
+  const reaction = await generateCharacterReaction(reactionContext)
 
-  if (respond) {
-    await respond({
-      text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
-      response_type: 'ephemeral',
-      blocks: [
-        buildInteractiveCharacterImageBlock(
-          userId,
-          opts.altText(character.characterName),
-        ),
+  // Use LLM-generated title, with emoji for special tiers
+  const modalTitle =
+    tier.name === 'legendary'
+      ? `✨${reaction.reactionTitle}✨`
+      : tier.name === 'great'
+        ? `🎉${reaction.reactionTitle}`
+        : reaction.reactionTitle
+
+  // Build reaction blocks
+  // biome-ignore lint/suspicious/noExplicitAny: Slack block types
+  const blocks: any[] = [
+    buildInteractiveCharacterImageBlock(
+      userId,
+      opts.altText(character.characterName),
+    ),
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*${character.characterName}* ${reaction.reactionEmoji}\n「${reaction.message}」`,
+      },
+    },
+  ]
+
+  // Add tier celebration for good reactions (using LLM-generated text)
+  if (tier.name !== 'normal' && reaction.tierCelebration) {
+    const celebrationEmoji =
+      tier.name === 'legendary' ? '🌟' : tier.name === 'great' ? '🎉' : '💫'
+    blocks.push({
+      type: 'context',
+      elements: [
         {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*${character.characterName}*: ${message}`,
-          },
-        },
-        {
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: `_+${pointsEarned}ポイント獲得！_`,
-            },
-          ],
+          type: 'mrkdwn',
+          text: `${celebrationEmoji} *${reaction.tierCelebration}* ${celebrationEmoji} ポイント${tier.multiplier}倍！`,
         },
       ],
     })
   }
+
+  // Add points and stats
+  const updatedCharacter = await getCharacter(userId)
+  const happiness = updatedCharacter?.happiness ?? character.happiness
+  const energy = updatedCharacter?.energy ?? character.energy
+
+  blocks.push(
+    { type: 'divider' },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `🎁 *+${totalPoints}ポイント*　　💗 ${happiness}%　　⚡ ${energy}%`,
+        },
+      ],
+    },
+  )
+
+  await client.views.open({
+    trigger_id: triggerId,
+    view: {
+      type: 'modal',
+      title: { type: 'plain_text', text: modalTitle },
+      close: { type: 'plain_text', text: '閉じる' },
+      blocks,
+    },
+  })
+}
+
+// ============================================
+// Rich Context Builder for Varied Responses
+// ============================================
+
+type TimeOfDay = 'morning' | 'afternoon' | 'evening' | 'night'
+
+function getTimeOfDay(): TimeOfDay {
+  const hour = dayjs().tz(TOKYO_TZ).hour()
+  if (hour >= 5 && hour < 12) return 'morning'
+  if (hour >= 12 && hour < 17) return 'afternoon'
+  if (hour >= 17 && hour < 21) return 'evening'
+  return 'night'
+}
+
+interface RichContext {
+  timeOfDay: TimeOfDay
+  recentMood?: string
+  daysSinceLastInteraction?: number
+  userMemories?: string[]
+}
+
+async function buildRichContext(
+  userId: string,
+  character: { lastInteractedAt: string | null },
+): Promise<RichContext> {
+  const context: RichContext = {
+    timeOfDay: getTimeOfDay(),
+  }
+
+  // Get recent diary mood
+  const recentEntry = await db
+    .selectFrom('diaryEntries')
+    .select(['moodLabel', 'moodEmoji'])
+    .where('userId', '=', userId)
+    .orderBy('entryDate', 'desc')
+    .limit(1)
+    .executeTakeFirst()
+
+  if (recentEntry?.moodLabel) {
+    context.recentMood = `${recentEntry.moodEmoji || ''} ${recentEntry.moodLabel}`.trim()
+  }
+
+  // Calculate days since last interaction
+  if (character.lastInteractedAt) {
+    const lastInteraction = dayjs(character.lastInteractedAt)
+    const now = dayjs().tz(TOKYO_TZ)
+    const daysSince = now.diff(lastInteraction, 'day')
+    if (daysSince > 0) {
+      context.daysSinceLastInteraction = daysSince
+    }
+  }
+
+  // Get user memories for personalization
+  const memories = await getActiveMemories(userId)
+  if (memories.length > 0) {
+    context.userMemories = memories
+      .filter((m) => ['preference', 'fact', 'pattern'].includes(m.memoryType))
+      .slice(0, 5)
+      .map((m) => m.content)
+  }
+
+  return context
 }

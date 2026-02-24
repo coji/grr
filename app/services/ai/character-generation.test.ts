@@ -37,6 +37,7 @@ import {
   generateCharacterConcept,
   generateCharacterImage,
   generateCharacterMessage,
+  generateCharacterReaction,
   type CharacterConcept,
 } from './character-generation'
 import { getUserPersonality } from './personality'
@@ -348,5 +349,145 @@ describe('generateCharacterImage', () => {
     const prompt = call.contents[call.contents.length - 1] as string
     expect(prompt).toContain('heart eyes')
     expect(prompt).toContain('being petted')
+  })
+})
+
+describe('generateCharacterReaction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should generate a reaction with message, title, and emoji', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: Mock response
+    vi.mocked(generateObject).mockResolvedValue(
+      mockGenerateObjectResponse({
+        message: 'きもちいいね〜☕',
+        reactionTitle: 'もふもふ',
+        reactionEmoji: '😊',
+      }) as any,
+    )
+
+    const result = await generateCharacterReaction({
+      concept: mockConcept,
+      evolutionStage: 3,
+      happiness: 80,
+      energy: 60,
+      context: 'pet',
+      reactionIntensity: 'normal',
+    })
+
+    expect(result.message).toBe('きもちいいね〜☕')
+    expect(result.reactionTitle).toBe('もふもふ')
+    expect(result.reactionEmoji).toBe('😊')
+  })
+
+  it('should include tierCelebration for legendary intensity', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: Mock response
+    vi.mocked(generateObject).mockResolvedValue(
+      mockGenerateObjectResponse({
+        message: 'さいこう！！☕',
+        reactionTitle: 'きゅん',
+        reactionEmoji: '💖',
+        tierCelebration: '奇跡だよ！',
+      }) as any,
+    )
+
+    const result = await generateCharacterReaction({
+      concept: mockConcept,
+      evolutionStage: 5,
+      happiness: 100,
+      energy: 100,
+      context: 'pet',
+      reactionIntensity: 'legendary',
+    })
+
+    expect(result.tierCelebration).toBe('奇跡だよ！')
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('tierCelebration'),
+      }),
+    )
+  })
+
+  it('should not request tierCelebration for normal intensity', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: Mock response
+    vi.mocked(generateObject).mockResolvedValue(
+      mockGenerateObjectResponse({
+        message: 'うんうん☕',
+        reactionTitle: 'ほのぼの',
+        reactionEmoji: '😌',
+      }) as any,
+    )
+
+    await generateCharacterReaction({
+      concept: mockConcept,
+      evolutionStage: 2,
+      happiness: 50,
+      energy: 50,
+      context: 'talk',
+      reactionIntensity: 'normal',
+    })
+
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.not.stringContaining('tierCelebration'),
+      }),
+    )
+  })
+
+  it('should include rich context when provided', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: Mock response
+    vi.mocked(generateObject).mockResolvedValue(
+      mockGenerateObjectResponse({
+        message: 'おはよ〜☕',
+        reactionTitle: 'ぽかぽか',
+        reactionEmoji: '🌅',
+      }) as any,
+    )
+
+    await generateCharacterReaction({
+      concept: mockConcept,
+      evolutionStage: 3,
+      happiness: 70,
+      energy: 80,
+      context: 'pet',
+      reactionIntensity: 'good',
+      timeOfDay: 'morning',
+      recentMood: '😄 ほっと安心',
+      userMemories: ['コーヒーが好き', '朝型'],
+    })
+
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('朝'),
+      }),
+    )
+  })
+
+  it('should pass additionalContext as flavor description', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: Mock response
+    vi.mocked(generateObject).mockResolvedValue(
+      mockGenerateObjectResponse({
+        message: 'えへへ☕',
+        reactionTitle: 'てれてれ',
+        reactionEmoji: '😳',
+      }) as any,
+    )
+
+    await generateCharacterReaction({
+      concept: mockConcept,
+      evolutionStage: 3,
+      happiness: 80,
+      energy: 60,
+      context: 'pet',
+      reactionIntensity: 'normal',
+      additionalContext: '照れている、恥ずかしそう',
+    })
+
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('照れている'),
+      }),
+    )
   })
 })

@@ -120,19 +120,86 @@ const characterMessageSchema = z.object({
   message: z.string().max(100).describe('キャラクターからのメッセージ'),
 })
 
+// Extended schema for interactive reactions (pet/talk)
+const characterReactionSchema = z.object({
+  message: z.string().max(100).describe('キャラクターからのセリフ'),
+  reactionTitle: z
+    .string()
+    .max(12)
+    .describe('反応のタイトル（擬音語や短い表現、例: もふもふ、うっとり、わくわく）'),
+  reactionEmoji: z.string().max(4).describe('反応を表す絵文字1つ'),
+  tierCelebration: z
+    .string()
+    .max(20)
+    .optional()
+    .describe('特別な反応時の祝福テキスト（大成功時のみ、例: やったね！、最高！、奇跡だ！）'),
+})
+
 /**
- * Generate a message from the character to the user
+ * Rich context for character message generation
  */
-export async function generateCharacterMessage(input: {
+export interface CharacterMessageContext {
   concept: CharacterConcept
   evolutionStage: number
   happiness: number
   energy: number
   context: 'greeting' | 'pet' | 'talk' | 'evolution' | 'diary_response'
   additionalContext?: string
-}): Promise<string> {
+  // Rich context for varied responses
+  userId?: string
+  timeOfDay?: 'morning' | 'afternoon' | 'evening' | 'night'
+  recentMood?: string
+  daysSinceLastInteraction?: number
+  userMemories?: string[]
+}
+
+/**
+ * Generate a message from the character to the user
+ */
+export async function generateCharacterMessage(
+  input: CharacterMessageContext,
+): Promise<string> {
   const messageModel = 'gemini-3-flash-preview'
   const model = google(messageModel)
+
+  // Build rich context sections
+  const contextSections: string[] = []
+
+  if (input.timeOfDay) {
+    const timeGreeting = {
+      morning: '朝の時間帯',
+      afternoon: '昼の時間帯',
+      evening: '夕方の時間帯',
+      night: '夜の時間帯',
+    }[input.timeOfDay]
+    contextSections.push(`時間帯: ${timeGreeting}`)
+  }
+
+  if (input.recentMood) {
+    contextSections.push(`ユーザーの最近の気分: ${input.recentMood}`)
+  }
+
+  if (
+    input.daysSinceLastInteraction !== undefined &&
+    input.daysSinceLastInteraction > 0
+  ) {
+    if (input.daysSinceLastInteraction >= 3) {
+      contextSections.push(
+        `${input.daysSinceLastInteraction}日ぶりの再会！久しぶりで嬉しい`,
+      )
+    } else if (input.daysSinceLastInteraction === 1) {
+      contextSections.push('昨日ぶりの再会')
+    }
+  }
+
+  if (input.userMemories && input.userMemories.length > 0) {
+    contextSections.push(
+      `ユーザーについて知っていること:\n${input.userMemories.slice(0, 3).join('\n')}`,
+    )
+  }
+
+  const richContext =
+    contextSections.length > 0 ? `\n\n## 追加コンテキスト\n${contextSections.join('\n')}` : ''
 
   const { object, usage } = await generateObject({
     model,
@@ -150,12 +217,15 @@ export async function generateCharacterMessage(input: {
 - 口癖: ${input.concept.catchphrase}
 - 進化段階: ${input.evolutionStage}/5
 - 幸福度: ${input.happiness}/100、元気度: ${input.energy}/100
+${richContext}
 
 ## 出力フォーマット
 - 長さ: 1-2文、50文字以内
 - トーン: キャラクターの性格と口癖を反映
 - 絵文字を1つ含める（${input.concept.emoji}など）
 - 幸福度/元気度が低いほど寂しそうなトーンに
+- 追加コンテキストがあれば自然に反映（無理に全部入れない）
+- 毎回違う表現を使う、ワンパターンにならない
     `.trim(),
     prompt: `
 状況: ${getContextDescription(input.context)}
@@ -174,6 +244,99 @@ ${input.additionalContext ? `補足: ${input.additionalContext}` : ''}
   })
 
   return object.message
+}
+
+// ============================================
+// Character Reaction Generation (for pet/talk interactions)
+// ============================================
+
+export interface CharacterReaction {
+  message: string
+  reactionTitle: string
+  reactionEmoji: string
+  tierCelebration?: string
+}
+
+/**
+ * Generate a full reaction for pet/talk interactions.
+ * Returns both the character's message and a creative reaction title.
+ * Uses flash-lite for speed and cost efficiency.
+ */
+export async function generateCharacterReaction(
+  input: CharacterMessageContext & {
+    reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
+  },
+): Promise<CharacterReaction> {
+  const reactionModel = 'gemini-2.0-flash-lite'
+  const model = google(reactionModel)
+
+  // Build rich context sections
+  const contextSections: string[] = []
+
+  if (input.timeOfDay) {
+    const timeGreeting = {
+      morning: '朝',
+      afternoon: '昼',
+      evening: '夕方',
+      night: '夜',
+    }[input.timeOfDay]
+    contextSections.push(`時間: ${timeGreeting}`)
+  }
+
+  if (input.recentMood) {
+    contextSections.push(`最近の気分: ${input.recentMood}`)
+  }
+
+  if (input.userMemories && input.userMemories.length > 0) {
+    contextSections.push(`ユーザーの情報: ${input.userMemories.slice(0, 2).join('、')}`)
+  }
+
+  const richContext = contextSections.length > 0 ? contextSections.join(' / ') : ''
+
+  const intensityHint = {
+    normal: 'ふつうの反応',
+    good: 'いい感じの反応、少し嬉しそう',
+    great: '大成功！とても嬉しそう、テンション高め',
+    legendary: '超レア！最高に嬉しい、特別な瞬間',
+  }[input.reactionIntensity]
+
+  const interactionType = input.context === 'pet' ? '撫でられた' : '話しかけられた'
+
+  // Only request tierCelebration for special reactions
+  const needsCelebration = input.reactionIntensity !== 'normal'
+
+  const { object, usage } = await generateObject({
+    model,
+    schema: characterReactionSchema,
+    system: `
+「${input.concept.name}」（${input.concept.species}）の反応を生成。
+性格: ${input.concept.personality}
+口癖: ${input.concept.catchphrase}
+${richContext}
+    `.trim(),
+    prompt: `
+${interactionType}時の反応。${intensityHint}。
+${input.additionalContext || ''}
+
+reactionTitle: 擬音語や短い感情表現（例: もふもふ、うっとり、きゅん、わくわく、ぽかぽか、ほわほわ）
+message: キャラらしい一言（${input.concept.emoji}を含む、50文字以内）
+reactionEmoji: 反応に合う絵文字1つ
+${needsCelebration ? `tierCelebration: 特別な瞬間を祝う短い言葉（例: やったね！、最高だよ！、奇跡だ！、すごいすごい！）` : ''}
+    `.trim(),
+  })
+
+  logAiCost({
+    operation: 'character_reaction',
+    model: reactionModel,
+    inputTokens: usage.inputTokens ?? 0,
+    outputTokens: usage.outputTokens ?? 0,
+    metadata: {
+      context: input.context,
+      intensity: input.reactionIntensity,
+    },
+  })
+
+  return object
 }
 
 // ============================================
