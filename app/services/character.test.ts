@@ -9,8 +9,9 @@ vi.mock('~/services/ai/character-generation', () => ({
   generateCharacterImage: vi.fn(),
 }))
 vi.mock('~/services/character-image', () => ({
-  buildR2Key: vi.fn(),
-  putCharacterImageToR2: vi.fn(),
+  addToPool: vi.fn(),
+  clearPool: vi.fn(),
+  putBaseImage: vi.fn(),
 }))
 
 import {

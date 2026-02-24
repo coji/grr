@@ -12,7 +12,7 @@ import {
   generateCharacterImage,
   type CharacterConcept,
 } from './ai/character-generation'
-import { buildR2Key, putCharacterImageToR2 } from './character-image'
+import { addToPool, clearPool, putBaseImage } from './character-image'
 import type { Database } from './db'
 import { db } from './db'
 
@@ -186,7 +186,7 @@ function checkAndApplyEvolution(
 
   const threshold = EVOLUTION_THRESHOLDS[currentStage]
   if (newPoints >= threshold) {
-    // Will evolve - update in separate call with new SVG
+    // Will evolve - update in separate call
     return true
   }
 
@@ -288,16 +288,18 @@ export async function updateCharacterOnDiaryEntry(
         `Created new character for user ${userId}: ${concept.name} (${concept.species})`,
       )
 
-      // Generate and store base image in R2
+      // Generate and store base image in R2, also add to pool
       try {
         const pngData = await generateCharacterImage({
           userId,
           concept,
           evolutionStage: 1,
         })
-        const r2Key = buildR2Key(userId)
-        await putCharacterImageToR2(r2Key, pngData)
-        console.log(`Stored base character image in R2: ${r2Key}`)
+        await putBaseImage(userId, pngData)
+        await addToPool(userId, pngData)
+        console.log(
+          `Stored base character image and added to pool for ${userId}`,
+        )
       } catch (imageError) {
         console.error('Failed to generate character image:', imageError)
         // Character created without image - will be generated on first access
@@ -335,16 +337,21 @@ export async function updateCharacterOnDiaryEntry(
           console.log(
             `Character evolved for user ${userId}: stage ${result.newStage}`,
           )
-          // Generate and store evolved image in R2
+          // Clear old pool and generate new base image for evolved form
           try {
+            const cleared = await clearPool(userId)
+            console.log(`Cleared ${cleared} pool images on evolution`)
+
             const pngData = await generateCharacterImage({
               userId,
               concept,
               evolutionStage: newStage,
             })
-            const r2Key = buildR2Key(userId)
-            await putCharacterImageToR2(r2Key, pngData)
-            console.log(`Stored evolved character image in R2: ${r2Key}`)
+            await putBaseImage(userId, pngData)
+            await addToPool(userId, pngData)
+            console.log(
+              `Stored evolved base image and added to pool for ${userId}`,
+            )
           } catch (imageError) {
             console.error('Failed to generate evolved image:', imageError)
           }
