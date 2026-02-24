@@ -35,12 +35,6 @@ function buildPoolKey(userId: string, stage: number, date: string): string {
   return `character/${userId}/pool/stage${stage}/${date}-${nanoid(8)}.png`
 }
 
-function extractDateFromPoolKey(key: string): string | null {
-  // key format: character/{userId}/pool/stage{N}/{YYYY-MM-DD}-{id}.png
-  const match = key.match(/(\d{4}-\d{2}-\d{2})-/)
-  return match ? match[1] : null
-}
-
 // ============================================
 // Base Image Operations
 // ============================================
