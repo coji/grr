@@ -7,7 +7,6 @@ vi.mock('@ai-sdk/google', () => ({
 
 vi.mock('ai', () => ({
   generateObject: vi.fn(),
-  generateText: vi.fn(),
 }))
 
 // Mock memory and personality services
@@ -19,13 +18,25 @@ vi.mock('./personality', () => ({
   getUserPersonality: vi.fn(),
 }))
 
-import { generateObject, generateText } from 'ai'
+vi.mock('cloudflare:workers', () => ({
+  env: { GOOGLE_GENERATIVE_AI_API_KEY: 'test-key' },
+}))
+
+const mockGenerateContent = vi.fn()
+vi.mock('@google/genai', () => {
+  return {
+    GoogleGenAI: class MockGoogleGenAI {
+      models = { generateContent: mockGenerateContent }
+    },
+  }
+})
+
+import { generateObject } from 'ai'
 import { getActiveMemories } from '~/services/memory'
 import {
   generateCharacterConcept,
+  generateCharacterImage,
   generateCharacterMessage,
-  generateCharacterSvg,
-  generateMessageSvg,
   type CharacterConcept,
 } from './character-generation'
 import { getUserPersonality } from './personality'
@@ -43,16 +54,6 @@ const mockConcept: CharacterConcept = {
 const mockGenerateObjectResponse = (object: any) => ({
   object,
   finishReason: 'stop',
-  usage: { promptTokens: 10, completionTokens: 20 },
-  rawCall: { rawPrompt: null, rawSettings: {} },
-  warnings: undefined,
-  request: {},
-})
-
-// biome-ignore lint/suspicious/noExplicitAny: Mock response helper
-const mockGenerateTextResponse = (text: string) => ({
-  text,
-  finishReason: 'stop' as const,
   usage: { promptTokens: 10, completionTokens: 20 },
   rawCall: { rawPrompt: null, rawSettings: {} },
   warnings: undefined,
@@ -148,96 +149,6 @@ describe('generateCharacterConcept', () => {
   })
 })
 
-describe('generateCharacterSvg', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  it('should generate clean SVG from AI response', async () => {
-    const svgContent =
-      '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><circle cx="100" cy="100" r="50" fill="#FFB6C1"/></svg>'
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse(svgContent) as any,
-    )
-
-    const result = await generateCharacterSvg({
-      concept: mockConcept,
-      evolutionStage: 1,
-    })
-
-    expect(result).toBe(svgContent)
-    expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'mock-model',
-        prompt: expect.stringContaining('モカ'),
-      }),
-    )
-  })
-
-  it('should strip markdown code blocks from SVG output', async () => {
-    const rawSvg =
-      '```svg\n<svg viewBox="0 0 200 200"><circle r="50"/></svg>\n```'
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse(rawSvg) as any,
-    )
-
-    const result = await generateCharacterSvg({
-      concept: mockConcept,
-      evolutionStage: 2,
-    })
-
-    expect(result).toBe('<svg viewBox="0 0 200 200"><circle r="50"/></svg>')
-  })
-
-  it('should extract SVG when preceded by extra text', async () => {
-    const rawSvg = 'Here is the SVG:\n<svg viewBox="0 0 200 200"><rect/></svg>'
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse(rawSvg) as any,
-    )
-
-    const result = await generateCharacterSvg({
-      concept: mockConcept,
-      evolutionStage: 1,
-    })
-
-    expect(result).toBe('<svg viewBox="0 0 200 200"><rect/></svg>')
-  })
-
-  it('should truncate content after closing svg tag', async () => {
-    const rawSvg =
-      '<svg viewBox="0 0 200 200"><circle/></svg>\n\nExtra text here'
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse(rawSvg) as any,
-    )
-
-    const result = await generateCharacterSvg({
-      concept: mockConcept,
-      evolutionStage: 1,
-    })
-
-    expect(result).toBe('<svg viewBox="0 0 200 200"><circle/></svg>')
-  })
-
-  it('should include evolution stage in prompt', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse('<svg viewBox="0 0 200 200"></svg>') as any,
-    )
-
-    await generateCharacterSvg({ concept: mockConcept, evolutionStage: 5 })
-
-    expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining('段階5'),
-      }),
-    )
-  })
-})
-
 describe('generateCharacterMessage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -327,115 +238,115 @@ describe('generateCharacterMessage', () => {
   })
 })
 
-describe('generateMessageSvg', () => {
+describe('generateCharacterImage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('should generate SVG with emotion and action context', async () => {
-    const svgContent =
-      '<svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="50" fill="#FFB6C1"/></svg>'
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse(svgContent) as any,
-    )
+  it('should generate image via Gemini Pro Image and return ArrayBuffer', async () => {
+    vi.mocked(getActiveMemories).mockResolvedValue([])
 
-    const result = await generateMessageSvg({
+    const mockImageData = btoa('fake-png-data')
+    mockGenerateContent.mockResolvedValue({
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inlineData: {
+                  data: mockImageData,
+                  mimeType: 'image/png',
+                },
+              },
+            ],
+          },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 200,
+        candidatesTokenCount: 1000,
+        totalTokenCount: 2200,
+        thoughtsTokenCount: 1000,
+      },
+    })
+
+    const result = await generateCharacterImage({
+      userId: 'U_TEST',
+      concept: mockConcept,
+      evolutionStage: 1,
+    })
+
+    expect(result).toBeInstanceOf(ArrayBuffer)
+    expect(mockGenerateContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gemini-3-pro-image-preview',
+        config: {
+          responseModalities: ['image', 'text'],
+        },
+      }),
+    )
+  })
+
+  it('should throw when no image data in response', async () => {
+    vi.mocked(getActiveMemories).mockResolvedValue([])
+
+    mockGenerateContent.mockResolvedValue({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: 'No image generated' }],
+          },
+        },
+      ],
+    })
+
+    await expect(
+      generateCharacterImage({
+        userId: 'U_TEST',
+        concept: mockConcept,
+        evolutionStage: 1,
+      }),
+    ).rejects.toThrow('No image data in response')
+  })
+
+  it('should include emotion and action in prompt', async () => {
+    vi.mocked(getActiveMemories).mockResolvedValue([])
+
+    const mockImageData = btoa('fake-png-data')
+    mockGenerateContent.mockResolvedValue({
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inlineData: {
+                  data: mockImageData,
+                  mimeType: 'image/png',
+                },
+              },
+            ],
+          },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 200,
+        candidatesTokenCount: 1000,
+        totalTokenCount: 1200,
+      },
+    })
+
+    await generateCharacterImage({
+      userId: 'U_TEST',
       concept: mockConcept,
       evolutionStage: 3,
       emotion: 'love',
       action: 'pet',
     })
 
-    expect(result).toBe(svgContent)
-    expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'mock-model',
-        prompt: expect.stringContaining('ハートの目をしている'),
-      }),
-    )
-    expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining('撫でられて気持ちよさそう'),
-      }),
-    )
-  })
-
-  it('should include emotion descriptions in prompt', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse('<svg viewBox="0 0 200 200"></svg>') as any,
-    )
-
-    await generateMessageSvg({
-      concept: mockConcept,
-      evolutionStage: 2,
-      emotion: 'shy',
-      action: 'talk',
-    })
-
-    expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining('照れて頬を赤らめている'),
-      }),
-    )
-  })
-
-  it('should include action descriptions in prompt', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse('<svg viewBox="0 0 200 200"></svg>') as any,
-    )
-
-    await generateMessageSvg({
-      concept: mockConcept,
-      evolutionStage: 4,
-      emotion: 'excited',
-      action: 'dance',
-    })
-
-    expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining('楽しそうに踊っている'),
-      }),
-    )
-  })
-
-  it('should clean up markdown code blocks from SVG output', async () => {
-    const rawSvg =
-      '```xml\n<svg viewBox="0 0 200 200"><circle r="30"/></svg>\n```'
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse(rawSvg) as any,
-    )
-
-    const result = await generateMessageSvg({
-      concept: mockConcept,
-      evolutionStage: 1,
-      emotion: 'happy',
-      action: 'wave',
-    })
-
-    expect(result).toBe('<svg viewBox="0 0 200 200"><circle r="30"/></svg>')
-  })
-
-  it('should include character concept in prompt', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
-    vi.mocked(generateText).mockResolvedValue(
-      mockGenerateTextResponse('<svg viewBox="0 0 200 200"></svg>') as any,
-    )
-
-    await generateMessageSvg({
-      concept: mockConcept,
-      evolutionStage: 3,
-      emotion: 'sleepy',
-      action: 'sparkle',
-    })
-
-    expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: expect.stringContaining('コーヒー豆の妖精'),
-      }),
-    )
+    const call = mockGenerateContent.mock.calls[0][0]
+    // contents is an array; the last element is the text prompt
+    const prompt = call.contents[call.contents.length - 1] as string
+    expect(prompt).toContain('heart eyes')
+    expect(prompt).toContain('being petted')
   })
 })

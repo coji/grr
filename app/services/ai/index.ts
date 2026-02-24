@@ -13,11 +13,6 @@ export {
   type DiaryReminderMoodOption,
 } from './diary-reminder'
 export { generateDiaryReply, type DiaryReplyContext } from './diary-reply'
-export { getPersonaBackground } from './persona'
-export {
-  generateSupportiveReaction,
-  type SupportiveReactionContext,
-} from './supportive-reaction'
 export {
   generateFollowupMessage,
   type FollowupMessageContext,
@@ -27,22 +22,27 @@ export {
   type DetectFutureEventsContext,
   type FutureEvent,
 } from './future-event-detection'
+export { getPersonaBackground } from './persona'
 export {
-  generateAnniversaryMessage,
-  generateMilestoneMessage,
-  generateWeeklyInsightMessage,
-  generateSeasonalMessage,
-  generateRandomCheckinMessage,
-  generateQuestionMessage,
-  generateBriefFollowupMessage,
-} from './proactive-messages'
-export {
-  generatePersonality,
-  getUserPersonality,
-  updateUserPersonality,
-  shouldUpdatePersonality,
-  hasPersonalityChangePending,
-  getPersonalityChangeNote,
   clearPersonalityChangePending,
+  generatePersonality,
+  getPersonalityChangeNote,
+  getUserPersonality,
+  hasPersonalityChangePending,
+  shouldUpdatePersonality,
+  updateUserPersonality,
   type Personality,
 } from './personality'
+export {
+  generateAnniversaryMessage,
+  generateBriefFollowupMessage,
+  generateMilestoneMessage,
+  generateQuestionMessage,
+  generateRandomCheckinMessage,
+  generateSeasonalMessage,
+  generateWeeklyInsightMessage,
+} from './proactive-messages'
+export {
+  generateSupportiveReaction,
+  type SupportiveReactionContext,
+} from './supportive-reaction'

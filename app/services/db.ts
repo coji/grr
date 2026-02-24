@@ -195,7 +195,6 @@ export interface Database {
     characterAppearance: string | null
     characterPersonality: string | null
     characterCatchphrase: string | null
-    characterSvg: string | null
     // Evolution state
     evolutionStage: number // 1-5
     evolutionPoints: number
@@ -215,6 +214,19 @@ export interface Database {
     userId: string
     interactionType: 'pet' | 'talk' | 'diary_entry' | 'mood_recorded'
     pointsEarned: number
+    metadata: string | null // JSON
+    createdAt: string
+  }
+
+  aiCostLogs: {
+    id: string
+    userId: string | null
+    operation: string
+    model: string
+    inputTokens: number
+    outputTokens: number
+    thinkingTokens: number
+    costUsd: number
     metadata: string | null // JSON
     createdAt: string
   }

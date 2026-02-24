@@ -22,8 +22,8 @@ import {
 } from '~/services/character'
 import { db } from '~/services/db'
 import {
+  buildCharacterImageBlock,
   buildInteractiveCharacterImageBlock,
-  buildStaticCharacterImageBlock,
 } from '~/slack-app/character-blocks'
 import { getFileTypeEmoji } from './file-utils'
 import { TOKYO_TZ } from './utils'
@@ -111,10 +111,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
         {
           type: 'divider',
         },
-        buildStaticCharacterImageBlock(
-          userId,
-          `${character.characterName}の画像`,
-        ),
+        buildCharacterImageBlock(userId, `${character.characterName}の画像`),
         {
           type: 'section',
           text: {
@@ -655,8 +652,6 @@ async function handleCharacterInteraction(
       blocks: [
         buildInteractiveCharacterImageBlock(
           userId,
-          opts.emotion,
-          opts.action,
           opts.altText(character.characterName),
         ),
         {

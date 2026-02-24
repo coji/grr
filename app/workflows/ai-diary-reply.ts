@@ -23,11 +23,16 @@ import {
 } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
-import { generateMessageSvg } from '~/services/ai/character-generation'
+import { generateCharacterImage } from '~/services/ai/character-generation'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
 import { characterToConcept, getCharacter } from '~/services/character'
-import { buildR2Key, svgToPng } from '~/services/character-image'
+import {
+  addToPool,
+  countTodayGenerations,
+  DAILY_GENERATION_CAP,
+  getBaseImage,
+} from '~/services/character-image'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import {
   CHARACTER_IMAGE_BASE_URL,
@@ -194,8 +199,8 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       },
     )
 
-    // Step 2: Generate character image and upload to R2
-    // This pre-generates the image so the PNG route can serve it instantly
+    // Step 2: Generate character image and add to pool
+    // Pre-generates the image so the PNG route can serve it instantly
     // when Slack fetches the image_url from the block.
     const characterImageUrl = await step.do(
       'generate-character-image',
@@ -209,46 +214,44 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
         const character = await getCharacter(params.userId)
         if (!character) return null
 
-        const style = MESSAGE_CHARACTER_STYLES.diary_reply
-        const date = getDailySeed()
-        const r2Key = buildR2Key(params.userId, {
-          emotion: style.emotion,
-          action: style.action,
-          date,
-        })
+        const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?d=${getDailySeed()}`
 
-        // Check if already generated today (skip regeneration)
-        const existing = await env.CHARACTER_IMAGES.head(r2Key)
-        if (existing) {
-          console.log(`Character image already exists in R2: ${r2Key}`)
-          const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?emotion=${style.emotion}&action=${style.action}&d=${date}`
+        // Check daily generation cap
+        const todayCount = await countTodayGenerations(params.userId)
+        if (todayCount >= DAILY_GENERATION_CAP) {
+          console.log(
+            `Daily generation cap reached for ${params.userId} (${todayCount}/${DAILY_GENERATION_CAP})`,
+          )
           return imageUrl
         }
 
         try {
           const concept = characterToConcept(character)
-          const svg = await generateMessageSvg({
+          const style = MESSAGE_CHARACTER_STYLES.diary_reply
+          const baseImage = (await getBaseImage(params.userId)) ?? undefined
+
+          const pngData = await generateCharacterImage({
+            userId: params.userId,
             concept,
             evolutionStage: character.evolutionStage,
             emotion: style.emotion,
             action: style.action,
+            baseImage,
           })
 
-          const pngData = await svgToPng(svg)
-          await env.CHARACTER_IMAGES.put(r2Key, pngData, {
-            httpMetadata: { contentType: 'image/png' },
-          })
-
+          const poolKey = await addToPool(
+            params.userId,
+            character.evolutionStage,
+            pngData,
+          )
           console.log(
-            `Uploaded character image to R2: ${r2Key} (${pngData.byteLength} bytes)`,
+            `Added character image to pool: ${poolKey} (${pngData.byteLength} bytes)`,
           )
 
-          const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?emotion=${style.emotion}&action=${style.action}&d=${date}`
           return imageUrl
         } catch (error) {
           console.error('Failed to generate character image:', error)
-          // Fall back to static URL (PNG route will handle it)
-          return `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png`
+          return imageUrl
         }
       },
     )

@@ -1,108 +1,165 @@
 /**
- * Character image service for R2 storage and SVG→PNG conversion.
+ * Character image service for R2 storage with image pool management.
  *
- * Images are generated dynamically by AI, converted to PNG, and stored in R2.
- * The PNG route serves images from R2 for fast response times.
- * The ai-diary-reply workflow pre-generates images before posting to Slack.
+ * Images are generated via Gemini's native image generation and stored in R2.
+ * A pool of images accumulates over time per evolution stage.
+ * Images are never deleted — old stages are preserved for future gallery use.
+ *
+ * R2 key structure:
+ *   character/{userId}/base.png                          - Base character image
+ *   character/{userId}/pool/stage{N}/{date}-{id}.png     - Pool images per stage
  */
 
-import { Resvg, initWasm } from '@resvg/resvg-wasm'
 import { env } from 'cloudflare:workers'
-import type {
-  CharacterAction,
-  CharacterEmotion,
-} from '~/services/ai/character-generation'
+import { nanoid } from 'nanoid'
 
-// WASM file URL from CDN (using specific version for stability)
-const RESVG_WASM_URL = 'https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm'
+/** Max new image generations per user per day */
+export const DAILY_GENERATION_CAP = 3
 
-// Track WASM initialization state
-let wasmInitialized = false
-let wasmInitPromise: Promise<void> | null = null
-
-async function ensureWasmInitialized() {
-  if (wasmInitialized) return
-  if (wasmInitPromise) return wasmInitPromise
-
-  wasmInitPromise = (async () => {
-    const wasmResponse = await fetch(RESVG_WASM_URL)
-    if (!wasmResponse.ok) {
-      throw new Error(`Failed to fetch resvg WASM: ${wasmResponse.status}`)
-    }
-    const wasmBytes = await wasmResponse.arrayBuffer()
-    await initWasm(wasmBytes)
-    wasmInitialized = true
-  })()
-
-  return wasmInitPromise
-}
-
-// PNG output size (Slack recommends images between 500-1500px)
-const PNG_WIDTH = 400
-
-/**
- * Convert an SVG string to PNG ArrayBuffer.
- * Initializes resvg-wasm on first call.
- */
-export async function svgToPng(svgString: string): Promise<ArrayBuffer> {
-  await ensureWasmInitialized()
-
-  const resvg = new Resvg(svgString, {
-    fitTo: { mode: 'width', value: PNG_WIDTH },
-  })
-  const rendered = resvg.render()
-  const pngData = rendered.asPng()
-  return pngData.buffer.slice(
-    pngData.byteOffset,
-    pngData.byteOffset + pngData.byteLength,
-  ) as ArrayBuffer
-}
+/** Only images within this window are candidates for random display */
+export const POOL_ACTIVE_DAYS = 7
 
 // ============================================
 // R2 Key Builders
 // ============================================
 
-/**
- * Build an R2 key for a character image.
- * Static images: `character/{userId}/static.png`
- * Dynamic images: `character/{userId}/{emotion}-{action}-{date}.png`
- */
-export function buildR2Key(
-  userId: string,
-  options?: {
-    emotion: CharacterEmotion
-    action: CharacterAction
-    date: string
-  },
-): string {
-  if (!options) return `character/${userId}/static.png`
-  return `character/${userId}/${options.emotion}-${options.action}-${options.date}.png`
+export function buildBaseKey(userId: string): string {
+  return `character/${userId}/base.png`
+}
+
+function buildStagePoolPrefix(userId: string, stage: number): string {
+  return `character/${userId}/pool/stage${stage}/`
+}
+
+function buildPoolKey(userId: string, stage: number, date: string): string {
+  return `character/${userId}/pool/stage${stage}/${date}-${nanoid(8)}.png`
 }
 
 // ============================================
-// R2 Operations
+// Base Image Operations
 // ============================================
 
-/**
- * Get a character image from R2.
- * Returns the PNG data or null if not found.
- */
-export async function getCharacterImageFromR2(
-  r2Key: string,
+export async function getBaseImage(
+  userId: string,
 ): Promise<ArrayBuffer | null> {
-  const object = await env.CHARACTER_IMAGES.get(r2Key)
+  const object = await env.CHARACTER_IMAGES.get(buildBaseKey(userId))
   if (!object) return null
   return await object.arrayBuffer()
 }
 
-/**
- * Upload a character image to R2.
- */
-export async function putCharacterImageToR2(
-  r2Key: string,
+export async function putBaseImage(
+  userId: string,
   pngData: ArrayBuffer,
 ): Promise<void> {
-  await env.CHARACTER_IMAGES.put(r2Key, pngData, {
+  await env.CHARACTER_IMAGES.put(buildBaseKey(userId), pngData, {
     httpMetadata: { contentType: 'image/png' },
   })
+}
+
+// ============================================
+// Pool Operations
+// ============================================
+
+/**
+ * Add an image to the pool for a given evolution stage. Returns the R2 key.
+ */
+export async function addToPool(
+  userId: string,
+  stage: number,
+  pngData: ArrayBuffer,
+): Promise<string> {
+  const today = new Date().toISOString().split('T')[0]
+  const key = buildPoolKey(userId, stage, today)
+  await env.CHARACTER_IMAGES.put(key, pngData, {
+    httpMetadata: { contentType: 'image/png' },
+  })
+  return key
+}
+
+/**
+ * Get a random image from the pool for the given evolution stage.
+ * Only considers images within the active window (POOL_ACTIVE_DAYS).
+ * Avoids serving the same image consecutively by tracking the last served key.
+ * Returns null if no active images exist.
+ */
+export async function getRandomPoolImage(
+  userId: string,
+  stage: number,
+): Promise<ArrayBuffer | null> {
+  const keys = await listActivePoolKeys(userId, stage)
+  if (keys.length === 0) return null
+
+  // Avoid repeating the last served image
+  const lastKey = await getLastServedKey(userId)
+  const candidates = keys.length > 1 ? keys.filter((k) => k !== lastKey) : keys
+
+  const randomKey = candidates[Math.floor(Math.random() * candidates.length)]
+  const object = await env.CHARACTER_IMAGES.get(randomKey)
+  if (!object) return null
+
+  // Remember this key (fire-and-forget)
+  setLastServedKey(userId, randomKey).catch(() => {})
+
+  return await object.arrayBuffer()
+}
+
+/**
+ * Count how many images were generated today for this user (across all stages).
+ * Iterates stage prefixes 1-5 and uses startAfter to only list today's keys.
+ */
+export async function countTodayGenerations(userId: string): Promise<number> {
+  const today = new Date().toISOString().split('T')[0]
+  let count = 0
+
+  for (let stage = 1; stage <= 5; stage++) {
+    const prefix = buildStagePoolPrefix(userId, stage)
+    const startAfter = `${prefix}${today}`
+    const listed = await env.CHARACTER_IMAGES.list({ prefix, startAfter })
+    count += listed.objects.length
+  }
+
+  return count
+}
+
+/**
+ * List pool keys within the active window for a specific stage.
+ * Uses R2 startAfter to skip old keys efficiently.
+ */
+async function listActivePoolKeys(
+  userId: string,
+  stage: number,
+): Promise<string[]> {
+  const prefix = buildStagePoolPrefix(userId, stage)
+  const cutoff = getActiveCutoffDate()
+  // Keys sort lexicographically: {prefix}{date}-{id}.png
+  // startAfter skips everything before the cutoff date
+  const startAfter = `${prefix}${cutoff}`
+  const listed = await env.CHARACTER_IMAGES.list({ prefix, startAfter })
+
+  return listed.objects.map((obj) => obj.key)
+}
+
+// ============================================
+// Helpers
+// ============================================
+
+function getActiveCutoffDate(): string {
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - POOL_ACTIVE_DAYS)
+  return cutoff.toISOString().split('T')[0]
+}
+
+function buildLastServedKvKey(userId: string): string {
+  return `character:${userId}:last-pool-key`
+}
+
+async function getLastServedKey(userId: string): Promise<string | null> {
+  return await env.KV.get(buildLastServedKvKey(userId))
+}
+
+async function setLastServedKey(
+  userId: string,
+  poolKey: string,
+): Promise<void> {
+  await env.KV.put(buildLastServedKvKey(userId), poolKey)
 }

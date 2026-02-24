@@ -3,6 +3,10 @@
  *
  * Single source of truth for character image URLs and Slack Block Kit
  * image blocks. All character images in Slack messages should go through here.
+ *
+ * Images are served from the pool (random selection) via the PNG route.
+ * The daily seed query param busts Slack's image cache so users see
+ * a fresh pool pick each day.
  */
 
 import type {
@@ -10,36 +14,19 @@ import type {
   CharacterEmotion,
 } from '~/services/ai/character-generation'
 
-export const CHARACTER_IMAGE_BASE_URL = 'https://grr.coji.dev'
+export const CHARACTER_IMAGE_BASE_URL = 'https://grr.techtalkjp.workers.dev'
 
 // ============================================
 // URL Builders
 // ============================================
 
 /**
- * Build a character image URL.
- *
- * - No options: static SVG (stored in DB, cached 1hr by the route)
- * - With emotion/action + daily seed: consistent within a day
- * - With emotion/action + cache buster: fresh every request (for interactive moments)
+ * Build a character image URL with a daily seed for Slack cache busting.
  */
-export function getCharacterImageUrl(
-  userId: string,
-  options?: {
-    emotion: CharacterEmotion
-    action: CharacterAction
-    seed?: string
-  },
-): string {
-  // Use PNG format for Slack compatibility (Slack Block Kit doesn't support SVG)
+export function getCharacterImageUrl(userId: string, seed?: string): string {
   const base = `${CHARACTER_IMAGE_BASE_URL}/character/${userId}.png`
-  if (!options) return base
-
-  const params = new URLSearchParams()
-  params.set('emotion', options.emotion)
-  params.set('action', options.action)
-  if (options.seed) params.set('d', options.seed)
-  return `${base}?${params.toString()}`
+  if (!seed) return base
+  return `${base}?d=${seed}`
 }
 
 export function getDailySeed(): string {
@@ -57,37 +44,17 @@ export function getCacheBuster(): string {
 type ImageBlock = { type: 'image'; image_url: string; alt_text: string }
 
 /**
- * Build a Slack image block showing the character's static (stored) SVG.
- * Used for the Home Tab display where no specific emotion is needed.
- */
-export function buildStaticCharacterImageBlock(
-  userId: string,
-  altText: string,
-): ImageBlock {
-  return {
-    type: 'image',
-    image_url: getCharacterImageUrl(userId),
-    alt_text: altText,
-  }
-}
-
-/**
- * Build a Slack image block with emotion/action and a daily seed.
- * Images are consistent within a day but refresh the next day.
+ * Build a Slack image block for the character.
+ * Uses a daily seed so the image refreshes once per day from the pool.
  */
 export function buildCharacterImageBlock(
   userId: string,
-  emotion: CharacterEmotion,
-  action: CharacterAction,
+  altText = 'キャラクターの画像',
 ): ImageBlock {
   return {
     type: 'image',
-    image_url: getCharacterImageUrl(userId, {
-      emotion,
-      action,
-      seed: getDailySeed(),
-    }),
-    alt_text: 'キャラクターの画像',
+    image_url: getCharacterImageUrl(userId, getDailySeed()),
+    alt_text: altText,
   }
 }
 
@@ -97,29 +64,23 @@ export function buildCharacterImageBlock(
  */
 export function buildInteractiveCharacterImageBlock(
   userId: string,
-  emotion: CharacterEmotion,
-  action: CharacterAction,
   altText: string,
 ): ImageBlock {
   return {
     type: 'image',
-    image_url: getCharacterImageUrl(userId, {
-      emotion,
-      action,
-      seed: getCacheBuster(),
-    }),
+    image_url: getCharacterImageUrl(userId, getCacheBuster()),
     alt_text: altText,
   }
 }
 
 // ============================================
-// Context-based Builder
+// Context-based styles (used by workflow for image generation)
 // ============================================
 
 /**
  * Message context to emotion/action mapping.
- * Each message type gets a characteristic style so the character
- * looks appropriate for the situation.
+ * Used when generating new images in the workflow to give
+ * the character an appropriate expression for the situation.
  */
 export const MESSAGE_CHARACTER_STYLES: Record<
   string,
@@ -153,11 +114,11 @@ export const MESSAGE_CHARACTER_STYLES: Record<
 
 /**
  * Build an image block for a known message context.
+ * Uses daily seed for cache busting.
  */
 export function buildCharacterImageBlockForContext(
   userId: string,
-  messageContext: keyof typeof MESSAGE_CHARACTER_STYLES,
+  _messageContext: keyof typeof MESSAGE_CHARACTER_STYLES,
 ): ImageBlock {
-  const style = MESSAGE_CHARACTER_STYLES[messageContext]
-  return buildCharacterImageBlock(userId, style.emotion, style.action)
+  return buildCharacterImageBlock(userId)
 }

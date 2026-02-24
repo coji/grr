@@ -6,7 +6,11 @@ vi.mock('~/services/db', () => ({
 }))
 vi.mock('~/services/ai/character-generation', () => ({
   generateCharacterConcept: vi.fn(),
-  generateCharacterSvg: vi.fn(),
+  generateCharacterImage: vi.fn(),
+}))
+vi.mock('~/services/character-image', () => ({
+  addToPool: vi.fn(),
+  putBaseImage: vi.fn(),
 }))
 
 import {
@@ -65,7 +69,6 @@ describe('characterToConcept', () => {
     characterAppearance: '茶色くて丸い体',
     characterPersonality: '穏やかで温かい',
     characterCatchphrase: 'ほっと一息☕',
-    characterSvg: '<svg></svg>',
     evolutionStage: 3,
     evolutionPoints: 150,
     happiness: 80,

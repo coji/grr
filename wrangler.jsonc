@@ -38,10 +38,10 @@
     "crons": ["0 13 * * *", "0 */3 * * *", "0 15 * * *", "0 1 * * 6"]
   },
   /**
-   * Smart Placement
-   * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+   * Placement Hint: prefer Tokyo region to avoid Gemini API geo-blocking
+   * (Hong Kong edge triggers Google API ban)
    */
-  // "placement": { "mode": "smart" },
+  "placement": { "region": "aws:ap-northeast-1" },
 
   /**
    * Bindings
@@ -60,6 +60,12 @@
     {
       "binding": "CHARACTER_IMAGES",
       "bucket_name": "grr-character-images"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "5a27a12f18c9499cb46fee2eb654f6a6"
     }
   ],
   "vars": {
