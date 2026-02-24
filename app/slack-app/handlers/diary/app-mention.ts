@@ -174,14 +174,15 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       })
     }
 
-    // キャラクター状態更新 (非同期で実行)
+    // キャラクター状態更新 (同期で実行)
     // 日記を書くとキャラクターが喜び、ポイントが貯まる
+    // ワークフローでキャラクター画像を表示するため、先に作成しておく必要がある
     if (entry) {
-      updateCharacterOnDiaryEntry(event.user, entry.moodValue).catch(
-        (error) => {
-          console.error('Failed to update character:', error)
-        },
-      )
+      try {
+        await updateCharacterOnDiaryEntry(event.user, entry.moodValue)
+      } catch (error) {
+        console.error('Failed to update character:', error)
+      }
     }
 
     // 前回のエントリを取得（当日より前の最新エントリ）
