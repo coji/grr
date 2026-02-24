@@ -2,19 +2,8 @@ import { env } from 'cloudflare:workers'
 import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
-import {
-  generateCharacterConcept,
-  generateCharacterSvg,
-} from '~/services/ai/character-generation'
 import { storeAttachments } from '~/services/attachments'
-import {
-  EVOLUTION_THRESHOLDS,
-  characterToConcept,
-  createCharacter,
-  evolveCharacter,
-  getCharacter,
-  recordInteraction,
-} from '~/services/character'
+import { updateCharacterOnDiaryEntry } from '~/services/character'
 import { db } from '~/services/db'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { handleDiaryEntryMilestone } from '~/services/milestone-handler'
@@ -242,87 +231,4 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
         .catch(() => {})
     }
   })
-}
-
-/**
- * Update character state when a diary entry is created
- * Creates a new character if one doesn't exist yet
- */
-async function updateCharacterOnDiaryEntry(
-  userId: string,
-  moodValue: number | null,
-): Promise<void> {
-  let character = await getCharacter(userId)
-
-  // Create character if it doesn't exist
-  if (!character) {
-    try {
-      // Generate unique character concept based on user's memories/personality
-      const concept = await generateCharacterConcept(userId)
-
-      // Generate initial SVG
-      const svg = await generateCharacterSvg({
-        concept,
-        evolutionStage: 1,
-      })
-
-      character = await createCharacter({
-        userId,
-        concept,
-        characterSvg: svg,
-      })
-
-      console.log(
-        `Created new character for user ${userId}: ${concept.name} (${concept.species})`,
-      )
-    } catch (error) {
-      console.error('Failed to create character:', error)
-      return
-    }
-  }
-
-  // Record the diary entry interaction
-  const { pointsEarned, evolved } = await recordInteraction({
-    userId,
-    interactionType: 'diary_entry',
-    metadata: { moodValue },
-  })
-
-  // Also record mood if present
-  if (moodValue !== null) {
-    await recordInteraction({
-      userId,
-      interactionType: 'mood_recorded',
-      metadata: { moodValue },
-    })
-  }
-
-  // Check for evolution after gaining points
-  const updatedCharacter = await getCharacter(userId)
-  if (updatedCharacter && updatedCharacter.evolutionStage < 5) {
-    const threshold = EVOLUTION_THRESHOLDS[updatedCharacter.evolutionStage]
-    if (updatedCharacter.evolutionPoints >= threshold) {
-      try {
-        // Generate new SVG for evolved form
-        const concept = characterToConcept(updatedCharacter)
-        const newSvg = await generateCharacterSvg({
-          concept,
-          evolutionStage: updatedCharacter.evolutionStage + 1,
-        })
-
-        const result = await evolveCharacter(userId, newSvg)
-        if (result) {
-          console.log(
-            `Character evolved for user ${userId}: stage ${result.newStage}`,
-          )
-        }
-      } catch (error) {
-        console.error('Failed to evolve character:', error)
-      }
-    }
-  }
-
-  console.log(
-    `Updated character for user ${userId}: +${pointsEarned} points, evolved: ${evolved}`,
-  )
 }

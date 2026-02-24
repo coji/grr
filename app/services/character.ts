@@ -7,7 +7,11 @@
 
 import { nanoid } from 'nanoid'
 import dayjs from '~/lib/dayjs'
-import type { CharacterConcept } from './ai/character-generation'
+import {
+  generateCharacterConcept,
+  generateCharacterSvg,
+  type CharacterConcept,
+} from './ai/character-generation'
 import type { Database } from './db'
 import { db } from './db'
 
@@ -263,4 +267,75 @@ export function characterToConcept(character: UserCharacter): CharacterConcept {
     personality: character.characterPersonality ?? '',
     catchphrase: character.characterCatchphrase ?? '',
   }
+}
+
+// ============================================
+// Character Lifecycle (Diary Integration)
+// ============================================
+
+/**
+ * Update character state when a diary entry is created.
+ * Creates a new character if one doesn't exist yet,
+ * records interactions, and triggers evolution when ready.
+ */
+export async function updateCharacterOnDiaryEntry(
+  userId: string,
+  moodValue: number | null,
+): Promise<void> {
+  let character = await getCharacter(userId)
+
+  if (!character) {
+    try {
+      const concept = await generateCharacterConcept(userId)
+      const svg = await generateCharacterSvg({ concept, evolutionStage: 1 })
+      character = await createCharacter({ userId, concept, characterSvg: svg })
+      console.log(
+        `Created new character for user ${userId}: ${concept.name} (${concept.species})`,
+      )
+    } catch (error) {
+      console.error('Failed to create character:', error)
+      return
+    }
+  }
+
+  const { pointsEarned, evolved } = await recordInteraction({
+    userId,
+    interactionType: 'diary_entry',
+    metadata: { moodValue },
+  })
+
+  if (moodValue !== null) {
+    await recordInteraction({
+      userId,
+      interactionType: 'mood_recorded',
+      metadata: { moodValue },
+    })
+  }
+
+  // Check for evolution after gaining points
+  const updatedCharacter = await getCharacter(userId)
+  if (updatedCharacter && updatedCharacter.evolutionStage < 5) {
+    const threshold = EVOLUTION_THRESHOLDS[updatedCharacter.evolutionStage]
+    if (updatedCharacter.evolutionPoints >= threshold) {
+      try {
+        const concept = characterToConcept(updatedCharacter)
+        const newSvg = await generateCharacterSvg({
+          concept,
+          evolutionStage: updatedCharacter.evolutionStage + 1,
+        })
+        const result = await evolveCharacter(userId, newSvg)
+        if (result) {
+          console.log(
+            `Character evolved for user ${userId}: stage ${result.newStage}`,
+          )
+        }
+      } catch (error) {
+        console.error('Failed to evolve character:', error)
+      }
+    }
+  }
+
+  console.log(
+    `Updated character for user ${userId}: +${pointsEarned} points, evolved: ${evolved}`,
+  )
 }

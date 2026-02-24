@@ -26,6 +26,7 @@ import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
 import { getCharacter } from '~/services/character'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
+import { buildCharacterImageBlockForContext } from '~/slack-app/character-blocks'
 
 // Import constants directly to avoid path issues
 const DIARY_PERSONA_NAME = 'ほたる'
@@ -201,19 +202,14 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
 
         // Check if user has a character for image attachment
         const character = await getCharacter(params.userId)
-        const baseUrl = 'https://grr.coji.dev'
-        const dailySeed = new Date().toISOString().split('T')[0]
 
         // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
         const blocks: any[] = []
 
-        // Add character image if the user has one
         if (character) {
-          blocks.push({
-            type: 'image',
-            image_url: `${baseUrl}/character/${params.userId}.svg?emotion=happy&action=wave&d=${dailySeed}`,
-            alt_text: `${character.characterName}の画像`,
-          })
+          blocks.push(
+            buildCharacterImageBlockForContext(params.userId, 'diary_reply'),
+          )
         }
 
         blocks.push({

@@ -7,7 +7,7 @@
 
 import { env } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
-import { buildCharacterImageBlockForContext } from '~/slack-app/handlers/diary/character-blocks'
+import { buildCharacterImageBlockForContext } from '~/slack-app/character-blocks'
 import { generateMilestoneMessage } from './ai'
 import { getCharacter } from './character'
 import { checkMilestones } from './heartbeat-evaluators'

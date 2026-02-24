@@ -19,11 +19,11 @@ import {
   getFollowupWithEntry,
   markFollowupAsSent,
 } from '~/services/pending-followups'
-import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 import {
   buildCharacterImageBlockForContext,
   MESSAGE_CHARACTER_STYLES,
-} from './handlers/diary/character-blocks'
+} from './character-blocks'
+import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 

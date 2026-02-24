@@ -3,8 +3,8 @@ import dayjs from '~/lib/dayjs'
 import { generateWeeklyDigest } from '~/services/ai'
 import { getCharacter } from '~/services/character'
 import { db } from '~/services/db'
+import { buildCharacterImageBlockForContext } from './character-blocks'
 import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
-import { buildCharacterImageBlockForContext } from './handlers/diary/character-blocks'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 

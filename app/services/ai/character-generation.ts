@@ -155,15 +155,24 @@ SVGコードのみ（<svg>タグから</svg>まで）
     `.trim(),
   })
 
-  // Clean up the SVG output
-  let svg = text.trim()
+  return cleanSvgOutput(text)
+}
 
-  // Remove markdown code blocks if present
+// ============================================
+// SVG Output Helpers
+// ============================================
+
+/**
+ * Clean raw AI text output into valid SVG.
+ * Strips markdown fences, leading text, and trailing content.
+ */
+function cleanSvgOutput(raw: string): string {
+  let svg = raw.trim()
+
   if (svg.startsWith('```')) {
     svg = svg.replace(/^```(?:svg|xml)?\n?/, '').replace(/\n?```$/, '')
   }
 
-  // Ensure it starts with <svg
   if (!svg.startsWith('<svg')) {
     const svgStart = svg.indexOf('<svg')
     if (svgStart >= 0) {
@@ -171,7 +180,6 @@ SVGコードのみ（<svg>タグから</svg>まで）
     }
   }
 
-  // Ensure it ends with </svg>
   const svgEnd = svg.lastIndexOf('</svg>')
   if (svgEnd >= 0) {
     svg = svg.substring(0, svgEnd + 6)
@@ -364,27 +372,5 @@ SVGコードのみ（<svg>タグから</svg>まで）
     `.trim(),
   })
 
-  // Clean up the SVG output
-  let svg = text.trim()
-
-  // Remove markdown code blocks if present
-  if (svg.startsWith('```')) {
-    svg = svg.replace(/^```(?:svg|xml)?\n?/, '').replace(/\n?```$/, '')
-  }
-
-  // Ensure it starts with <svg
-  if (!svg.startsWith('<svg')) {
-    const svgStart = svg.indexOf('<svg')
-    if (svgStart >= 0) {
-      svg = svg.substring(svgStart)
-    }
-  }
-
-  // Ensure it ends with </svg>
-  const svgEnd = svg.lastIndexOf('</svg>')
-  if (svgEnd >= 0) {
-    svg = svg.substring(0, svgEnd + 6)
-  }
-
-  return svg
+  return cleanSvgOutput(text)
 }

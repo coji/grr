@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// Mock cloudflare:workers dependency
+// Mock dependencies that are imported by character.ts
 vi.mock('~/services/db', () => ({
   db: {},
+}))
+vi.mock('~/services/ai/character-generation', () => ({
+  generateCharacterConcept: vi.fn(),
+  generateCharacterSvg: vi.fn(),
 }))
 
 import {

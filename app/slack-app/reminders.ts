@@ -6,11 +6,11 @@ import { generateDiaryReminder } from '~/services/ai'
 import { getCharacter } from '~/services/character'
 import { db } from '~/services/db'
 import { getUserMilestones } from '~/services/proactive-messages'
+import { buildCharacterImageBlockForContext } from './character-blocks'
 import {
   DIARY_MOOD_CHOICES,
   DIARY_PERSONA_NAME,
 } from './handlers/diary-constants'
-import { buildCharacterImageBlockForContext } from './handlers/diary/character-blocks'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 

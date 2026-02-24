@@ -4,14 +4,27 @@ import type {
   SlackApp,
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
+import type { Respond } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
+import type {
+  CharacterAction,
+  CharacterEmotion,
+} from '~/services/ai/character-generation'
+import { generateCharacterMessage } from '~/services/ai/character-generation'
 import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
 import {
+  characterToConcept,
   getBondLevelDisplay,
   getCharacter,
   getProgressBar,
+  recordInteraction,
+  type InteractionType,
 } from '~/services/character'
 import { db } from '~/services/db'
+import {
+  buildInteractiveCharacterImageBlock,
+  buildStaticCharacterImageBlock,
+} from '~/slack-app/character-blocks'
 import { getFileTypeEmoji } from './file-utils'
 import { TOKYO_TZ } from './utils'
 
@@ -94,18 +107,14 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       const energyBar = getProgressBar(character.energy)
       const bondLevel = getBondLevelDisplay(character.bondLevel)
 
-      // Base URL for character SVG images
-      const baseUrl = 'https://grr.coji.dev'
-
       blocks.push(
         {
           type: 'divider',
         },
-        {
-          type: 'image',
-          image_url: `${baseUrl}/character/${userId}.svg`,
-          alt_text: `${character.characterName}の画像`,
-        },
+        buildStaticCharacterImageBlock(
+          userId,
+          `${character.characterName}の画像`,
+        ),
         {
           type: 'section',
           text: {
@@ -574,157 +583,99 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
   // キャラクターインタラクション: なでる
   app.action('character_pet', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
-    const userId = action.user.id
-
-    // Import dynamically to avoid circular dependency
-    const {
-      recordInteraction,
-      getCharacter: getChar,
-      characterToConcept,
-    } = await import('~/services/character')
-    const { generateCharacterMessage } =
-      await import('~/services/ai/character-generation')
-
-    const character = await getChar(userId)
-    if (!character) {
-      if (context.respond) {
-        await context.respond({
-          text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
-          response_type: 'ephemeral',
-        })
-      }
-      return
-    }
-
-    // Record the interaction
-    const { pointsEarned } = await recordInteraction({
-      userId,
+    await handleCharacterInteraction(action.user.id, context.respond, {
       interactionType: 'pet',
+      messageContext: 'pet',
+      emotion: 'love',
+      action: 'pet',
+      altText: (name) => `${name}が撫でられている`,
     })
-
-    // Generate a response from the character
-    const concept = characterToConcept(character)
-    const message = await generateCharacterMessage({
-      concept,
-      evolutionStage: character.evolutionStage,
-      happiness: character.happiness,
-      energy: character.energy,
-      context: 'pet',
-    })
-
-    // Use cache buster for interactive moments to get fresh expressions
-    const cacheBuster = Date.now()
-    const baseUrl = 'https://grr.coji.dev'
-    const imageUrl = `${baseUrl}/character/${userId}.svg?emotion=love&action=pet&t=${cacheBuster}`
-
-    if (context.respond) {
-      await context.respond({
-        text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
-        response_type: 'ephemeral',
-        blocks: [
-          {
-            type: 'image',
-            image_url: imageUrl,
-            alt_text: `${character.characterName}が撫でられている`,
-          },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*${character.characterName}*: ${message}`,
-            },
-          },
-          {
-            type: 'context',
-            elements: [
-              {
-                type: 'mrkdwn',
-                text: `_+${pointsEarned}ポイント獲得！_`,
-              },
-            ],
-          },
-        ],
-      })
-    }
   })
 
   // キャラクターインタラクション: 話しかける
   app.action('character_talk', async ({ payload, context }) => {
     const action = payload as MessageBlockAction<ButtonAction>
-    const userId = action.user.id
-
-    const {
-      recordInteraction,
-      getCharacter: getChar,
-      characterToConcept,
-    } = await import('~/services/character')
-    const { generateCharacterMessage } =
-      await import('~/services/ai/character-generation')
-
-    const character = await getChar(userId)
-    if (!character) {
-      if (context.respond) {
-        await context.respond({
-          text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
-          response_type: 'ephemeral',
-        })
-      }
-      return
-    }
-
-    // Record the interaction
-    const { pointsEarned } = await recordInteraction({
-      userId,
-      interactionType: 'talk',
-    })
-
-    // Generate a response from the character
-    const concept = characterToConcept(character)
-    const message = await generateCharacterMessage({
-      concept,
-      evolutionStage: character.evolutionStage,
-      happiness: character.happiness,
-      energy: character.energy,
-      context: 'talk',
-    })
-
-    // Base URL for character SVG images with dynamic expression
-    const baseUrl = 'https://grr.coji.dev'
-    // Randomly select emotion for variety
-    const emotions = ['happy', 'excited', 'shy'] as const
+    const emotions: CharacterEmotion[] = ['happy', 'excited', 'shy']
     const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)]
-    // Use random variation to prevent caching same expression
-    const cacheBuster = Date.now()
-    const imageUrl = `${baseUrl}/character/${userId}.svg?emotion=${randomEmotion}&action=talk&t=${cacheBuster}`
 
-    if (context.respond) {
-      await context.respond({
-        text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
+    await handleCharacterInteraction(action.user.id, context.respond, {
+      interactionType: 'talk',
+      messageContext: 'talk',
+      emotion: randomEmotion,
+      action: 'talk',
+      altText: (name) => `${name}が話している`,
+    })
+  })
+}
+
+// ============================================
+// Interaction Handler Helper
+// ============================================
+
+async function handleCharacterInteraction(
+  userId: string,
+  respond: Respond | undefined,
+  opts: {
+    interactionType: InteractionType
+    messageContext: 'pet' | 'talk'
+    emotion: CharacterEmotion
+    action: CharacterAction
+    altText: (characterName: string) => string
+  },
+): Promise<void> {
+  const character = await getCharacter(userId)
+  if (!character) {
+    if (respond) {
+      await respond({
+        text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
         response_type: 'ephemeral',
-        blocks: [
-          {
-            type: 'image',
-            image_url: imageUrl,
-            alt_text: `${character.characterName}が話している`,
-          },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `*${character.characterName}*: ${message}`,
-            },
-          },
-          {
-            type: 'context',
-            elements: [
-              {
-                type: 'mrkdwn',
-                text: `_+${pointsEarned}ポイント獲得！_`,
-              },
-            ],
-          },
-        ],
       })
     }
+    return
+  }
+
+  const { pointsEarned } = await recordInteraction({
+    userId,
+    interactionType: opts.interactionType,
   })
+
+  const concept = characterToConcept(character)
+  const message = await generateCharacterMessage({
+    concept,
+    evolutionStage: character.evolutionStage,
+    happiness: character.happiness,
+    energy: character.energy,
+    context: opts.messageContext,
+  })
+
+  if (respond) {
+    await respond({
+      text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
+      response_type: 'ephemeral',
+      blocks: [
+        buildInteractiveCharacterImageBlock(
+          userId,
+          opts.emotion,
+          opts.action,
+          opts.altText(character.characterName),
+        ),
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${character.characterName}*: ${message}`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `_+${pointsEarned}ポイント獲得！_`,
+            },
+          ],
+        },
+      ],
+    })
+  }
 }
