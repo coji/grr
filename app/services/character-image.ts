@@ -1,56 +1,15 @@
 /**
- * Character image service for R2 storage and SVG→PNG conversion.
+ * Character image service for R2 storage.
  *
- * Images are generated dynamically by AI, converted to PNG, and stored in R2.
+ * Images are generated via Gemini's native image generation and stored in R2.
  * The PNG route serves images from R2 for fast response times.
- * The ai-diary-reply workflow pre-generates images before posting to Slack.
  */
 
-import { Resvg, initWasm } from '@resvg/resvg-wasm'
 import { env } from 'cloudflare:workers'
 import type {
   CharacterAction,
   CharacterEmotion,
 } from '~/services/ai/character-generation'
-// Static import of WASM binary (Cloudflare Workers disallows dynamic WASM instantiation)
-import resvgWasm from '../vendor/resvg.wasm'
-
-// Track WASM initialization state (resvg-wasm throws on repeated init)
-let wasmInitialized = false
-let wasmInitPromise: Promise<void> | null = null
-
-async function ensureWasmInitialized() {
-  if (wasmInitialized) return
-  if (wasmInitPromise) return wasmInitPromise
-
-  wasmInitPromise = (async () => {
-    await initWasm(resvgWasm)
-    wasmInitialized = true
-  })()
-
-  return wasmInitPromise
-}
-
-// PNG output size (Slack recommends images between 500-1500px)
-const PNG_WIDTH = 400
-
-/**
- * Convert an SVG string to PNG ArrayBuffer.
- * Initializes resvg-wasm on first call.
- */
-export async function svgToPng(svgString: string): Promise<ArrayBuffer> {
-  await ensureWasmInitialized()
-
-  const resvg = new Resvg(svgString, {
-    fitTo: { mode: 'width', value: PNG_WIDTH },
-  })
-  const rendered = resvg.render()
-  const pngData = rendered.asPng()
-  return pngData.buffer.slice(
-    pngData.byteOffset,
-    pngData.byteOffset + pngData.byteLength,
-  ) as ArrayBuffer
-}
 
 // ============================================
 // R2 Key Builders

@@ -23,11 +23,11 @@ import {
 } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
-import { generateMessageSvg } from '~/services/ai/character-generation'
+import { generateCharacterImage } from '~/services/ai/character-generation'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
 import { characterToConcept, getCharacter } from '~/services/character'
-import { buildR2Key, svgToPng } from '~/services/character-image'
+import { buildR2Key } from '~/services/character-image'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import {
   CHARACTER_IMAGE_BASE_URL,
@@ -227,14 +227,14 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
 
         try {
           const concept = characterToConcept(character)
-          const svg = await generateMessageSvg({
+          const pngData = await generateCharacterImage({
+            userId: params.userId,
             concept,
             evolutionStage: character.evolutionStage,
             emotion: style.emotion,
             action: style.action,
           })
 
-          const pngData = await svgToPng(svg)
           await env.CHARACTER_IMAGES.put(r2Key, pngData, {
             httpMetadata: { contentType: 'image/png' },
           })

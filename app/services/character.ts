@@ -9,9 +9,10 @@ import { nanoid } from 'nanoid'
 import dayjs from '~/lib/dayjs'
 import {
   generateCharacterConcept,
-  generateCharacterSvg,
+  generateCharacterImage,
   type CharacterConcept,
 } from './ai/character-generation'
+import { buildR2Key, putCharacterImageToR2 } from './character-image'
 import type { Database } from './db'
 import { db } from './db'
 
@@ -62,7 +63,6 @@ export async function getCharacter(
 export async function createCharacter(input: {
   userId: string
   concept: CharacterConcept
-  characterSvg?: string | null
 }): Promise<UserCharacter> {
   const now = dayjs().utc().toISOString()
 
@@ -74,7 +74,6 @@ export async function createCharacter(input: {
     characterAppearance: input.concept.appearance,
     characterPersonality: input.concept.personality,
     characterCatchphrase: input.concept.catchphrase,
-    characterSvg: input.characterSvg ?? null,
     evolutionStage: 1,
     evolutionPoints: 0,
     happiness: 50,
@@ -99,7 +98,6 @@ export async function updateCharacter(
   updates: Partial<
     Pick<
       UserCharacter,
-      | 'characterSvg'
       | 'evolutionStage'
       | 'evolutionPoints'
       | 'happiness'
@@ -200,7 +198,6 @@ function checkAndApplyEvolution(
  */
 export async function evolveCharacter(
   userId: string,
-  newSvg?: string,
 ): Promise<{ newStage: number } | null> {
   const character = await getCharacter(userId)
   if (!character || character.evolutionStage >= 5) {
@@ -211,7 +208,6 @@ export async function evolveCharacter(
 
   await updateCharacter(userId, {
     evolutionStage: newStage,
-    characterSvg: newSvg ?? character.characterSvg,
   })
 
   return { newStage }
@@ -287,11 +283,25 @@ export async function updateCharacterOnDiaryEntry(
   if (!character) {
     try {
       const concept = await generateCharacterConcept(userId)
-      const svg = await generateCharacterSvg({ concept, evolutionStage: 1 })
-      character = await createCharacter({ userId, concept, characterSvg: svg })
+      character = await createCharacter({ userId, concept })
       console.log(
         `Created new character for user ${userId}: ${concept.name} (${concept.species})`,
       )
+
+      // Generate and store base image in R2
+      try {
+        const pngData = await generateCharacterImage({
+          userId,
+          concept,
+          evolutionStage: 1,
+        })
+        const r2Key = buildR2Key(userId)
+        await putCharacterImageToR2(r2Key, pngData)
+        console.log(`Stored base character image in R2: ${r2Key}`)
+      } catch (imageError) {
+        console.error('Failed to generate character image:', imageError)
+        // Character created without image - will be generated on first access
+      }
     } catch (error) {
       console.error('Failed to create character:', error)
       return
@@ -319,15 +329,25 @@ export async function updateCharacterOnDiaryEntry(
     if (updatedCharacter.evolutionPoints >= threshold) {
       try {
         const concept = characterToConcept(updatedCharacter)
-        const newSvg = await generateCharacterSvg({
-          concept,
-          evolutionStage: updatedCharacter.evolutionStage + 1,
-        })
-        const result = await evolveCharacter(userId, newSvg)
+        const newStage = updatedCharacter.evolutionStage + 1
+        const result = await evolveCharacter(userId)
         if (result) {
           console.log(
             `Character evolved for user ${userId}: stage ${result.newStage}`,
           )
+          // Generate and store evolved image in R2
+          try {
+            const pngData = await generateCharacterImage({
+              userId,
+              concept,
+              evolutionStage: newStage,
+            })
+            const r2Key = buildR2Key(userId)
+            await putCharacterImageToR2(r2Key, pngData)
+            console.log(`Stored evolved character image in R2: ${r2Key}`)
+          } catch (imageError) {
+            console.error('Failed to generate evolved image:', imageError)
+          }
         }
       } catch (error) {
         console.error('Failed to evolve character:', error)
