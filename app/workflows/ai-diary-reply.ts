@@ -65,6 +65,7 @@ export interface AiDiaryReplyParams {
   previousEntry: string | null
   mentionMessage: string | null
   mention: string
+  isFirstDiary?: boolean // True when this is the user's first diary entry (onboarding)
 }
 
 export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
@@ -293,6 +294,22 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             text: message,
           },
         })
+
+        // For first diary: Add character introduction message
+        if (params.isFirstDiary) {
+          const character = await getCharacter(params.userId)
+          if (character) {
+            blocks.push({
+              type: 'context',
+              elements: [
+                {
+                  type: 'mrkdwn',
+                  text: `${character.characterEmoji} あなたとの会話から *${character.characterName}* (${character.characterSpecies}) が生まれました！日記を続けると成長していきます。`,
+                },
+              ],
+            })
+          }
+        }
 
         const result = await slackClient.chat.postMessage({
           channel: params.channel,

@@ -26,6 +26,7 @@ import {
   buildInteractiveCharacterImageBlock,
 } from '~/slack-app/character-blocks'
 import { getFileTypeEmoji } from './file-utils'
+import { buildOnboardingBlocks } from './onboarding'
 import { TOKYO_TZ } from './utils'
 
 export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
@@ -34,6 +35,25 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
     if (event.tab !== 'home') return
 
     const userId = event.user
+
+    // ユーザーの設定を確認（オンボーディング判定のため）
+    const settings = await db
+      .selectFrom('userDiarySettings')
+      .select('diaryChannelId')
+      .where('userId', '=', userId)
+      .executeTakeFirst()
+
+    // diaryChannelId が設定されていない場合はオンボーディング画面を表示
+    if (!settings?.diaryChannelId) {
+      await context.client.views.publish({
+        user_id: userId,
+        view: {
+          type: 'home',
+          blocks: buildOnboardingBlocks(),
+        },
+      })
+      return
+    }
 
     // 今日の日付
     const today = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
