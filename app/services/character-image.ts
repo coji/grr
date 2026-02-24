@@ -155,19 +155,17 @@ function getActiveCutoffDate(): string {
   return cutoff.toISOString().split('T')[0]
 }
 
-function buildLastServedKey(userId: string): string {
-  return `character/${userId}/last-pool-key.txt`
+function buildLastServedKvKey(userId: string): string {
+  return `character:${userId}:last-pool-key`
 }
 
 async function getLastServedKey(userId: string): Promise<string | null> {
-  const object = await env.CHARACTER_IMAGES.get(buildLastServedKey(userId))
-  if (!object) return null
-  return await object.text()
+  return await env.KV.get(buildLastServedKvKey(userId))
 }
 
 async function setLastServedKey(
   userId: string,
   poolKey: string,
 ): Promise<void> {
-  await env.CHARACTER_IMAGES.put(buildLastServedKey(userId), poolKey)
+  await env.KV.put(buildLastServedKvKey(userId), poolKey)
 }
