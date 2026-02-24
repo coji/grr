@@ -4,9 +4,27 @@ import type {
   SlackApp,
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
+import type { Respond } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
+import type {
+  CharacterAction,
+  CharacterEmotion,
+} from '~/services/ai/character-generation'
+import { generateCharacterMessage } from '~/services/ai/character-generation'
 import { getAttachmentStats, getEntryAttachments } from '~/services/attachments'
+import {
+  characterToConcept,
+  getBondLevelDisplay,
+  getCharacter,
+  getProgressBar,
+  recordInteraction,
+  type InteractionType,
+} from '~/services/character'
 import { db } from '~/services/db'
+import {
+  buildInteractiveCharacterImageBlock,
+  buildStaticCharacterImageBlock,
+} from '~/slack-app/character-blocks'
 import { getFileTypeEmoji } from './file-utils'
 import { TOKYO_TZ } from './utils'
 
@@ -60,8 +78,12 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
             .join(' | ')
         : '今週はまだ記録がありません'
 
+    // ユーザーのキャラクターを取得
+    const character = await getCharacter(userId)
+
     // Home Tab のビューを構築
-    const blocks = [
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
+    const blocks: any[] = [
       {
         type: 'header',
         text: {
@@ -77,6 +99,66 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
           text: `こんにちは！\n今週の気分: ${moodStats}`,
         },
       },
+    ]
+
+    // キャラクターセクション
+    if (character) {
+      const happinessBar = getProgressBar(character.happiness)
+      const energyBar = getProgressBar(character.energy)
+      const bondLevel = getBondLevelDisplay(character.bondLevel)
+
+      blocks.push(
+        {
+          type: 'divider',
+        },
+        buildStaticCharacterImageBlock(
+          userId,
+          `${character.characterName}の画像`,
+        ),
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*あなたの相棒* ${character.characterEmoji}\n*${character.characterName}* (${character.characterSpecies})`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `💗 ${happinessBar} ${character.happiness}% | ⚡ ${energyBar} ${character.energy}% | 🤝 絆 Lv.${bondLevel}`,
+            },
+          ],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: 'なでる 🤚',
+                emoji: true,
+              },
+              action_id: 'character_pet',
+            },
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: '話しかける 💬',
+                emoji: true,
+              },
+              action_id: 'character_talk',
+            },
+          ],
+        },
+      )
+    }
+
+    // メインアクションセクション
+    blocks.push(
       {
         type: 'divider',
       },
@@ -116,7 +198,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
           emoji: true,
         },
       },
-    ]
+    )
 
     // 最近のエントリをリスト表示
     if (recentEntries.length === 0) {
@@ -173,8 +255,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       user_id: userId,
       view: {
         type: 'home',
-        // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
-        blocks: blocks as any,
+        blocks: blocks,
       },
     })
   })
@@ -498,4 +579,103 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       },
     })
   })
+
+  // キャラクターインタラクション: なでる
+  app.action('character_pet', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    await handleCharacterInteraction(action.user.id, context.respond, {
+      interactionType: 'pet',
+      messageContext: 'pet',
+      emotion: 'love',
+      action: 'pet',
+      altText: (name) => `${name}が撫でられている`,
+    })
+  })
+
+  // キャラクターインタラクション: 話しかける
+  app.action('character_talk', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const emotions: CharacterEmotion[] = ['happy', 'excited', 'shy']
+    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)]
+
+    await handleCharacterInteraction(action.user.id, context.respond, {
+      interactionType: 'talk',
+      messageContext: 'talk',
+      emotion: randomEmotion,
+      action: 'talk',
+      altText: (name) => `${name}が話している`,
+    })
+  })
+}
+
+// ============================================
+// Interaction Handler Helper
+// ============================================
+
+async function handleCharacterInteraction(
+  userId: string,
+  respond: Respond | undefined,
+  opts: {
+    interactionType: InteractionType
+    messageContext: 'pet' | 'talk'
+    emotion: CharacterEmotion
+    action: CharacterAction
+    altText: (characterName: string) => string
+  },
+): Promise<void> {
+  const character = await getCharacter(userId)
+  if (!character) {
+    if (respond) {
+      await respond({
+        text: 'まだキャラクターがいないよ。日記を書いて育ててみよう！',
+        response_type: 'ephemeral',
+      })
+    }
+    return
+  }
+
+  const { pointsEarned } = await recordInteraction({
+    userId,
+    interactionType: opts.interactionType,
+  })
+
+  const concept = characterToConcept(character)
+  const message = await generateCharacterMessage({
+    concept,
+    evolutionStage: character.evolutionStage,
+    happiness: character.happiness,
+    energy: character.energy,
+    context: opts.messageContext,
+  })
+
+  if (respond) {
+    await respond({
+      text: `${character.characterName}: ${message} (+${pointsEarned}ポイント)`,
+      response_type: 'ephemeral',
+      blocks: [
+        buildInteractiveCharacterImageBlock(
+          userId,
+          opts.emotion,
+          opts.action,
+          opts.altText(character.characterName),
+        ),
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${character.characterName}*: ${message}`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `_+${pointsEarned}ポイント獲得！_`,
+            },
+          ],
+        },
+      ],
+    })
+  }
 }

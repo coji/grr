@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { storeAttachments } from '~/services/attachments'
+import { updateCharacterOnDiaryEntry } from '~/services/character'
 import { db } from '~/services/db'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { handleDiaryEntryMilestone } from '~/services/milestone-handler'
@@ -171,6 +172,16 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
       ).catch((error) => {
         console.error('Failed to handle milestone:', error)
       })
+    }
+
+    // キャラクター状態更新 (非同期で実行)
+    // 日記を書くとキャラクターが喜び、ポイントが貯まる
+    if (entry) {
+      updateCharacterOnDiaryEntry(event.user, entry.moodValue).catch(
+        (error) => {
+          console.error('Failed to update character:', error)
+        },
+      )
     }
 
     // 前回のエントリを取得（当日より前の最新エントリ）

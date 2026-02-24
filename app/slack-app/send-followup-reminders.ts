@@ -1,6 +1,7 @@
 import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateFollowupMessage } from '~/services/ai'
+import { getCharacter } from '~/services/character'
 import { db } from '~/services/db'
 import {
   evaluateAnniversaryMessages,
@@ -18,6 +19,10 @@ import {
   getFollowupWithEntry,
   markFollowupAsSent,
 } from '~/services/pending-followups'
+import {
+  buildCharacterImageBlockForContext,
+  MESSAGE_CHARACTER_STYLES,
+} from './character-blocks'
 import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -167,10 +172,18 @@ async function processEventFollowups(
         originalEntryText: originalEntry,
       })
 
+      // Build character image block if user has a character
+      const character = await getCharacter(followup.userId)
+      // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+      const characterBlocks: any[] = character
+        ? [buildCharacterImageBlockForContext(followup.userId, 'followup')]
+        : []
+
       const result = await client.chat.postMessage({
         channel: followup.channelId,
         text: `<@${followup.userId}> ${followupText}`,
         blocks: [
+          ...characterBlocks,
           {
             type: 'section',
             text: {
@@ -340,10 +353,11 @@ async function processProactiveMessages(
     }
 
     try {
+      const character = await getCharacter(message.userId)
       const result = await client.chat.postMessage({
         channel: message.channelId,
         text: `<@${message.userId}> ${message.text}`,
-        blocks: buildProactiveMessageBlocks(message),
+        blocks: buildProactiveMessageBlocks(message, !!character),
       })
 
       if (result.ok && result.ts) {
@@ -370,22 +384,33 @@ async function processProactiveMessages(
  */
 function buildProactiveMessageBlocks(
   message: ProactiveMessageResult,
-): Array<
-  | { type: 'section'; text: { type: 'mrkdwn'; text: string } }
-  | { type: 'context'; elements: Array<{ type: 'mrkdwn'; text: string }> }
-> {
-  const blocks: Array<
-    | { type: 'section'; text: { type: 'mrkdwn'; text: string } }
-    | { type: 'context'; elements: Array<{ type: 'mrkdwn'; text: string }> }
-  > = [
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `<@${message.userId}> ${message.text}`,
-      },
+  hasCharacter: boolean,
+  // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+): any[] {
+  // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+  const blocks: any[] = []
+
+  // Add character image if user has a character
+  if (hasCharacter) {
+    const contextKey =
+      message.messageType in MESSAGE_CHARACTER_STYLES
+        ? message.messageType
+        : 'random_checkin'
+    blocks.push(
+      buildCharacterImageBlockForContext(
+        message.userId,
+        contextKey as keyof typeof MESSAGE_CHARACTER_STYLES,
+      ),
+    )
+  }
+
+  blocks.push({
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `<@${message.userId}> ${message.text}`,
     },
-  ]
+  })
 
   // Add context based on message type
   const contextMap: Record<string, string> = {

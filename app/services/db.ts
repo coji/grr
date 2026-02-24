@@ -185,6 +185,39 @@ export interface Database {
     lastUpdatedAt: string
     invalidatedAt: string | null
   }
+
+  userCharacters: {
+    userId: string
+    // Character identity (all AI-generated, unique per user)
+    characterName: string
+    characterSpecies: string
+    characterEmoji: string
+    characterAppearance: string | null
+    characterPersonality: string | null
+    characterCatchphrase: string | null
+    characterSvg: string | null
+    // Evolution state
+    evolutionStage: number // 1-5
+    evolutionPoints: number
+    // Status
+    happiness: number // 0-100
+    energy: number // 0-100
+    bondLevel: number // 0-100
+    // Activity tracking
+    lastInteractedAt: string | null
+    daysWithoutDiary: number
+    createdAt: string
+    updatedAt: string
+  }
+
+  characterInteractions: {
+    id: string
+    userId: string
+    interactionType: 'pet' | 'talk' | 'diary_entry' | 'mood_recorded'
+    pointsEarned: number
+    metadata: string | null // JSON
+    createdAt: string
+  }
 }
 
 export const createDb = (database: D1Database) =>

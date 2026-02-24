@@ -24,7 +24,9 @@ import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
+import { getCharacter } from '~/services/character'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
+import { buildCharacterImageBlockForContext } from '~/slack-app/character-blocks'
 
 // Import constants directly to avoid path issues
 const DIARY_PERSONA_NAME = 'ほたる'
@@ -186,7 +188,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       },
     )
 
-    // Step 2: Post message to Slack
+    // Step 2: Post message to Slack (with character image if available)
     await step.do(
       'post-slack-message',
       {
@@ -198,10 +200,31 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       async (): Promise<void> => {
         const message = `${params.mention} ${aiReply}`.trim()
 
+        // Check if user has a character for image attachment
+        const character = await getCharacter(params.userId)
+
+        // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+        const blocks: any[] = []
+
+        if (character) {
+          blocks.push(
+            buildCharacterImageBlockForContext(params.userId, 'diary_reply'),
+          )
+        }
+
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: message,
+          },
+        })
+
         const result = await slackClient.chat.postMessage({
           channel: params.channel,
           thread_ts: params.threadTs ?? params.messageTs,
           text: message,
+          blocks,
         })
 
         if (!result.ok) {

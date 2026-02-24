@@ -251,6 +251,14 @@ git push -u origin fix/urgent-issue
 gh pr create --title "fix: urgent issue"
 ```
 
+## 作業完了時のチェックリスト
+
+ひとまとまりの作業が終わったら以下を必ず実行する。
+
+1. **AIプロンプトレビュー**: プロンプトを追加・編集した場合、[プロンプトガイド](docs/gemini-3-prompting-guide.md)に照らして確認
+2. **ユニットテスト**: 変更したビジネスロジックにテストを追加し `pnpm test:unit` を通す
+3. **リファクタリング**: 凝集度を高く、結合度を低く、重複を排除して整理する
+
 ## Collaboration notes
 
 - Favor descriptive commit messages and PR summaries that explain user-facing changes.
