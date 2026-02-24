@@ -10,8 +10,6 @@
  */
 
 import { Resvg, initWasm } from '@resvg/resvg-wasm'
-// @ts-expect-error - WASM module import
-import resvgWasm from '@resvg/resvg-wasm/index_bg.wasm'
 import {
   generateCharacterSvg,
   generateMessageSvg,
@@ -21,14 +19,29 @@ import {
 import { characterToConcept, getCharacter } from '~/services/character'
 import type { Route } from './+types/character.$userId.png'
 
+// WASM file URL from CDN (using specific version for stability)
+const RESVG_WASM_URL = 'https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm'
+
 // Track WASM initialization state
 let wasmInitialized = false
+let wasmInitPromise: Promise<void> | null = null
 
 async function ensureWasmInitialized() {
-  if (!wasmInitialized) {
-    await initWasm(resvgWasm)
+  if (wasmInitialized) return
+  if (wasmInitPromise) return wasmInitPromise
+
+  wasmInitPromise = (async () => {
+    // Fetch WASM from CDN at runtime to avoid Vite build issues
+    const wasmResponse = await fetch(RESVG_WASM_URL)
+    if (!wasmResponse.ok) {
+      throw new Error(`Failed to fetch resvg WASM: ${wasmResponse.status}`)
+    }
+    const wasmBytes = await wasmResponse.arrayBuffer()
+    await initWasm(wasmBytes)
     wasmInitialized = true
-  }
+  })()
+
+  return wasmInitPromise
 }
 
 // Default fallback SVG for when character doesn't exist
