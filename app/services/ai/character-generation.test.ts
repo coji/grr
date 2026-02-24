@@ -351,12 +351,12 @@ describe('generateMessageSvg', () => {
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
         model: 'mock-model',
-        prompt: expect.stringContaining('love'),
+        prompt: expect.stringContaining('ハートの目をしている'),
       }),
     )
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        prompt: expect.stringContaining('pet'),
+        prompt: expect.stringContaining('撫でられて気持ちよさそう'),
       }),
     )
   })

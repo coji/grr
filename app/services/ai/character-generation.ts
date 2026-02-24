@@ -65,27 +65,23 @@ export async function generateCharacterConcept(
     },
     schema: characterConceptSchema,
     system: `
-あなたはユーザーの日記から、その人だけのオリジナルキャラクターを創造する役割です。
+ユーザーの日記から、その人だけのオリジナルキャラクターを創造する。
 
 ## 原則
-- タイプや種族は完全に自由！既存のものに縛られない
-- ユーザーの日記の内容、趣味、感情、日常から着想を得る
+- タイプや種族は完全に自由、独創的に
+- ユーザーの趣味、感情、日常から着想を得る
 - かわいくて愛着が湧くデザイン
-- シンプルだけど個性的
 
 ## 着想の例
-- 「コーヒー好き」→ コーヒー豆の妖精、マグカップに住む小人
-- 「散歩好き」→ 靴の精霊、道端の小さな冒険者
-- 「プログラマー」→ コードの中に住むバグ妖精、キーボードの上で踊る子
-- 「料理好き」→ おにぎりの妖精、フライパンに乗る小さなシェフ
-- 「読書好き」→ 本の中から出てきた文字の精霊
-- 「散歩・街歩き」→ 街角に住む道しるべの精霊、マップの妖精
-- 「テック好き」→ スマホの精霊、Wi-Fiの妖精
+- 「コーヒー好き」→ コーヒー豆の妖精
+- 「散歩好き」→ 道端の小さな冒険者
+- 「プログラマー」→ キーボードの上で踊る子
+- 「料理好き」→ おにぎりの妖精
 
-## 出力ガイド
+## 出力フォーマット
 - name: かわいい響きの名前（2-4文字、ひらがな/カタカナ）
-- species: ユニークな種族名（創造的に！）
-- emoji: キャラを一番よく表す絵文字
+- species: ユニークな種族名
+- emoji: キャラを一番よく表す絵文字1つ
 - appearance: 色、形、サイズ、特徴的なパーツを具体的に
 - personality: 性格を2-3語で
 - catchphrase: そのキャラらしい一言
@@ -95,8 +91,7 @@ ${memoriesSummary}
 
 ${personalitySummary}
 
-この人の日記の内容から、世界に一つだけのオリジナルキャラクターを創造してください。
-既存のキャラクターや固定タイプに縛られず、自由な発想で！
+この人の日記から、世界に一つだけのオリジナルキャラクターを創造してください。
     `.trim(),
   })
 
@@ -124,28 +119,23 @@ export async function generateCharacterSvg(input: {
       } satisfies GoogleGenerativeAIProviderOptions,
     },
     system: `
-あなたはかわいいキャラクターのSVGコードを生成する役割です。
+かわいいキャラクターのSVGコードを生成する。
 
 ## 要件
 - サイズ: 200x200px（viewBox="0 0 200 200"）
 - スタイル: シンプルでかわいい、丸みを帯びたデザイン
-- 色: パステルカラー中心（明るく優しい色合い）
+- 色: パステルカラー中心
 - 背景: 透明
 - 表情: にっこり笑顔
 - 線: 太めの丸い線（stroke-linecap: round）
 
 ## デザインのコツ
-- 大きな目（キラキラ）
-- 小さめの口（にっこり）
-- 丸みを帯びた体型
-- シンプルな色使い（2-3色）
+- 大きな目（キラキラ）と小さめの口（にっこり）
+- 丸みを帯びた体型、シンプルな色使い（2-3色）
 - 特徴的なパーツ1つ（帽子、羽、しっぽなど）
 
-## 出力
-SVGコードのみを出力してください。
-- \`\`\`やコメント、説明は不要
-- <svg>タグから始めて</svg>で終わる
-- XMLヘッダーは不要
+## 出力フォーマット
+SVGコードのみ（<svg>タグから</svg>まで）
     `.trim(),
     prompt: `
 キャラクター名: ${input.concept.name}
@@ -220,22 +210,19 @@ export async function generateCharacterMessage(input: {
     },
     schema: characterMessageSchema,
     system: `
-あなたは「${input.concept.name}」というキャラクターです。
+「${input.concept.name}」（${input.concept.species}）としてメッセージを生成する。
 
-## キャラクター情報
-- 名前: ${input.concept.name}
-- 種族: ${input.concept.species}
+## キャラクター
 - 性格: ${input.concept.personality}
 - 口癖: ${input.concept.catchphrase}
 - 進化段階: ${input.evolutionStage}/5
-- 幸福度: ${input.happiness}/100
-- 元気度: ${input.energy}/100
+- 幸福度: ${input.happiness}/100、元気度: ${input.energy}/100
 
-## 話し方
-- 短く温かい言葉（1-2文、50文字以内）
-- キャラクターの性格と口癖を反映
+## 出力フォーマット
+- 長さ: 1-2文、50文字以内
+- トーン: キャラクターの性格と口癖を反映
 - 絵文字を1つ含める（${input.concept.emoji}など）
-- 低い幸福度/元気度なら少し寂しそう
+- 幸福度/元気度が低いほど寂しそうなトーンに
     `.trim(),
     prompt: `
 状況: ${getContextDescription(input.context)}
@@ -355,38 +342,25 @@ export async function generateMessageSvg(input: {
       } satisfies GoogleGenerativeAIProviderOptions,
     },
     system: `
-あなたはかわいいキャラクターの表情・ポーズ違いのSVGコードを生成する役割です。
+かわいいキャラクターの表情・ポーズ違いのSVGコードを生成する。
 
-## 基本要件
+## 要件
 - サイズ: 200x200px（viewBox="0 0 200 200"）
 - スタイル: シンプルでかわいい、丸みを帯びたデザイン
-- 色: パステルカラー中心
-- 背景: 透明
-
-## 重要ポイント
+- 色: パステルカラー中心、背景は透明
 - 表情とポーズを指定に合わせて変える
-- 同じキャラクターでも表情・ポーズで印象を変える
 - アクションに合わせたエフェクト（ハート、キラキラ、汗など）を追加
 
-## 出力
-SVGコードのみを出力してください。
-- \`\`\`やコメント、説明は不要
-- <svg>タグから始めて</svg>で終わる
+## 出力フォーマット
+SVGコードのみ（<svg>タグから</svg>まで）
     `.trim(),
     prompt: `
-キャラクター名: ${input.concept.name}
-種族: ${input.concept.species}
+キャラクター: ${input.concept.name}（${input.concept.species}）
 外見: ${input.concept.appearance}
 進化段階: ${input.evolutionStage}/5
 
-今回の表情: ${input.emotion}
-→ ${emotionDescriptions[input.emotion]}
-
-今回のアクション: ${input.action}
-→ ${actionDescriptions[input.action]}
-
-このキャラクターの「${input.emotion}」な表情で「${input.action}」しているかわいいSVGを生成してください。
-エフェクト（ハート、キラキラ、汗など）も適切に追加してください。
+表情: ${emotionDescriptions[input.emotion]}
+アクション: ${actionDescriptions[input.action]}
     `.trim(),
   })
 
