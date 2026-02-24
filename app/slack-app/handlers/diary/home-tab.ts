@@ -697,6 +697,12 @@ interface SlackClient {
       trigger_id: string
       // biome-ignore lint/suspicious/noExplicitAny: Slack view type
       view: any
+      // biome-ignore lint/suspicious/noExplicitAny: Slack response type
+    }) => Promise<{ ok: boolean; view?: { id?: string }; [key: string]: any }>
+    update: (params: {
+      view_id: string
+      // biome-ignore lint/suspicious/noExplicitAny: Slack view type
+      view: any
     }) => Promise<unknown>
   }
 }
@@ -713,6 +719,7 @@ async function handleCharacterInteractionModal(
     altText: (characterName: string) => string
   },
 ): Promise<void> {
+  // Quick check for character existence (fast, no AI call)
   const character = await getCharacter(userId)
   if (!character) {
     await client.views.open({
@@ -735,119 +742,180 @@ async function handleCharacterInteractionModal(
     return
   }
 
-  // Pick reaction tier and flavor
-  const tier = pickReactionTier()
-  const flavor =
+  // Open a loading modal immediately to avoid 3-second timeout
+  const loadingEmoji = opts.messageContext === 'pet' ? '🤚' : '💬'
+  const loadingText =
     opts.messageContext === 'pet'
-      ? pickRandom(PET_FLAVORS)
-      : pickRandom(TALK_FLAVORS)
+      ? `${character.characterName}をなでています...`
+      : `${character.characterName}に話しかけています...`
 
-  const { pointsEarned } = await recordInteraction({
-    userId,
-    interactionType: opts.interactionType,
-  })
-
-  // Apply bonus points based on tier multiplier
-  const bonusInteractions = Math.floor(tier.multiplier) - 1
-  for (let i = 0; i < bonusInteractions; i++) {
-    await recordInteraction({
-      userId,
-      interactionType: opts.interactionType,
-      metadata: { bonus: true, tier: tier.name },
-    })
-  }
-
-  const totalPoints = Math.floor(pointsEarned * tier.multiplier)
-  const concept = characterToConcept(character)
-
-  // Build rich context for varied responses
-  const richContext = await buildRichContext(userId, character)
-
-  // Map tier name to reaction intensity
-  const reactionIntensity = tier.name as 'normal' | 'good' | 'great' | 'legendary'
-
-  // Generate reaction with LLM (message + title + emoji)
-  const reactionContext: CharacterMessageContext & {
-    reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
-  } = {
-    concept,
-    evolutionStage: character.evolutionStage,
-    happiness: character.happiness,
-    energy: character.energy,
-    context: opts.messageContext,
-    additionalContext: flavor.description,
-    userId,
-    reactionIntensity,
-    ...richContext,
-  }
-  const reaction = await generateCharacterReaction(reactionContext)
-
-  // Use LLM-generated title, with emoji for special tiers
-  const modalTitle =
-    tier.name === 'legendary'
-      ? `✨${reaction.reactionTitle}✨`
-      : tier.name === 'great'
-        ? `🎉${reaction.reactionTitle}`
-        : reaction.reactionTitle
-
-  // Build reaction blocks
-  // biome-ignore lint/suspicious/noExplicitAny: Slack block types
-  const blocks: any[] = [
-    buildInteractiveCharacterImageBlock(
-      userId,
-      opts.altText(character.characterName),
-    ),
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*${character.characterName}* ${reaction.reactionEmoji}\n「${reaction.message}」`,
-      },
-    },
-  ]
-
-  // Add tier celebration for good reactions (using LLM-generated text)
-  if (tier.name !== 'normal' && reaction.tierCelebration) {
-    const celebrationEmoji =
-      tier.name === 'legendary' ? '🌟' : tier.name === 'great' ? '🎉' : '💫'
-    blocks.push({
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: `${celebrationEmoji} *${reaction.tierCelebration}* ${celebrationEmoji} ポイント${tier.multiplier}倍！`,
-        },
-      ],
-    })
-  }
-
-  // Add points and stats
-  const updatedCharacter = await getCharacter(userId)
-  const happiness = updatedCharacter?.happiness ?? character.happiness
-  const energy = updatedCharacter?.energy ?? character.energy
-
-  blocks.push(
-    { type: 'divider' },
-    {
-      type: 'context',
-      elements: [
-        {
-          type: 'mrkdwn',
-          text: `🎁 *+${totalPoints}ポイント*　　💗 ${happiness}%　　⚡ ${energy}%`,
-        },
-      ],
-    },
-  )
-
-  await client.views.open({
+  const openResult = await client.views.open({
     trigger_id: triggerId,
     view: {
       type: 'modal',
-      title: { type: 'plain_text', text: modalTitle },
+      title: { type: 'plain_text', text: `${loadingEmoji} ...` },
       close: { type: 'plain_text', text: '閉じる' },
-      blocks,
+      blocks: [
+        buildCharacterImageBlock(userId, `${character.characterName}の画像`),
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${character.characterName}* ${character.characterEmoji}\n_${loadingText}_`,
+          },
+        },
+      ],
     },
   })
+
+  // Get the view_id for updating later
+  const viewId = openResult.view?.id
+  if (!viewId) {
+    console.error('Failed to get view_id from modal open response')
+    return
+  }
+
+  // Now do the heavy work (AI generation, etc.)
+  try {
+    // Pick reaction tier and flavor
+    const tier = pickReactionTier()
+    const flavor =
+      opts.messageContext === 'pet'
+        ? pickRandom(PET_FLAVORS)
+        : pickRandom(TALK_FLAVORS)
+
+    const { pointsEarned } = await recordInteraction({
+      userId,
+      interactionType: opts.interactionType,
+    })
+
+    // Apply bonus points based on tier multiplier
+    const bonusInteractions = Math.floor(tier.multiplier) - 1
+    for (let i = 0; i < bonusInteractions; i++) {
+      await recordInteraction({
+        userId,
+        interactionType: opts.interactionType,
+        metadata: { bonus: true, tier: tier.name },
+      })
+    }
+
+    const totalPoints = Math.floor(pointsEarned * tier.multiplier)
+    const concept = characterToConcept(character)
+
+    // Build rich context for varied responses
+    const richContext = await buildRichContext(userId, character)
+
+    // Map tier name to reaction intensity
+    const reactionIntensity = tier.name as
+      | 'normal'
+      | 'good'
+      | 'great'
+      | 'legendary'
+
+    // Generate reaction with LLM (message + title + emoji)
+    const reactionContext: CharacterMessageContext & {
+      reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
+    } = {
+      concept,
+      evolutionStage: character.evolutionStage,
+      happiness: character.happiness,
+      energy: character.energy,
+      context: opts.messageContext,
+      additionalContext: flavor.description,
+      userId,
+      reactionIntensity,
+      ...richContext,
+    }
+    const reaction = await generateCharacterReaction(reactionContext)
+
+    // Use LLM-generated title, with emoji for special tiers
+    const modalTitle =
+      tier.name === 'legendary'
+        ? `✨${reaction.reactionTitle}✨`
+        : tier.name === 'great'
+          ? `🎉${reaction.reactionTitle}`
+          : reaction.reactionTitle
+
+    // Build reaction blocks
+    // biome-ignore lint/suspicious/noExplicitAny: Slack block types
+    const blocks: any[] = [
+      buildInteractiveCharacterImageBlock(
+        userId,
+        opts.altText(character.characterName),
+      ),
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${character.characterName}* ${reaction.reactionEmoji}\n「${reaction.message}」`,
+        },
+      },
+    ]
+
+    // Add tier celebration for good reactions (using LLM-generated text)
+    if (tier.name !== 'normal' && reaction.tierCelebration) {
+      const celebrationEmoji =
+        tier.name === 'legendary' ? '🌟' : tier.name === 'great' ? '🎉' : '💫'
+      blocks.push({
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `${celebrationEmoji} *${reaction.tierCelebration}* ${celebrationEmoji} ポイント${tier.multiplier}倍！`,
+          },
+        ],
+      })
+    }
+
+    // Add points and stats
+    const updatedCharacter = await getCharacter(userId)
+    const happiness = updatedCharacter?.happiness ?? character.happiness
+    const energy = updatedCharacter?.energy ?? character.energy
+
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `🎁 *+${totalPoints}ポイント*　　💗 ${happiness}%　　⚡ ${energy}%`,
+          },
+        ],
+      },
+    )
+
+    // Update the modal with the actual content
+    await client.views.update({
+      view_id: viewId,
+      view: {
+        type: 'modal',
+        title: { type: 'plain_text', text: modalTitle },
+        close: { type: 'plain_text', text: '閉じる' },
+        blocks,
+      },
+    })
+  } catch (error) {
+    console.error('Error generating character reaction:', error)
+    // Update modal with error message
+    await client.views.update({
+      view_id: viewId,
+      view: {
+        type: 'modal',
+        title: { type: 'plain_text', text: 'エラー' },
+        close: { type: 'plain_text', text: '閉じる' },
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `😢 ${character.characterName}の反応を生成できませんでした。\nもう一度試してみてね！`,
+            },
+          },
+        ],
+      },
+    })
+  }
 }
 
 // ============================================
@@ -889,7 +957,8 @@ async function buildRichContext(
     .executeTakeFirst()
 
   if (recentEntry?.moodLabel) {
-    context.recentMood = `${recentEntry.moodEmoji || ''} ${recentEntry.moodLabel}`.trim()
+    context.recentMood =
+      `${recentEntry.moodEmoji || ''} ${recentEntry.moodLabel}`.trim()
   }
 
   // Calculate days since last interaction
