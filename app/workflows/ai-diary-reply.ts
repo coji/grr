@@ -84,7 +84,6 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             .slice(0, 3) // Limit to 3 images for memory safety
 
           if (images.length === 0) {
-            console.log('No image attachments found')
             imageAttachments = undefined
           } else {
             console.log(

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers'
 import { CamelCasePlugin, Kysely } from 'kysely'
-import { D1Dialect } from 'kysely-d1'
+import { D1Dialect } from './d1-dialect'
 
 export interface Database {
   irritations: {
