@@ -206,6 +206,9 @@ export interface Database {
     // Activity tracking
     lastInteractedAt: string | null
     daysWithoutDiary: number
+    // Social features
+    workspaceId: string | null
+    interactionEnabled: number // 0 or 1
     createdAt: string
     updatedAt: string
   }
@@ -217,6 +220,55 @@ export interface Database {
     pointsEarned: number
     metadata: string | null // JSON
     createdAt: string
+  }
+
+  characterEncounters: {
+    id: string
+    workspaceId: string
+    characterAUserId: string
+    characterBUserId: string
+    encounterType: string // 'random_meeting'
+    locationChannelId: string | null
+    locationName: string | null
+    episodeText: string
+    readByA: number // 0 or 1
+    readByB: number // 0 or 1
+    createdAt: string
+  }
+
+  characterAdventures: {
+    id: string
+    workspaceId: string
+    themeId: string
+    themeName: string
+    themeEmoji: string
+    mainEpisode: string
+    participantCount: number
+    createdAt: string
+  }
+
+  characterAdventureParticipants: {
+    id: string
+    adventureId: string
+    characterUserId: string
+    roleText: string
+    highlightText: string
+    isRead: number // 0 or 1
+  }
+
+  characterItems: {
+    id: string
+    ownerUserId: string
+    workspaceId: string
+    itemId: string
+    itemName: string
+    itemEmoji: string
+    itemCategory: string
+    itemDescription: string | null
+    foundAt: string
+    receivedFromUserId: string | null
+    giftedToUserId: string | null
+    giftedAt: string | null
   }
 
   aiCostLogs: {

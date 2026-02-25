@@ -13,6 +13,7 @@ import {
   type CharacterConcept,
 } from './ai/character-generation'
 import { addToPool, putBaseImage } from './character-image'
+import { tryDiscoverItem } from './character-items'
 import type { Database } from './db'
 import { db } from './db'
 
@@ -81,6 +82,8 @@ export async function createCharacter(input: {
     bondLevel: 0,
     lastInteractedAt: now,
     daysWithoutDiary: 0,
+    workspaceId: null,
+    interactionEnabled: 1,
     createdAt: now,
     updatedAt: now,
   }
@@ -362,4 +365,19 @@ export async function updateCharacterOnDiaryEntry(
   console.log(
     `Updated character for user ${userId}: +${pointsEarned} points, evolved: ${evolved}`,
   )
+
+  // Try to discover an item (workspace ID must be set from home tab visit)
+  const finalCharacter = await getCharacter(userId)
+  if (finalCharacter?.workspaceId) {
+    try {
+      const item = await tryDiscoverItem(userId, finalCharacter.workspaceId)
+      if (item) {
+        console.log(
+          `Character found item for user ${userId}: ${item.emoji} ${item.name}`,
+        )
+      }
+    } catch (error) {
+      console.error('Failed to discover item:', error)
+    }
+  }
 }
