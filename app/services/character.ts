@@ -64,6 +64,7 @@ export async function getCharacter(
 export async function createCharacter(input: {
   userId: string
   concept: CharacterConcept
+  workspaceId?: string
 }): Promise<UserCharacter> {
   const now = dayjs().utc().toISOString()
 
@@ -82,7 +83,7 @@ export async function createCharacter(input: {
     bondLevel: 0,
     lastInteractedAt: now,
     daysWithoutDiary: 0,
-    workspaceId: null,
+    workspaceId: input.workspaceId ?? null,
     interactionEnabled: 1,
     createdAt: now,
     updatedAt: now,
@@ -280,13 +281,14 @@ export function characterToConcept(character: UserCharacter): CharacterConcept {
 export async function updateCharacterOnDiaryEntry(
   userId: string,
   moodValue: number | null,
+  workspaceId?: string,
 ): Promise<void> {
   let character = await getCharacter(userId)
 
   if (!character) {
     try {
       const concept = await generateCharacterConcept(userId)
-      character = await createCharacter({ userId, concept })
+      character = await createCharacter({ userId, concept, workspaceId })
       console.log(
         `Created new character for user ${userId}: ${concept.name} (${concept.species})`,
       )

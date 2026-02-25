@@ -18,9 +18,11 @@ import {
 } from '~/services/channel-locations'
 import {
   createGroupAdventure,
+  ensureWorkspaceId,
   evaluateEncounters,
   getActiveWorkspaces,
 } from '~/services/character-social'
+import { db } from '~/services/db'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -34,6 +36,9 @@ export async function processCharacterSocialEvents(): Promise<void> {
 
   // Only run during active hours (9:00-21:00 JST)
   if (hour < 9 || hour >= 21) return
+
+  // Backfill workspaceId for characters that don't have one yet
+  await backfillWorkspaceIds()
 
   const workspaces = await getActiveWorkspaces()
   if (workspaces.length === 0) return
@@ -97,6 +102,53 @@ async function processWeeklyAdventure(workspaceId: string): Promise<void> {
     console.log(
       `Created weekly adventure ${adventureId} for workspace ${workspaceId}`,
     )
+  }
+}
+
+// ============================================
+// Backfill
+// ============================================
+
+/**
+ * Backfill workspaceId for characters that have it set to NULL.
+ * Uses auth.test to get the workspace's team_id and updates all
+ * NULL records. Becomes a no-op once all records are filled.
+ */
+async function backfillWorkspaceIds(): Promise<void> {
+  const nullRecords = await db
+    .selectFrom('userCharacters')
+    .select('userId')
+    .where('workspaceId', 'is', null)
+    .execute()
+
+  if (nullRecords.length === 0) return
+
+  try {
+    const token = env.SLACK_BOT_TOKEN
+    const response = await fetch('https://slack.com/api/auth.test', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = (await response.json()) as {
+      ok: boolean
+      team_id?: string
+    }
+
+    if (!data.ok || !data.team_id) {
+      console.error('Failed to get team_id from auth.test')
+      return
+    }
+
+    const teamId = data.team_id
+
+    for (const record of nullRecords) {
+      await ensureWorkspaceId(record.userId, teamId)
+    }
+
+    console.log(
+      `Backfilled workspaceId for ${nullRecords.length} characters with team_id=${teamId}`,
+    )
+  } catch (error) {
+    console.error('Failed to backfill workspace IDs:', error)
   }
 }
 
