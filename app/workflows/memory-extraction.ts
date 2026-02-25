@@ -18,6 +18,7 @@ import {
   type WorkflowStep,
 } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
+import { CONSOLIDATION_THRESHOLD } from '~/services/ai/memory-consolidation'
 import {
   extractMemoriesFromEntry,
   validateExtractedMemory,
@@ -29,6 +30,7 @@ import {
   createMemory,
   getActiveMemories,
   getMemoryById,
+  getMemoryCount,
   invalidateContextCache,
   markExtractionCompleted,
   supersedeMemory,
@@ -251,5 +253,25 @@ export class MemoryExtractionWorkflow extends WorkflowEntrypoint<
         `Memory extraction completed. Extracted: ${extractedMemories.length}, Stored: ${processedCount}`,
       )
     })
+
+    // Step 5: Trigger consolidation if needed
+    if (processedCount > 0) {
+      await step.do('check-consolidation', async (): Promise<void> => {
+        const count = await getMemoryCount(params.userId)
+        if (count > CONSOLIDATION_THRESHOLD) {
+          try {
+            await env.MEMORY_CONSOLIDATION_WORKFLOW.create({
+              params: { userId: params.userId },
+            })
+            console.log(
+              `[Memory] Triggered consolidation for user ${params.userId} (${count} memories)`,
+            )
+          } catch (error) {
+            // Non-critical: consolidation will also run in HEARTBEAT
+            console.warn(`[Memory] Failed to trigger consolidation:`, error)
+          }
+        }
+      })
+    }
   }
 }

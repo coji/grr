@@ -32,6 +32,11 @@
       "name": "memory-extraction",
       "binding": "MEMORY_EXTRACTION_WORKFLOW",
       "class_name": "MemoryExtractionWorkflow"
+    },
+    {
+      "name": "memory-consolidation",
+      "binding": "MEMORY_CONSOLIDATION_WORKFLOW",
+      "class_name": "MemoryConsolidationWorkflow"
     }
   ],
   "triggers": {

@@ -134,9 +134,9 @@ export async function extractMemoriesFromEntry(
 work / health / hobby / family / personal / general
 
 ## 抽出ルール
-1. 明確に述べられていることを抽出（推測は控えめに）
-2. 持続的な特性を優先（「今日は疲れた」→抽出しない）
-3. 最大5件まで
+1. 本当に覚える価値があるものだけを厳選する（最大3件）
+2. 持続的な特性・繰り返し現れるパターン・重要な事実を優先する
+3. 一時的な感想や単発の出来事（「今日は疲れた」「ランチにカレー食べた」等）はスキップする
 4. 確信度: 推測=0.5-0.7、明言=0.8-1.0
 5. 重要度: 日常的=1-4、中程度=5-7、重要=8-10
 6. 共有リンクの情報がある場合、リンク先の具体的な名称や情報を記憶に含める
@@ -145,10 +145,12 @@ work / health / hobby / family / personal / general
    - メッセージ内の情報を必ず1件以上抽出する
    - 確信度は1.0、重要度は7以上に設定
 
-## 既存記憶との照合
-- 同じ内容 → action="confirm" + relatedMemoryId
-- 更新/修正 → action="update" + relatedMemoryId
-- 新規 → action="new"
+## 既存記憶との照合（重要）
+既存記憶リストをよく確認し、重複を避けること。
+- 同じ内容や類似の内容がある → action="confirm" + relatedMemoryId
+- 既存の内容を補足・修正する情報 → action="update" + relatedMemoryId（内容を統合した文にする）
+- 既存記憶にない全く新しい情報 → action="new"
+新規追加(new)より、既存記憶の確認(confirm)・更新(update)を優先すること。
       `.trim(),
       prompt: `
 以下の日記エントリから、ユーザーについての「記憶」を抽出してください。
