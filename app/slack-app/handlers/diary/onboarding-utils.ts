@@ -22,13 +22,14 @@ export function detectReferralPattern(
     .map((m) => m.replace(/<@|>/g, ''))
     .filter((id) => id !== botUserId) // ボット自身を除外
 
-  // 送信者以外のユーザーがメンションされていれば紹介パターン
+  // 送信者以外のユーザーがちょうど1人メンションされていれば紹介パターン
+  // 複数人メンションは日記として扱う（紹介は通常1人ずつ行う）
   const otherUsers = mentionedUserIds.filter((id) => id !== senderId)
 
-  if (otherUsers.length > 0) {
+  if (otherUsers.length === 1) {
     return {
       isReferral: true,
-      newUserId: otherUsers[0], // 最初にメンションされたユーザーを対象
+      newUserId: otherUsers[0],
     }
   }
 

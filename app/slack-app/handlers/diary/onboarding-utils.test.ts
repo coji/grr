@@ -13,12 +13,12 @@ describe('detectReferralPattern', () => {
     expect(result.newUserId).toBe('UNEWUSER')
   })
 
-  it('should return first mentioned user when multiple users are mentioned', () => {
+  it('should not detect referral when multiple users are mentioned', () => {
     const text = '<@UBOT123> <@UFIRST> と <@USECOND> に案内して'
     const result = detectReferralPattern(text, SENDER_ID, BOT_ID)
 
-    expect(result.isReferral).toBe(true)
-    expect(result.newUserId).toBe('UFIRST')
+    expect(result.isReferral).toBe(false)
+    expect(result.newUserId).toBeUndefined()
   })
 
   it('should not detect referral when only bot is mentioned', () => {
