@@ -4,7 +4,6 @@
  * Handles:
  * - Gift item selection (pick recipient)
  * - Gift confirmation
- * - Interaction toggle in settings
  */
 
 import type {
@@ -14,9 +13,8 @@ import type {
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
 import { getCharacter } from '~/services/character'
-import { giftItem } from '~/services/character-items'
+import { getGiftableItem, giftItem } from '~/services/character-items'
 import { getWorkspaceCharacters } from '~/services/character-social'
-import { db } from '~/services/db'
 
 export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
   // Gift item: show recipient selector
@@ -25,22 +23,12 @@ export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     const userId = action.user.id
     const itemDbId = action.actions[0].value
 
-    // Get the item
-    const item = await db
-      .selectFrom('characterItems')
-      .selectAll()
-      .where('id', '=', itemDbId)
-      .where('ownerUserId', '=', userId)
-      .where('giftedToUserId', 'is', null)
-      .executeTakeFirst()
-
+    const item = await getGiftableItem(itemDbId, userId)
     if (!item) return
 
-    // Get the user's character for workspace ID
     const character = await getCharacter(userId)
     if (!character?.workspaceId) return
 
-    // Get other characters in the workspace
     const workspaceChars = await getWorkspaceCharacters(character.workspaceId)
     const otherChars = workspaceChars.filter((c) => c.userId !== userId)
 
@@ -65,7 +53,6 @@ export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
       return
     }
 
-    // Build options for recipient selection
     const options = otherChars.slice(0, 10).map((c) => ({
       text: {
         type: 'plain_text' as const,
@@ -129,18 +116,12 @@ export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     const success = await giftItem(itemDbId, userId, recipientUserId)
 
     if (success) {
-      // Get both characters for a nice message
       const myChar = await getCharacter(userId)
       const theirChar = await getCharacter(recipientUserId)
-      const item = await db
-        .selectFrom('characterItems')
-        .select(['itemName', 'itemEmoji'])
-        .where('id', '=', itemDbId)
-        .executeTakeFirst()
 
-      if (myChar && theirChar && item) {
+      if (myChar && theirChar) {
         console.log(
-          `${myChar.characterName} gifted ${item.itemEmoji} ${item.itemName} to ${theirChar.characterName}`,
+          `${myChar.characterName} gifted item to ${theirChar.characterName}`,
         )
       }
     }

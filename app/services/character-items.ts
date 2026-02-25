@@ -317,6 +317,19 @@ export async function getReceivedGifts(userId: string, limit = 5) {
 }
 
 /**
+ * Get a specific held (ungifted) item by database ID and owner.
+ */
+export async function getGiftableItem(itemDbId: string, ownerUserId: string) {
+  return db
+    .selectFrom('characterItems')
+    .selectAll()
+    .where('id', '=', itemDbId)
+    .where('ownerUserId', '=', ownerUserId)
+    .where('giftedToUserId', 'is', null)
+    .executeTakeFirst()
+}
+
+/**
  * Get an item definition by ID.
  */
 export function getItemDefinition(itemId: string): ItemDefinition | undefined {

@@ -20,12 +20,10 @@ import { logAiCost } from './cost-logger'
 // ============================================
 
 const PRIVACY_RULES = `
-## 絶対に守るルール
-- ユーザーの日記内容には一切言及しない
-- 「最近忙しそう」「落ち込んでる」などユーザーの状態を推測する発言をしない
-- 具体的な時刻や日付に言及しない
-- キャラクター自身の冒険や気持ちとして語る
-- 「主」「飼い主」「ユーザー」という言葉を使わない
+## ルール
+- キャラクター自身の冒険や気持ちだけを描写する
+- 場面描写は架空の出来事のみ
+- キャラクター同士の会話や行動に集中する
 `.trim()
 
 // ============================================
@@ -78,30 +76,24 @@ export async function generateEncounterEpisode(
     },
     schema: encounterEpisodeSchema,
     system: `
+## タスク
 2匹のキャラクターが偶然出会った場面を描写する。
 
 ${PRIVACY_RULES}
 
-## キャラクターA
-名前: ${context.characterA.name}
-種族: ${context.characterA.species}
-性格: ${context.characterA.personality}
-
-## キャラクターB
-名前: ${context.characterB.name}
-種族: ${context.characterB.species}
-性格: ${context.characterB.personality}
+## 入力
+キャラクターA: ${context.characterA.name}（${context.characterA.species}、${context.characterA.personality}）
+キャラクターB: ${context.characterB.name}（${context.characterB.species}、${context.characterB.personality}）
 
 ## 出力フォーマット
-- 2-3文の短いエピソード
-- 両方のキャラの性格が出る描写
-- 具体的で可愛らしい場面
-- 場所が指定されていればその雰囲気を活かす
+- 形式: 散文
+- 長さ: 2-3文、100文字以内
+- トーン: 温かく可愛らしい
+- 両方のキャラの性格が表れる具体的な場面
     `.trim(),
     prompt: `
 ${locationContext}
-
-${context.characterA.name}と${context.characterB.name}の偶然の出会いのエピソードを書いてください。
+${context.characterA.name}と${context.characterB.name}の偶然の出会いを描写してください。
     `.trim(),
   })
 
@@ -183,23 +175,22 @@ export async function generateAdventureEpisode(
     },
     schema,
     system: `
+## タスク
 キャラクターたちのグループ冒険のエピソードを生成する。
 
 ${PRIVACY_RULES}
 
-## 冒険テーマ
-${context.theme.emoji} ${context.theme.name}
-
-## 参加キャラクター
+## 入力
+テーマ: ${context.theme.emoji} ${context.theme.name}
+参加者:
 ${participantList}
 
 ## 出力フォーマット
-- mainEpisode: 冒険の全体ストーリー（3-5文、全員が登場）
-- highlights: 各キャラの見せ場（1文ずつ、その子の性格と役割が出る）
+- mainEpisode: 全体ストーリー（3-5文、全員が登場、温かく楽しいトーン）
+- highlights: 各キャラの見せ場（1文、性格と役割が表れる）
     `.trim(),
     prompt: `
 「${context.theme.name}」の冒険エピソードを書いてください。
-全キャラクターが活躍する楽しい冒険にしてください。
     `.trim(),
   })
 
