@@ -6,9 +6,14 @@ import { sendDailyDiaryReminders } from '~/slack-app/reminders'
 import { heartbeatFollowups } from '~/slack-app/send-followup-reminders'
 import { sendWeeklyDigest } from '~/slack-app/weekly-digest'
 import { AiDiaryReplyWorkflow } from '~/workflows/ai-diary-reply'
+import { MemoryConsolidationWorkflow } from '~/workflows/memory-consolidation'
 import { MemoryExtractionWorkflow } from '~/workflows/memory-extraction'
 
-export { AiDiaryReplyWorkflow, MemoryExtractionWorkflow }
+export {
+  AiDiaryReplyWorkflow,
+  MemoryConsolidationWorkflow,
+  MemoryExtractionWorkflow,
+}
 
 declare module 'react-router' {
   export interface AppLoadContext {

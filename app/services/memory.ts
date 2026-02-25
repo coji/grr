@@ -437,6 +437,81 @@ export async function markExtractionFailed(
 }
 
 /**
+ * Decay (deactivate) memories that have naturally faded:
+ * - Low importance + old + rarely mentioned + not user-confirmed
+ *
+ * This mimics human forgetting: unimportant things that haven't
+ * come up in a while just naturally fade from memory.
+ */
+export async function decayMemories(userId: string): Promise<number> {
+  const now = dayjs().utc().toISOString()
+
+  // Tier 1: Very low importance, untouched for 14+ days
+  const tier1Cutoff = dayjs().utc().subtract(14, 'day').toISOString()
+  const tier1 = await db
+    .updateTable('userMemories')
+    .set({ isActive: 0, updatedAt: now })
+    .where('userId', '=', userId)
+    .where('isActive', '=', 1)
+    .where('importance', '<=', 2)
+    .where('mentionCount', '<=', 1)
+    .where('userConfirmed', '=', 0)
+    .where('lastConfirmedAt', '<', tier1Cutoff)
+    .execute()
+
+  // Tier 2: Low importance, untouched for 30+ days
+  const tier2Cutoff = dayjs().utc().subtract(30, 'day').toISOString()
+  const tier2 = await db
+    .updateTable('userMemories')
+    .set({ isActive: 0, updatedAt: now })
+    .where('userId', '=', userId)
+    .where('isActive', '=', 1)
+    .where('importance', '<=', 4)
+    .where('mentionCount', '<=', 1)
+    .where('userConfirmed', '=', 0)
+    .where('lastConfirmedAt', '<', tier2Cutoff)
+    .execute()
+
+  // Tier 3: Medium importance, untouched for 60+ days
+  const tier3Cutoff = dayjs().utc().subtract(60, 'day').toISOString()
+  const tier3 = await db
+    .updateTable('userMemories')
+    .set({ isActive: 0, updatedAt: now })
+    .where('userId', '=', userId)
+    .where('isActive', '=', 1)
+    .where('importance', '<=', 5)
+    .where('mentionCount', '<=', 2)
+    .where('userConfirmed', '=', 0)
+    .where('lastConfirmedAt', '<', tier3Cutoff)
+    .execute()
+
+  const total =
+    Number(tier1[0]?.numUpdatedRows ?? 0) +
+    Number(tier2[0]?.numUpdatedRows ?? 0) +
+    Number(tier3[0]?.numUpdatedRows ?? 0)
+
+  if (total > 0) {
+    console.log(`[Memory] Decayed ${total} memories for user ${userId}`)
+  }
+
+  return total
+}
+
+/**
+ * Get all user IDs that have active memories (for batch operations)
+ */
+export async function getUserIdsWithMemories(): Promise<string[]> {
+  const results = await db
+    .selectFrom('userMemories')
+    .select('userId')
+    .where('isActive', '=', 1)
+    .groupBy('userId')
+    .execute()
+
+  return results.map((r) => r.userId)
+}
+
+/**
  * Clean up old extraction records (older than 30 days)
  */
 export async function cleanupOldExtractions(): Promise<number> {

@@ -1,6 +1,7 @@
 import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateFollowupMessage } from '~/services/ai'
+import { CONSOLIDATION_THRESHOLD } from '~/services/ai/memory-consolidation'
 import { getCharacter } from '~/services/character'
 import { db } from '~/services/db'
 import {
@@ -13,7 +14,11 @@ import {
   recordMessageSent,
   type ProactiveMessageResult,
 } from '~/services/heartbeat-evaluators'
-import { cleanupOldExtractions } from '~/services/memory'
+import {
+  cleanupOldExtractions,
+  getMemoryCount,
+  getUserIdsWithMemories,
+} from '~/services/memory'
 import {
   expireOldFollowups,
   getFollowupWithEntry,
@@ -111,6 +116,15 @@ export const heartbeatFollowups = async (env: Env) => {
     }
   } catch (error) {
     console.error('[HEARTBEAT] Failed to cleanup old extractions:', error)
+  }
+
+  // ============================================
+  // Phase 4: Memory maintenance (consolidation + decay)
+  // ============================================
+  try {
+    await processMemoryMaintenance(env)
+  } catch (error) {
+    console.error('[HEARTBEAT] Failed memory maintenance:', error)
   }
 
   console.log('[HEARTBEAT] Complete')
@@ -514,6 +528,41 @@ async function evaluateFollowup(
 
   // All checks passed
   return { send: true }
+}
+
+/**
+ * Memory maintenance: trigger consolidation for users with too many memories.
+ * Decay happens inside the consolidation workflow as its first step.
+ */
+async function processMemoryMaintenance(env: Env): Promise<void> {
+  const userIds = await getUserIdsWithMemories()
+  let triggeredCount = 0
+
+  for (const userId of userIds) {
+    const count = await getMemoryCount(userId)
+    if (count > CONSOLIDATION_THRESHOLD) {
+      try {
+        await env.MEMORY_CONSOLIDATION_WORKFLOW.create({
+          params: { userId },
+        })
+        triggeredCount++
+        console.log(
+          `[HEARTBEAT] Triggered memory consolidation for user ${userId} (${count} memories)`,
+        )
+      } catch (error) {
+        console.error(
+          `[HEARTBEAT] Failed to trigger consolidation for ${userId}:`,
+          error,
+        )
+      }
+    }
+  }
+
+  if (triggeredCount > 0) {
+    console.log(
+      `[HEARTBEAT] Triggered ${triggeredCount} memory consolidation workflows`,
+    )
+  }
 }
 
 // Keep the old function name as an alias for backwards compatibility
