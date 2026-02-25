@@ -3,6 +3,7 @@ import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateSupportiveReaction } from '~/services/ai'
 import { storeAttachments } from '~/services/attachments'
+import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { detectAndStoreFutureEvents } from '~/services/pending-followups'
@@ -34,6 +35,14 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
     if (!event.user) {
       console.log('[message] Skipping message without user')
       return
+    }
+
+    // Track workspace ID for social features (fire-and-forget)
+    const teamId = (payload as unknown as { team_id?: string }).team_id
+    if (teamId) {
+      ensureWorkspaceId(event.user, teamId).catch((err) =>
+        console.error('Failed to update workspace ID:', err),
+      )
     }
 
     const entry = await db

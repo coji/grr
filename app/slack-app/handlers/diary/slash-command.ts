@@ -5,6 +5,7 @@ import type {
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { getAttachmentStats } from '~/services/attachments'
+import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
 import {
   CATEGORY_LABELS,
@@ -23,6 +24,14 @@ export function registerSlashCommandHandler(app: SlackApp<SlackEdgeAppEnv>) {
     const text = command.text.trim()
     const args = text.split(/\s+/)
     const subcommand = args[0]?.toLowerCase() || 'help'
+
+    // Track workspace ID for social features (fire-and-forget)
+    const teamId = (command as unknown as { team_id?: string }).team_id
+    if (teamId) {
+      ensureWorkspaceId(userId, teamId).catch((err) =>
+        console.error('Failed to update workspace ID:', err),
+      )
+    }
 
     try {
       switch (subcommand) {

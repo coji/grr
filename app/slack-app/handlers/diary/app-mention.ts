@@ -4,6 +4,7 @@ import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { storeAttachments } from '~/services/attachments'
 import { updateCharacterOnDiaryEntry } from '~/services/character'
+import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { handleDiaryEntryMilestone } from '~/services/milestone-handler'
@@ -124,6 +125,14 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('app_mention', async ({ payload, context }) => {
     const event = payload
     if (!event.user) return
+
+    // Track workspace ID for social features (fire-and-forget)
+    const teamId = (payload as unknown as { team_id?: string }).team_id
+    if (teamId) {
+      ensureWorkspaceId(event.user, teamId).catch((err) =>
+        console.error('Failed to update workspace ID:', err),
+      )
+    }
 
     // ボットのユーザーIDを取得（紹介パターン検出用）
     let botUserId = ''
@@ -360,7 +369,7 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
     // ワークフローでキャラクター画像を表示するため、先に作成しておく必要がある
     if (entry) {
       try {
-        await updateCharacterOnDiaryEntry(event.user, entry.moodValue)
+        await updateCharacterOnDiaryEntry(event.user, entry.moodValue, teamId)
       } catch (error) {
         console.error('Failed to update character:', error)
       }
