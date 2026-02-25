@@ -146,44 +146,52 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
     // 紹介パターンの検出
     const referral = detectReferralPattern(event.text, event.user, botUserId)
 
-    // 対象ユーザーを決定（紹介の場合は紹介された人、通常は送信者）
-    const targetUserId =
-      referral.isReferral && referral.newUserId
-        ? referral.newUserId
-        : event.user
+    // 紹介パターンの場合: メンションされたユーザーが新規かどうか確認
+    // 既存ユーザー（welcomed/completed）へのメンションは日記として扱う
+    if (referral.isReferral && referral.newUserId) {
+      const { onboardingStatus: mentionedUserStatus } =
+        await getOrCreateUserSettings(referral.newUserId, event.channel)
 
-    // オンボーディング状態を取得
+      // 新規ユーザー（none）の場合のみ紹介として処理
+      if (mentionedUserStatus === 'none') {
+        const newUserName = await getUserDisplayName(
+          referral.newUserId,
+          context.client,
+        )
+        const referrerName = await getUserDisplayName(
+          event.user,
+          context.client,
+        )
+        const welcomeMessage = buildReferralWelcomeMessage(
+          newUserName,
+          referrerName,
+        )
+
+        await context.client.chat.postMessage({
+          channel: event.channel,
+          text: welcomeMessage.text,
+          blocks: welcomeMessage.blocks,
+        })
+
+        // 新しいユーザーのステータスを welcomed に更新
+        await updateOnboardingStatus(referral.newUserId, 'welcomed')
+
+        console.log(
+          `Referral onboarding: ${event.user} introduced ${referral.newUserId}`,
+        )
+        return
+      }
+      // 既存ユーザーへのメンションは日記として処理を続行
+      console.log(
+        `Mention to existing user ${referral.newUserId} - processing as diary entry`,
+      )
+    }
+
+    // 送信者のオンボーディング状態を取得
     const { onboardingStatus } = await getOrCreateUserSettings(
-      targetUserId,
+      event.user,
       event.channel,
     )
-
-    // 紹介パターンの場合: 新しいユーザーに歓迎メッセージを送信
-    if (referral.isReferral && referral.newUserId) {
-      const newUserName = await getUserDisplayName(
-        referral.newUserId,
-        context.client,
-      )
-      const referrerName = await getUserDisplayName(event.user, context.client)
-      const welcomeMessage = buildReferralWelcomeMessage(
-        newUserName,
-        referrerName,
-      )
-
-      await context.client.chat.postMessage({
-        channel: event.channel,
-        text: welcomeMessage.text,
-        blocks: welcomeMessage.blocks,
-      })
-
-      // 新しいユーザーのステータスを welcomed に更新
-      await updateOnboardingStatus(referral.newUserId, 'welcomed')
-
-      console.log(
-        `Referral onboarding: ${event.user} introduced ${referral.newUserId}`,
-      )
-      return
-    }
 
     // 初回ユーザー: 歓迎メッセージを送信して終了
     if (onboardingStatus === 'none') {
