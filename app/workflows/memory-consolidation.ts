@@ -26,6 +26,7 @@ import {
   deleteMemory,
   getActiveMemories,
   invalidateContextCache,
+  markMemoryAsUserConfirmed,
   supersedeMemory,
 } from '~/services/memory'
 
@@ -148,8 +149,6 @@ export class MemoryConsolidationWorkflow extends WorkflowEntrypoint<
 
             // If any source was user-confirmed, preserve that
             if (anyUserConfirmed) {
-              const { markMemoryAsUserConfirmed } =
-                await import('~/services/memory')
               await markMemoryAsUserConfirmed(newMemory.id)
             }
 
