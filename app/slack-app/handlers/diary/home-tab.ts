@@ -22,6 +22,15 @@ import {
   recordInteraction,
   type InteractionType,
 } from '~/services/character'
+import { getHeldItems } from '~/services/character-items'
+import {
+  countUnreadEncounters,
+  ensureWorkspaceId,
+  getLatestAdventure,
+  getRecentEncounters,
+  markAdventureRead,
+  markEncountersRead,
+} from '~/services/character-social'
 import { db } from '~/services/db'
 import { getActiveMemories } from '~/services/memory'
 import {
@@ -176,6 +185,25 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
           ],
         },
       )
+    }
+
+    // Track workspace ID for social features
+    if (character) {
+      // team_id is available in the raw event payload but not in the typed interface
+      const teamId = (payload as unknown as { team_id?: string }).team_id
+      if (teamId) {
+        ensureWorkspaceId(userId, teamId).catch((err) =>
+          console.error('Failed to update workspace ID:', err),
+        )
+      }
+    }
+
+    // ============================================
+    // Social Events Section (encounters, adventures, items)
+    // ============================================
+    if (character) {
+      const socialBlocks = await buildSocialBlocks(userId)
+      blocks.push(...socialBlocks)
     }
 
     // メインアクションセクション
@@ -1078,4 +1106,148 @@ async function buildRichContext(
   }
 
   return context
+}
+
+// ============================================
+// Social Blocks Builder
+// ============================================
+
+// biome-ignore lint/suspicious/noExplicitAny: dynamic Slack block types
+async function buildSocialBlocks(userId: string): Promise<any[]> {
+  // biome-ignore lint/suspicious/noExplicitAny: dynamic block types
+  const blocks: any[] = []
+
+  // --- Recent Encounters ---
+  const encounters = await getRecentEncounters(userId, 3)
+  const unreadCount = await countUnreadEncounters(userId)
+
+  if (encounters.length > 0) {
+    const headerText =
+      unreadCount > 0
+        ? `おでかけレポート (${unreadCount}件の新着)`
+        : 'おでかけレポート'
+
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: headerText, emoji: true },
+      },
+    )
+
+    for (const encounter of encounters) {
+      const isUserA = encounter.characterAUserId === userId
+      const otherUserId = isUserA
+        ? encounter.characterBUserId
+        : encounter.characterAUserId
+      const isUnread = isUserA ? !encounter.readByA : !encounter.readByB
+
+      // Get other character's info
+      const otherChar = await db
+        .selectFrom('userCharacters')
+        .select(['characterName', 'characterEmoji'])
+        .where('userId', '=', otherUserId)
+        .executeTakeFirst()
+
+      const otherName = otherChar
+        ? `${otherChar.characterEmoji} ${otherChar.characterName}`
+        : 'だれか'
+
+      const locationTag = encounter.locationName
+        ? ` _${encounter.locationName}にて_`
+        : ''
+
+      const dateStr = dayjs(encounter.createdAt).tz(TOKYO_TZ).format('M/D')
+      const newBadge = isUnread ? ' *NEW*' : ''
+
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${newBadge} *${dateStr}* ${otherName}と会ったよ！${locationTag}\n${encounter.episodeText}`,
+        },
+      })
+    }
+
+    // Mark as read after displaying
+    markEncountersRead(userId).catch((err) =>
+      console.error('Failed to mark encounters read:', err),
+    )
+  }
+
+  // --- Latest Adventure ---
+  const adventureData = await getLatestAdventure(userId)
+  if (adventureData) {
+    const { adventure, participation } = adventureData
+    const isUnread = !participation.isRead
+    const adventureHeader = isUnread
+      ? `${adventure.themeEmoji} 冒険レポート *NEW*`
+      : `${adventure.themeEmoji} 冒険レポート`
+
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: adventureHeader, emoji: true },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${adventure.themeName}*\n${adventure.mainEpisode}`,
+        },
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `あなたの役割: ${participation.roleText}\n${participation.highlightText}`,
+          },
+        ],
+      },
+    )
+
+    if (isUnread) {
+      markAdventureRead(adventure.id, userId).catch((err) =>
+        console.error('Failed to mark adventure read:', err),
+      )
+    }
+  }
+
+  // --- Held Items ---
+  const items = await getHeldItems(userId)
+  if (items.length > 0) {
+    blocks.push(
+      { type: 'divider' },
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `もちもの (${items.length})`,
+          emoji: true,
+        },
+      },
+    )
+
+    for (const item of items.slice(0, 5)) {
+      const origin = item.receivedFromUserId ? 'もらいもの' : '散歩中に見つけた'
+
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${item.itemEmoji} *${item.itemName}*  _${origin}_`,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'あげる', emoji: true },
+          action_id: 'gift_item_select',
+          value: item.id,
+        },
+      })
+    }
+  }
+
+  return blocks
 }

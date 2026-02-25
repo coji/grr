@@ -10,6 +10,7 @@ import { registerReactionAddedHandler } from './reaction-added'
 import { registerReactionRemovedHandler } from './reaction-removed'
 import { registerShortcutsHandler } from './shortcuts'
 import { registerSlashCommandHandler } from './slash-command'
+import { registerSocialActionHandlers } from './social-actions'
 
 export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   registerReactionAddedHandler(app)
@@ -23,4 +24,5 @@ export const registerDiaryHandlers = (app: SlackApp<SlackEdgeAppEnv>) => {
   registerShortcutsHandler(app)
   registerButtonActionHandlers(app)
   registerLinkUnfurlHandler(app)
+  registerSocialActionHandlers(app)
 }

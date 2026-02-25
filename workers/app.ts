@@ -1,4 +1,5 @@
 import { createRequestHandler } from 'react-router'
+import { processCharacterSocialEvents } from '~/slack-app/character-social-cron'
 import { generateDailyDiaryReflections } from '~/slack-app/daily-reflection'
 import { sendMonthlyReport } from '~/slack-app/monthly-report'
 import { sendDailyDiaryReminders } from '~/slack-app/reminders'
@@ -51,6 +52,8 @@ export default {
       await heartbeatFollowups(env)
       // 月次レポート (月初1-7日の土曜日のみ実行される)
       await sendMonthlyReport(env)
+      // キャラクター交流イベント（エンカウンター + 週次冒険）
+      await processCharacterSocialEvents()
     }
   },
 } satisfies ExportedHandler<Env>

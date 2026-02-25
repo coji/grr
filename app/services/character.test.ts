@@ -76,6 +76,8 @@ describe('characterToConcept', () => {
     bondLevel: 40,
     lastInteractedAt: '2024-01-01T00:00:00Z',
     daysWithoutDiary: 0,
+    workspaceId: null,
+    interactionEnabled: 1,
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-01T00:00:00Z',
   }
