@@ -1,7 +1,10 @@
 /**
- * PNG route for character images
+ * PNG route for character images with seed-based cache busting
  *
- * Serves character images from the R2 image pool.
+ * Serves character images from the R2 image pool with a seed in the path
+ * to ensure proper cache busting with Slack and CDN caching layers.
+ *
+ * URL format: /character/{userId}/{seed}.png
  *
  * Flow:
  * 1. Try to serve a random image from the current stage's pool
@@ -20,7 +23,7 @@ import {
   getRandomPoolImage,
   putBaseImage,
 } from '~/services/character-image'
-import type { Route } from './+types/character.$userId[.png]'
+import type { Route } from './+types/character.$userId.$seed[.png]'
 
 // 1x1 transparent PNG as final fallback
 const FALLBACK_PNG = new Uint8Array([
@@ -42,6 +45,8 @@ const NO_CACHE_HEADERS = {
 
 export const loader = async ({ params }: Route.LoaderArgs) => {
   const userId = params.userId
+  // seed is captured but not used directly - its presence in the URL path
+  // ensures each request gets a unique URL for cache busting
 
   if (!userId) {
     return new Response(FALLBACK_PNG, {

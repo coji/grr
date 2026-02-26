@@ -21,12 +21,17 @@ export const CHARACTER_IMAGE_BASE_URL = 'https://grr.techtalkjp.workers.dev'
 // ============================================
 
 /**
- * Build a character image URL with a daily seed for Slack cache busting.
+ * Build a character image URL with a seed for Slack cache busting.
+ *
+ * Uses path segment format (/character/{userId}/{seed}.png) instead of
+ * query params to ensure cache busting works with Slack and Cloudflare CDN,
+ * which may ignore query strings when caching images.
  */
 export function getCharacterImageUrl(userId: string, seed?: string): string {
-  const base = `${CHARACTER_IMAGE_BASE_URL}/character/${userId}.png`
-  if (!seed) return base
-  return `${base}?d=${seed}`
+  if (!seed) {
+    return `${CHARACTER_IMAGE_BASE_URL}/character/${userId}.png`
+  }
+  return `${CHARACTER_IMAGE_BASE_URL}/character/${userId}/${seed}.png`
 }
 
 export function getCacheBuster(): string {
