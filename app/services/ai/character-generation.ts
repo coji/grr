@@ -538,6 +538,21 @@ function getContextDescription(
   }
 }
 
+/**
+ * Convert ArrayBuffer to base64 string without using spread operator.
+ * Uses chunked processing to avoid stack overflow on large buffers.
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  const CHUNK_SIZE = 8192
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, i + CHUNK_SIZE)
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[])
+  }
+  return btoa(binary)
+}
+
 // ============================================
 // Character Image Generation (Gemini Pro Image)
 // ============================================
@@ -617,7 +632,7 @@ One surprising detail that gives character.
   // biome-ignore lint/suspicious/noExplicitAny: Google GenAI SDK content types
   const contents: any[] = []
   if (input.baseImage) {
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(input.baseImage)))
+    const base64 = arrayBufferToBase64(input.baseImage)
     contents.push({
       inlineData: { mimeType: 'image/png', data: base64 },
     })
