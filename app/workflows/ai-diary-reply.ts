@@ -23,6 +23,10 @@ import {
 } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
+import type {
+  CharacterAction,
+  CharacterEmotion,
+} from '~/services/ai/character-generation'
 import { generateCharacterImage } from '~/services/ai/character-generation'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
@@ -38,7 +42,6 @@ import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import {
   CHARACTER_IMAGE_BASE_URL,
   getCacheBuster,
-  MESSAGE_CHARACTER_STYLES,
 } from '~/slack-app/character-blocks'
 
 // Import constants directly to avoid path issues
@@ -53,6 +56,26 @@ const SUPPORTIVE_REACTIONS = [
   'four_leaf_clover',
   'seedling',
 ]
+
+// Available emotions and actions for image variety
+const EMOTIONS: CharacterEmotion[] = [
+  'happy',
+  'excited',
+  'shy',
+  'sleepy',
+  'love',
+]
+const ACTIONS: CharacterAction[] = ['pet', 'talk', 'wave', 'dance', 'sparkle']
+
+/** Pick random emotion and action for image generation variety */
+function pickRandomStyle(): {
+  emotion: CharacterEmotion
+  action: CharacterAction
+} {
+  const emotion = EMOTIONS[Math.floor(Math.random() * EMOTIONS.length)]
+  const action = ACTIONS[Math.floor(Math.random() * ACTIONS.length)]
+  return { emotion, action }
+}
 
 export interface AiDiaryReplyParams {
   entryId: string
@@ -229,7 +252,8 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
 
         try {
           const concept = characterToConcept(character)
-          const style = MESSAGE_CHARACTER_STYLES.diary_reply
+          // Pick random emotion and action for variety
+          const style = pickRandomStyle()
           const baseImage = (await getBaseImage(params.userId)) ?? undefined
 
           const pngData = await generateCharacterImage({

@@ -78,15 +78,23 @@ export async function addToPool(
 
 /**
  * Get a random image from the pool for the given evolution stage.
- * Only considers images within the active window (POOL_ACTIVE_DAYS).
+ * Prefers images within the active window (POOL_ACTIVE_DAYS), but falls back
+ * to all pool images if the active pool is empty.
  * Avoids serving the same image consecutively by tracking the last served key.
- * Returns null if no active images exist.
+ * Returns null if no images exist at all.
  */
 export async function getRandomPoolImage(
   userId: string,
   stage: number,
 ): Promise<ArrayBuffer | null> {
-  const keys = await listActivePoolKeys(userId, stage)
+  // Try active images first
+  let keys = await listActivePoolKeys(userId, stage)
+
+  // Fall back to all pool images if active pool is empty
+  if (keys.length === 0) {
+    keys = await listAllPoolKeys(userId, stage)
+  }
+
   if (keys.length === 0) return null
 
   // Avoid repeating the last served image
@@ -136,6 +144,19 @@ async function listActivePoolKeys(
   const startAfter = `${prefix}${cutoff}`
   const listed = await env.CHARACTER_IMAGES.list({ prefix, startAfter })
 
+  return listed.objects.map((obj) => obj.key)
+}
+
+/**
+ * List ALL pool keys for a specific stage (no date filtering).
+ * Used as a fallback when the active pool is empty.
+ */
+async function listAllPoolKeys(
+  userId: string,
+  stage: number,
+): Promise<string[]> {
+  const prefix = buildStagePoolPrefix(userId, stage)
+  const listed = await env.CHARACTER_IMAGES.list({ prefix })
   return listed.objects.map((obj) => obj.key)
 }
 
