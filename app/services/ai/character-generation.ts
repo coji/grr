@@ -629,6 +629,53 @@ function pickStyleFromMood(moodLabel: string | null): {
 }
 
 // ============================================
+// Weekly Theme System
+// ============================================
+
+/** Weekly themes that rotate throughout the year for visual freshness */
+const WEEKLY_THEMES = [
+  { label: '桜の庭', desc: 'cherry blossom garden, pink petals floating' },
+  { label: '雨の日', desc: 'rainy day, holding a tiny umbrella, puddles' },
+  { label: '新緑', desc: 'fresh green leaves, bright spring sunshine' },
+  { label: '花畑', desc: 'colorful flower field, butterflies' },
+  { label: 'ピクニック', desc: 'picnic blanket, basket, sunny meadow' },
+  { label: '星空', desc: 'starry night sky, sitting on a crescent moon' },
+  { label: '海辺', desc: 'beach scene, waves, seashells, sunset' },
+  { label: '花火', desc: 'fireworks in night sky, summer festival' },
+  { label: 'ひまわり', desc: 'sunflower field, bright yellow, summer heat' },
+  { label: 'かき氷', desc: 'eating shaved ice, summer treats, fan' },
+  { label: '森の中', desc: 'deep forest, mushrooms, dappled sunlight' },
+  { label: 'お月見', desc: 'moon viewing, full moon, dango, susuki grass' },
+  { label: '紅葉', desc: 'autumn leaves, red and orange, gentle wind' },
+  { label: '読書の秋', desc: 'cozy reading corner, stacked books, warm light' },
+  { label: 'ハロウィン', desc: 'Halloween, pumpkins, candy, costume' },
+  { label: '焚き火', desc: 'campfire, roasting marshmallows, starry sky' },
+  { label: '雪景色', desc: 'snowy landscape, snowflakes falling gently' },
+  { label: 'クリスマス', desc: 'Christmas tree, gifts, twinkling lights' },
+  { label: 'お正月', desc: 'New Year, mochi, sunrise, kadomatsu' },
+  { label: '温泉', desc: 'hot spring, steam, relaxing, towel on head' },
+  { label: 'バレンタイン', desc: 'Valentine chocolates, hearts, ribbon' },
+  { label: '宇宙', desc: 'outer space, planets, floating among stars' },
+  { label: 'お茶会', desc: 'tea party, teacups, sweets, elegant table' },
+  { label: '音楽', desc: 'playing music, musical notes floating, concert' },
+  { label: '虹', desc: 'rainbow after rain, colorful sky, fresh air' },
+  { label: 'キャンプ', desc: 'camping tent, lantern, mountains, nature' },
+] as const
+
+/**
+ * Get the current weekly theme based on ISO week number.
+ * Changes every Monday, cycles through 26 themes.
+ */
+export function getWeeklyTheme(): { label: string; desc: string } {
+  const now = new Date()
+  // ISO week: Jan 4 is always in week 1
+  const jan4 = new Date(now.getFullYear(), 0, 4)
+  const daysSinceJan4 = (now.getTime() - jan4.getTime()) / (24 * 60 * 60 * 1000)
+  const weekNumber = Math.floor(daysSinceJan4 / 7)
+  return WEEKLY_THEMES[weekNumber % WEEKLY_THEMES.length]
+}
+
+// ============================================
 // Character Image Generation (Gemini Pro Image)
 // ============================================
 
@@ -672,19 +719,21 @@ export async function generateCharacterImage(input: {
     : 'standing naturally'
 
   const isVariant = !!input.baseImage
+  const theme = getWeeklyTheme()
 
   const prompt = isVariant
     ? `
 Same character as the reference image. Keep the exact same appearance,
 colors, art style, proportions, and design details.
-Change only the expression and pose.
+Change only the expression, pose, and setting.
 
 Expression: ${emotionDesc}
 Pose: ${actionDesc}
+Weekly theme: ${theme.desc}
     `.trim()
     : `
 Small character icon, simple flat illustration, 64x64 pixel size.
-Soft pastel background color that matches the character's theme.
+Background and setting: ${theme.desc}
 
 Character: ${input.concept.name} (${input.concept.species})
 Appearance: ${input.concept.appearance}
