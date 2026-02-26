@@ -31,7 +31,11 @@ export const INTERACTION_POINTS = {
 } as const
 
 // Points required for each evolution stage
-export const EVOLUTION_THRESHOLDS = [0, 30, 100, 250, 500] as const
+// Designed so diary is the primary growth driver (~67 diary days for Stage 5)
+export const EVOLUTION_THRESHOLDS = [0, 50, 200, 500, 1000] as const
+
+// Max evolution points from pet/talk per day (interactions still work for fun/happiness)
+export const DAILY_INTERACTION_POINT_CAP = 20
 
 // Daily decay when no diary is written
 export const DAILY_DECAY = {
@@ -129,7 +133,9 @@ export async function updateCharacter(
 // ============================================
 
 /**
- * Record an interaction with a character
+ * Record an interaction with a character.
+ * Pet/talk evolution points are capped daily to prevent spam-leveling.
+ * The interaction itself always updates happiness/energy/bond.
  */
 export async function recordInteraction(input: {
   userId: string
@@ -137,9 +143,19 @@ export async function recordInteraction(input: {
   metadata?: Record<string, unknown>
 }): Promise<{ pointsEarned: number; evolved: boolean }> {
   const now = dayjs().utc().toISOString()
-  const pointsEarned = INTERACTION_POINTS[input.interactionType]
+  const basePoints: number = INTERACTION_POINTS[input.interactionType]
 
-  // Record the interaction
+  // For pet/talk, cap daily evolution points
+  const isInteraction =
+    input.interactionType === 'pet' || input.interactionType === 'talk'
+  let pointsEarned = basePoints
+  if (isInteraction) {
+    const todayPoints = await getTodayInteractionPoints(input.userId)
+    const remaining = Math.max(0, DAILY_INTERACTION_POINT_CAP - todayPoints)
+    pointsEarned = Math.min(basePoints, remaining)
+  }
+
+  // Record the interaction (always, even if 0 evolution points)
   await db
     .insertInto('characterInteractions')
     .values({
@@ -152,7 +168,7 @@ export async function recordInteraction(input: {
     })
     .execute()
 
-  // Update character state
+  // Update character state (happiness/energy/bond always increase)
   const character = await getCharacter(input.userId)
   if (!character) {
     return { pointsEarned, evolved: false }
@@ -176,6 +192,22 @@ export async function recordInteraction(input: {
   })
 
   return { pointsEarned, evolved }
+}
+
+/**
+ * Get total evolution points earned today from pet/talk interactions.
+ */
+async function getTodayInteractionPoints(userId: string): Promise<number> {
+  const todayStart = dayjs().utc().startOf('day').toISOString()
+  const result = await db
+    .selectFrom('characterInteractions')
+    .select(db.fn.sum<number>('pointsEarned').as('total'))
+    .where('userId', '=', userId)
+    .where('interactionType', 'in', ['pet', 'talk'])
+    .where('createdAt', '>=', todayStart)
+    .executeTakeFirst()
+
+  return result?.total ?? 0
 }
 
 /**
