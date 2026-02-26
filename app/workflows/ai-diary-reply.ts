@@ -23,7 +23,10 @@ import {
 } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
 import { generateDiaryReply, generateSupportiveReaction } from '~/services/ai'
-import { generateCharacterImage } from '~/services/ai/character-generation'
+import {
+  generateCharacterImage,
+  pickCharacterStyle,
+} from '~/services/ai/character-generation'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
 import { characterToConcept, getCharacter } from '~/services/character'
@@ -38,7 +41,6 @@ import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import {
   CHARACTER_IMAGE_BASE_URL,
   getCacheBuster,
-  MESSAGE_CHARACTER_STYLES,
 } from '~/slack-app/character-blocks'
 
 // Import constants directly to avoid path issues
@@ -229,7 +231,11 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
 
         try {
           const concept = characterToConcept(character)
-          const style = MESSAGE_CHARACTER_STYLES.diary_reply
+          // Pick emotion and action based on diary content
+          const style = await pickCharacterStyle({
+            diaryText: params.latestEntry,
+            moodLabel: params.moodLabel,
+          })
           const baseImage = (await getBaseImage(params.userId)) ?? undefined
 
           const pngData = await generateCharacterImage({
