@@ -287,7 +287,7 @@ describe('generateCharacterImage', () => {
           responseModalities: ['image', 'text'],
           imageConfig: {
             aspectRatio: '1:1',
-            imageSize: '1K',
+            imageSize: '0.5K',
           },
         },
       }),
