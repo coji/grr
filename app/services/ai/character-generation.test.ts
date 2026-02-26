@@ -38,6 +38,8 @@ import {
   generateCharacterImage,
   generateCharacterMessage,
   generateCharacterReaction,
+  generateWeeklyTheme,
+  getWeeklyTheme,
   type CharacterConcept,
 } from './character-generation'
 import { getUserPersonality } from './personality'
@@ -489,5 +491,128 @@ describe('generateCharacterReaction', () => {
         prompt: expect.stringContaining('照れている'),
       }),
     )
+  })
+})
+
+describe('getWeeklyTheme (base theme)', () => {
+  it('should return winter/Valentine theme for late February', () => {
+    // February 26th - should be week 4 (days 22+) = 'ぬくぬく' (cozy indoor)
+    const feb26 = new Date(2026, 1, 26) // month is 0-indexed, so 1 = February
+    const theme = getWeeklyTheme(feb26)
+
+    expect(theme.label).toBe('ぬくぬく')
+    expect(theme.desc).toContain('cozy')
+  })
+
+  it('should return Valentine theme for early February', () => {
+    // February 5th - should be week 1 (days 1-7) = 'バレンタイン'
+    const feb5 = new Date(2026, 1, 5)
+    const theme = getWeeklyTheme(feb5)
+
+    expect(theme.label).toBe('バレンタイン')
+    expect(theme.desc).toContain('Valentine')
+  })
+
+  it('should return Hinamatsuri theme for early March', () => {
+    // March 3rd - should be week 1 = 'ひなまつり'
+    const mar3 = new Date(2026, 2, 3)
+    const theme = getWeeklyTheme(mar3)
+
+    expect(theme.label).toBe('ひなまつり')
+    expect(theme.desc).toContain('Hinamatsuri')
+  })
+
+  it('should return summer festival theme for August', () => {
+    // August 10th - should be week 2 = '夏祭り'
+    const aug10 = new Date(2026, 7, 10)
+    const theme = getWeeklyTheme(aug10)
+
+    expect(theme.label).toBe('夏祭り')
+    expect(theme.desc).toContain('summer festival')
+  })
+
+  it('should return fireworks theme for early August', () => {
+    // August 1st - should be week 1 = '花火'
+    const aug1 = new Date(2026, 7, 1)
+    const theme = getWeeklyTheme(aug1)
+
+    expect(theme.label).toBe('花火')
+    expect(theme.desc).toContain('fireworks')
+  })
+
+  it('should return Christmas theme for December', () => {
+    // December 1st - should be week 1 = 'クリスマス'
+    const dec1 = new Date(2026, 11, 1)
+    const theme = getWeeklyTheme(dec1)
+
+    expect(theme.label).toBe('クリスマス')
+    expect(theme.desc).toContain('Christmas')
+  })
+
+  it('should return New Year theme for January', () => {
+    // January 1st - should be week 1 = 'お正月'
+    const jan1 = new Date(2026, 0, 1)
+    const theme = getWeeklyTheme(jan1)
+
+    expect(theme.label).toBe('お正月')
+    expect(theme.desc).toContain('New Year')
+  })
+
+  it('should cycle through 4 themes within a month', () => {
+    // Test all 4 weeks of February
+    const week1 = getWeeklyTheme(new Date(2026, 1, 1)) // days 1-7
+    const week2 = getWeeklyTheme(new Date(2026, 1, 8)) // days 8-14
+    const week3 = getWeeklyTheme(new Date(2026, 1, 15)) // days 15-21
+    const week4 = getWeeklyTheme(new Date(2026, 1, 22)) // days 22+
+
+    expect(week1.label).toBe('バレンタイン')
+    expect(week2.label).toBe('冬の夜空')
+    expect(week3.label).toBe('梅の花')
+    expect(week4.label).toBe('ぬくぬく')
+  })
+
+  it('should handle day 28, 29, 30, 31 as week 4', () => {
+    // All late month dates should return week 4 theme
+    const day28 = getWeeklyTheme(new Date(2026, 0, 28)) // January 28
+    const day31 = getWeeklyTheme(new Date(2026, 0, 31)) // January 31
+
+    expect(day28.label).toBe('こたつ') // Week 4 January theme
+    expect(day31.label).toBe('こたつ') // Same week 4 theme
+  })
+})
+
+describe('generateWeeklyTheme (AI-enhanced)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should enhance base theme with AI-generated flavor', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: Mock response
+    vi.mocked(generateObject).mockResolvedValue(
+      mockGenerateObjectResponse({
+        label: '粉雪の朝',
+        desc: 'gentle snowflakes falling at dawn, warm light through frosted window',
+      }) as any,
+    )
+
+    const theme = await generateWeeklyTheme(new Date(2026, 0, 15)) // January week 3
+
+    expect(theme.label).toBe('粉雪の朝')
+    expect(theme.desc).toContain('snowflakes')
+    expect(generateObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: expect.stringContaining('雪景色'), // Base theme for Jan week 3
+      }),
+    )
+  })
+
+  it('should fall back to base theme if AI fails', async () => {
+    vi.mocked(generateObject).mockRejectedValue(new Error('AI unavailable'))
+
+    const theme = await generateWeeklyTheme(new Date(2026, 1, 5)) // February week 1
+
+    // Should return the base theme
+    expect(theme.label).toBe('バレンタイン')
+    expect(theme.desc).toContain('Valentine')
   })
 })

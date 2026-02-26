@@ -629,50 +629,180 @@ function pickStyleFromMood(moodLabel: string | null): {
 }
 
 // ============================================
-// Weekly Theme System
+// Weekly Theme System (Season-Aware + AI Flavor)
 // ============================================
 
-/** Weekly themes that rotate throughout the year for visual freshness */
-const WEEKLY_THEMES = [
-  { label: '桜の庭', desc: 'cherry blossom garden, pink petals floating' },
-  { label: '雨の日', desc: 'rainy day, holding a tiny umbrella, puddles' },
-  { label: '新緑', desc: 'fresh green leaves, bright spring sunshine' },
-  { label: '花畑', desc: 'colorful flower field, butterflies' },
-  { label: 'ピクニック', desc: 'picnic blanket, basket, sunny meadow' },
-  { label: '星空', desc: 'starry night sky, sitting on a crescent moon' },
-  { label: '海辺', desc: 'beach scene, waves, seashells, sunset' },
-  { label: '花火', desc: 'fireworks in night sky, summer festival' },
-  { label: 'ひまわり', desc: 'sunflower field, bright yellow, summer heat' },
-  { label: 'かき氷', desc: 'eating shaved ice, summer treats, fan' },
-  { label: '森の中', desc: 'deep forest, mushrooms, dappled sunlight' },
-  { label: 'お月見', desc: 'moon viewing, full moon, dango, susuki grass' },
-  { label: '紅葉', desc: 'autumn leaves, red and orange, gentle wind' },
-  { label: '読書の秋', desc: 'cozy reading corner, stacked books, warm light' },
-  { label: 'ハロウィン', desc: 'Halloween, pumpkins, candy, costume' },
-  { label: '焚き火', desc: 'campfire, roasting marshmallows, starry sky' },
-  { label: '雪景色', desc: 'snowy landscape, snowflakes falling gently' },
-  { label: 'クリスマス', desc: 'Christmas tree, gifts, twinkling lights' },
-  { label: 'お正月', desc: 'New Year, mochi, sunrise, kadomatsu' },
-  { label: '温泉', desc: 'hot spring, steam, relaxing, towel on head' },
-  { label: 'バレンタイン', desc: 'Valentine chocolates, hearts, ribbon' },
-  { label: '宇宙', desc: 'outer space, planets, floating among stars' },
-  { label: 'お茶会', desc: 'tea party, teacups, sweets, elegant table' },
-  { label: '音楽', desc: 'playing music, musical notes floating, concert' },
-  { label: '虹', desc: 'rainbow after rain, colorful sky, fresh air' },
-  { label: 'キャンプ', desc: 'camping tent, lantern, mountains, nature' },
-] as const
+/**
+ * Base seasonal themes organized by month (0-indexed: 0=January, 11=December).
+ * Each month has 4 themes to cycle through weekly for variety.
+ * These serve as the foundation for AI-enhanced themes.
+ */
+const MONTHLY_THEMES: Record<number, Array<{ label: string; desc: string }>> = {
+  // January: New Year, cold winter
+  0: [
+    {
+      label: 'お正月',
+      desc: 'New Year celebration, mochi, sunrise, kadomatsu',
+    },
+    { label: '初詣', desc: 'shrine visit, winter clothes, omikuji fortune' },
+    { label: '雪景色', desc: 'snowy landscape, snowflakes falling gently' },
+    { label: 'こたつ', desc: 'kotatsu table, warm blanket, mikan oranges' },
+  ],
+  // February: Still cold, Valentine's, approaching spring
+  1: [
+    { label: 'バレンタイン', desc: 'Valentine chocolates, hearts, ribbon' },
+    { label: '冬の夜空', desc: 'crisp winter night sky, bright stars' },
+    { label: '梅の花', desc: 'early plum blossoms, end of winter' },
+    { label: 'ぬくぬく', desc: 'cozy indoor scene, warm drink, blanket' },
+  ],
+  // March: Hinamatsuri, early spring
+  2: [
+    { label: 'ひなまつり', desc: 'Hinamatsuri dolls, peach blossoms' },
+    { label: '春の訪れ', desc: 'early spring, melting snow, first flowers' },
+    {
+      label: '桜のつぼみ',
+      desc: 'cherry blossom buds, anticipation of spring',
+    },
+    { label: '卒業式', desc: 'graduation ceremony, new beginnings' },
+  ],
+  // April: Cherry blossoms
+  3: [
+    {
+      label: '桜満開',
+      desc: 'cherry blossom full bloom, pink petals floating',
+    },
+    { label: 'お花見', desc: 'cherry blossom viewing party, bento, sunshine' },
+    { label: '入学式', desc: 'school entrance ceremony, fresh start' },
+    { label: '春風', desc: 'gentle spring breeze, flowers dancing' },
+  ],
+  // May: Fresh green, Golden Week
+  4: [
+    { label: '新緑', desc: 'fresh green leaves, bright spring sunshine' },
+    { label: 'こどもの日', desc: 'Childrens Day, koinobori carp streamers' },
+    { label: 'ピクニック', desc: 'picnic blanket, basket, sunny meadow' },
+    { label: '花畑', desc: 'colorful flower field, butterflies' },
+  ],
+  // June: Rainy season
+  5: [
+    { label: '梅雨', desc: 'rainy season, holding umbrella, puddles' },
+    {
+      label: '紫陽花',
+      desc: 'hydrangea flowers, purple and blue, rainy garden',
+    },
+    { label: 'てるてる坊主', desc: 'teru teru bozu, hoping for sunny day' },
+    { label: 'カエル', desc: 'cute frog on lotus leaf, rain drops' },
+  ],
+  // July: Tanabata, early summer
+  6: [
+    { label: '七夕', desc: 'Tanabata festival, bamboo wishes, night sky' },
+    { label: '夏の始まり', desc: 'early summer, cicadas, blue sky' },
+    { label: '風鈴', desc: 'wind chime, summer breeze, veranda' },
+    { label: '海開き', desc: 'beach opening, ocean waves, summer vacation' },
+  ],
+  // August: Summer festivals
+  7: [
+    { label: '花火', desc: 'fireworks in night sky, summer festival' },
+    { label: '夏祭り', desc: 'summer festival, food stalls, lanterns' },
+    { label: 'かき氷', desc: 'shaved ice, summer treats, colorful syrup' },
+    { label: 'お盆', desc: 'Obon festival, lanterns, family gathering' },
+  ],
+  // September: Moon viewing
+  8: [
+    { label: 'お月見', desc: 'moon viewing, full moon, dango, susuki grass' },
+    { label: '秋の気配', desc: 'hint of autumn, cooler breeze' },
+    { label: 'コスモス', desc: 'cosmos flowers, autumn field' },
+    { label: '虫の声', desc: 'autumn insects singing, peaceful night' },
+  ],
+  // October: Autumn
+  9: [
+    { label: '紅葉', desc: 'autumn leaves, red and orange, gentle wind' },
+    { label: 'ハロウィン', desc: 'Halloween, pumpkins, candy, costume' },
+    { label: '読書の秋', desc: 'cozy reading corner, stacked books' },
+    { label: '栗拾い', desc: 'chestnut picking, autumn harvest' },
+  ],
+  // November: Late autumn
+  10: [
+    { label: '落ち葉', desc: 'fallen leaves, crisp autumn air' },
+    { label: '七五三', desc: 'Shichi-Go-San, traditional kimono, shrine' },
+    { label: '焚き火', desc: 'bonfire, roasting sweet potatoes' },
+    { label: '温かい飲み物', desc: 'warm drink, cafe, autumn scenery' },
+  ],
+  // December: Winter holidays
+  11: [
+    { label: 'クリスマス', desc: 'Christmas tree, gifts, twinkling lights' },
+    { label: '冬至', desc: 'winter solstice, yuzu bath, warm and cozy' },
+    { label: '年末', desc: 'year-end, reflection, preparing for new year' },
+    { label: 'イルミネーション', desc: 'winter illumination, city lights' },
+  ],
+}
+
+const themeFlavorSchema = z.object({
+  label: z.string().max(12).describe('テーマの詳細ラベル（日本語、2-6文字）'),
+  desc: z
+    .string()
+    .max(120)
+    .describe(
+      'Enhanced background/setting description for image generation (English)',
+    ),
+})
 
 /**
- * Get the current weekly theme based on ISO week number.
- * Changes every Monday, cycles through 26 themes.
+ * Get the base weekly theme based on month and week of month.
+ * Provides a seasonal foundation for image generation.
  */
-export function getWeeklyTheme(): { label: string; desc: string } {
-  const now = new Date()
-  // ISO week: Jan 4 is always in week 1
-  const jan4 = new Date(now.getFullYear(), 0, 4)
-  const daysSinceJan4 = (now.getTime() - jan4.getTime()) / (24 * 60 * 60 * 1000)
-  const weekNumber = Math.floor(daysSinceJan4 / 7)
-  return WEEKLY_THEMES[weekNumber % WEEKLY_THEMES.length]
+export function getWeeklyTheme(date?: Date): { label: string; desc: string } {
+  const now = date ?? new Date()
+  const month = now.getMonth()
+  const dayOfMonth = now.getDate()
+
+  const monthThemes = MONTHLY_THEMES[month]
+  const weekOfMonth = Math.min(Math.floor((dayOfMonth - 1) / 7), 3)
+
+  return monthThemes[weekOfMonth]
+}
+
+/**
+ * Generate an AI-enhanced version of the weekly theme.
+ * Takes the base seasonal theme and adds creative variation.
+ * Falls back to base theme if AI fails.
+ */
+export async function generateWeeklyTheme(
+  date?: Date,
+): Promise<{ label: string; desc: string }> {
+  const now = date ?? new Date()
+  const baseTheme = getWeeklyTheme(now)
+  const month = now.getMonth()
+  const day = now.getDate()
+
+  try {
+    const model = google('gemini-2.5-flash-lite')
+    const { object } = await generateObject({
+      model,
+      schema: themeFlavorSchema,
+      prompt: `
+ベーステーマにクリエイティブなフレイバーを加えて。
+
+## ベーステーマ
+- ラベル: ${baseTheme.label}
+- 説明: ${baseTheme.desc}
+- 日付: ${month + 1}月${day}日
+
+## ルール
+- ベーステーマの季節感を維持
+- 具体的なディテールや雰囲気を追加
+- 毎回少し違うバリエーションに
+
+## 出力フォーマット
+- label: ベースをアレンジ（例: お正月→初日の出、雪景色→粉雪の朝）
+- desc: 具体的な情景を英語で描写
+      `.trim(),
+    })
+
+    return object
+  } catch (error) {
+    console.error('Theme flavor generation failed, using base theme:', error)
+    return baseTheme
+  }
 }
 
 // ============================================
@@ -719,7 +849,7 @@ export async function generateCharacterImage(input: {
     : 'standing naturally'
 
   const isVariant = !!input.baseImage
-  const theme = getWeeklyTheme()
+  const theme = await generateWeeklyTheme()
 
   const prompt = isVariant
     ? `
