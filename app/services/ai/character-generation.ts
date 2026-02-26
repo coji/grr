@@ -806,10 +806,10 @@ export async function generateWeeklyTheme(
 }
 
 // ============================================
-// Character Image Generation (Gemini Pro Image)
+// Character Image Generation (Gemini Flash Image)
 // ============================================
 
-const CHARACTER_IMAGE_MODEL = 'gemini-3-pro-image-preview'
+const CHARACTER_IMAGE_MODEL = 'gemini-3.1-flash-image-preview'
 
 /**
  * Generate a character PNG image using Gemini's native image generation.
@@ -896,6 +896,10 @@ One surprising detail that gives character.
     contents,
     config: {
       responseModalities: ['image', 'text'],
+      imageConfig: {
+        aspectRatio: '1:1',
+        imageSize: '1K',
+      },
     },
   })
 

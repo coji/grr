@@ -16,6 +16,12 @@ const MODEL_PRICING: Record<
   { input: number; output: number; thinking: number }
 > = {
   // Gemini 3 series (preview)
+  // Output pricing uses image rate ($60/M) since this model is used for image generation
+  'gemini-3.1-flash-image-preview': {
+    input: 0.25,
+    output: 60.0,
+    thinking: 1.5,
+  },
   'gemini-3-pro-image-preview': { input: 2.0, output: 12.0, thinking: 2.0 },
   'gemini-3-flash-preview': { input: 0.5, output: 3.0, thinking: 0.5 },
   'gemini-3.1-pro-preview': { input: 2.0, output: 12.0, thinking: 2.0 },
