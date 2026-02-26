@@ -3,7 +3,7 @@
  *
  * Generates unique character designs based on user memories and personalities.
  * All character images are generated via Gemini's native image generation
- * (gemini-3-pro-image-preview). No SVG pipeline.
+ * (gemini-3.1-flash-image-preview). No SVG pipeline.
  */
 
 import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
