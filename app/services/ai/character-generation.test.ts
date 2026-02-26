@@ -246,7 +246,7 @@ describe('generateCharacterImage', () => {
     vi.clearAllMocks()
   })
 
-  it('should generate image via Gemini Pro Image and return ArrayBuffer', async () => {
+  it('should generate image via Gemini Flash Image and return ArrayBuffer', async () => {
     vi.mocked(getActiveMemories).mockResolvedValue([])
 
     const mockImageData = btoa('fake-png-data')
@@ -282,9 +282,13 @@ describe('generateCharacterImage', () => {
     expect(result).toBeInstanceOf(ArrayBuffer)
     expect(mockGenerateContent).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'gemini-3-pro-image-preview',
+        model: 'gemini-3.1-flash-image-preview',
         config: {
           responseModalities: ['image', 'text'],
+          imageConfig: {
+            aspectRatio: '1:1',
+            imageSize: '0.5K',
+          },
         },
       }),
     )
