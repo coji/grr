@@ -78,6 +78,14 @@ AIプロンプトを追加・編集する際は、**[docs/gemini-3-prompting-gui
    - `low`: 要約・フォローアップ
    - `medium`: 日記返信・振り返り
 
+### モデルごとの注意点
+
+| モデル | thinkingLevel | 用途 |
+|--------|---------------|------|
+| `gemini-2.5-flash-lite` | ❌ 非対応 | 軽量タスク（テーマ生成など） |
+| `gemini-3-flash-preview` | ✅ 対応 | 標準タスク |
+| `gemini-3-pro-image-preview` | - | 画像生成専用 |
+
 ### プロンプト構造の統一
 
 ```typescript
