@@ -1,5 +1,4 @@
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateText } from 'ai'
+import { generateText } from './genai'
 
 interface DiaryDigestOptions {
   personaName: string
@@ -55,15 +54,10 @@ ${entriesText}
 
 上記を踏まえて、週次ダイジェストメッセージを生成してください。`
 
-  const model = google('gemini-3-flash-preview')
   const { text } = await generateText({
-    model,
-    providerOptions: {
-      google: {
-        // 週次ダイジェストは要約タスクなのでlowで十分
-        thinkingConfig: { thinkingLevel: 'low' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: 'gemini-3-flash-preview',
+    // 週次ダイジェストは要約タスクなのでlowで十分
+    thinkingLevel: 'low',
     system: systemPrompt,
     prompt: userPrompt,
   })
@@ -115,15 +109,10 @@ ${entriesText}
 
 上記を踏まえて、さりげない気遣いのメッセージを生成してください。`
 
-  const model = google('gemini-3-flash-preview')
   const { text } = await generateText({
-    model,
-    providerOptions: {
-      google: {
-        // 気遣いメッセージは単純なタスクなのでlowで十分
-        thinkingConfig: { thinkingLevel: 'low' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: 'gemini-3-flash-preview',
+    // 気遣いメッセージは単純なタスクなのでlowで十分
+    thinkingLevel: 'low',
     system: systemPrompt,
     prompt: userPrompt,
   })

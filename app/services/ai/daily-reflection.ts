@@ -1,6 +1,5 @@
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateText } from 'ai'
 import dayjs from '~/lib/dayjs'
+import { generateText } from './genai'
 import type { Personality } from './personality'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -99,14 +98,9 @@ ${entriesText}
 
 上記を踏まえて、ふりかえりメモを作成してください。`
 
-  const model = google('gemini-3-flash-preview')
   const { text } = await generateText({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'medium' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: 'gemini-3-flash-preview',
+    thinkingLevel: 'medium',
     system: systemPrompt,
     prompt: userPrompt,
   })

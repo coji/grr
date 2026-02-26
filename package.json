@@ -23,12 +23,10 @@
     "validate": "pnpm run typecheck && pnpm run lint && pnpm run format"
   },
   "dependencies": {
-    "@ai-sdk/google": "3.0.33",
     "@google/genai": "1.43.0",
     "@radix-ui/react-select": "2.2.6",
     "@radix-ui/react-slot": "1.2.4",
     "@react-router/remix-routes-option-adapter": "7.13.1",
-    "ai": "6.0.103",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "dayjs": "1.11.19",

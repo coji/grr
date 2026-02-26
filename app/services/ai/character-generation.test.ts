@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Mock AI SDK
-vi.mock('@ai-sdk/google', () => ({
-  google: vi.fn(() => 'mock-model'),
-}))
-
-vi.mock('ai', () => ({
+// Mock genai wrapper
+vi.mock('./genai', () => ({
   generateObject: vi.fn(),
 }))
 
@@ -31,7 +27,6 @@ vi.mock('@google/genai', () => {
   }
 })
 
-import { generateObject } from 'ai'
 import { getActiveMemories } from '~/services/memory'
 import {
   generateCharacterConcept,
@@ -42,6 +37,7 @@ import {
   getWeeklyTheme,
   type CharacterConcept,
 } from './character-generation'
+import { generateObject } from './genai'
 import { getUserPersonality } from './personality'
 
 const mockConcept: CharacterConcept = {
@@ -56,11 +52,7 @@ const mockConcept: CharacterConcept = {
 // biome-ignore lint/suspicious/noExplicitAny: Mock response helper
 const mockGenerateObjectResponse = (object: any) => ({
   object,
-  finishReason: 'stop',
-  usage: { promptTokens: 10, completionTokens: 20 },
-  rawCall: { rawPrompt: null, rawSettings: {} },
-  warnings: undefined,
-  request: {},
+  usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
 })
 
 describe('generateCharacterConcept', () => {
@@ -90,9 +82,8 @@ describe('generateCharacterConcept', () => {
       },
     ])
     vi.mocked(getUserPersonality).mockResolvedValue(null)
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
-      mockGenerateObjectResponse(mockConcept) as any,
+      mockGenerateObjectResponse(mockConcept),
     )
 
     const result = await generateCharacterConcept('U123')
@@ -102,7 +93,7 @@ describe('generateCharacterConcept', () => {
     expect(getUserPersonality).toHaveBeenCalledWith('U123')
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model',
+        model: 'gemini-3-flash-preview',
         schema: expect.any(Object),
         system: expect.stringContaining('オリジナルキャラクター'),
         prompt: expect.stringContaining('コーヒーが好き'),
@@ -113,9 +104,8 @@ describe('generateCharacterConcept', () => {
   it('should handle empty memories gracefully', async () => {
     vi.mocked(getActiveMemories).mockResolvedValue([])
     vi.mocked(getUserPersonality).mockResolvedValue(null)
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
-      mockGenerateObjectResponse(mockConcept) as any,
+      mockGenerateObjectResponse(mockConcept),
     )
 
     const result = await generateCharacterConcept('U123')
@@ -137,9 +127,8 @@ describe('generateCharacterConcept', () => {
       expressions: ['なるほど〜', 'わくわく！'],
       changeNote: null,
     })
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
-      mockGenerateObjectResponse(mockConcept) as any,
+      mockGenerateObjectResponse(mockConcept),
     )
 
     await generateCharacterConcept('U123')
@@ -158,9 +147,8 @@ describe('generateCharacterMessage', () => {
   })
 
   it('should generate a message for pet context', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
-      mockGenerateObjectResponse({ message: 'きもちいい〜☕' }) as any,
+      mockGenerateObjectResponse({ message: 'きもちいい〜☕' }),
     )
 
     const result = await generateCharacterMessage({
@@ -181,9 +169,8 @@ describe('generateCharacterMessage', () => {
   })
 
   it('should generate a message for talk context', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
-      mockGenerateObjectResponse({ message: 'なになに？☕' }) as any,
+      mockGenerateObjectResponse({ message: 'なになに？☕' }),
     )
 
     const result = await generateCharacterMessage({
@@ -198,9 +185,8 @@ describe('generateCharacterMessage', () => {
   })
 
   it('should include character stats in system prompt', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
-      mockGenerateObjectResponse({ message: 'test' }) as any,
+      mockGenerateObjectResponse({ message: 'test' }),
     )
 
     await generateCharacterMessage({
@@ -219,9 +205,8 @@ describe('generateCharacterMessage', () => {
   })
 
   it('should include additionalContext when provided', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
-      mockGenerateObjectResponse({ message: 'やったね！☕' }) as any,
+      mockGenerateObjectResponse({ message: 'やったね！☕' }),
     )
 
     await generateCharacterMessage({
@@ -364,13 +349,12 @@ describe('generateCharacterReaction', () => {
   })
 
   it('should generate a reaction with message, title, and emoji', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
       mockGenerateObjectResponse({
         message: 'きもちいいね〜☕',
         reactionTitle: 'もふもふ',
         reactionEmoji: '😊',
-      }) as any,
+      }),
     )
 
     const result = await generateCharacterReaction({
@@ -388,14 +372,13 @@ describe('generateCharacterReaction', () => {
   })
 
   it('should include tierCelebration for legendary intensity', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
       mockGenerateObjectResponse({
         message: 'さいこう！！☕',
         reactionTitle: 'きゅん',
         reactionEmoji: '💖',
         tierCelebration: '奇跡だよ！',
-      }) as any,
+      }),
     )
 
     const result = await generateCharacterReaction({
@@ -416,13 +399,12 @@ describe('generateCharacterReaction', () => {
   })
 
   it('should not request tierCelebration for normal intensity', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
       mockGenerateObjectResponse({
         message: 'うんうん☕',
         reactionTitle: 'ほのぼの',
         reactionEmoji: '😌',
-      }) as any,
+      }),
     )
 
     await generateCharacterReaction({
@@ -442,13 +424,12 @@ describe('generateCharacterReaction', () => {
   })
 
   it('should include rich context when provided', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
       mockGenerateObjectResponse({
         message: 'おはよ〜☕',
         reactionTitle: 'ぽかぽか',
         reactionEmoji: '🌅',
-      }) as any,
+      }),
     )
 
     await generateCharacterReaction({
@@ -471,13 +452,12 @@ describe('generateCharacterReaction', () => {
   })
 
   it('should pass additionalContext as flavor description', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
       mockGenerateObjectResponse({
         message: 'えへへ☕',
         reactionTitle: 'てれてれ',
         reactionEmoji: '😳',
-      }) as any,
+      }),
     )
 
     await generateCharacterReaction({
@@ -591,12 +571,11 @@ describe('generateWeeklyTheme (AI-enhanced)', () => {
   })
 
   it('should enhance base theme with AI-generated flavor', async () => {
-    // biome-ignore lint/suspicious/noExplicitAny: Mock response
     vi.mocked(generateObject).mockResolvedValue(
       mockGenerateObjectResponse({
         label: '粉雪の朝',
         desc: 'gentle snowflakes falling at dawn, warm light through frosted window',
-      }) as any,
+      }),
     )
 
     const theme = await generateWeeklyTheme(new Date(2026, 0, 15)) // January week 3

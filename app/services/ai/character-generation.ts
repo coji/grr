@@ -6,14 +6,13 @@
  * (gemini-3.1-flash-image-preview). No SVG pipeline.
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import { GoogleGenAI } from '@google/genai'
-import { generateObject } from 'ai'
 import { env } from 'cloudflare:workers'
 import { z } from 'zod'
 import type { UserMemory } from '~/services/memory'
 import { getActiveMemories } from '~/services/memory'
 import { logAiCost } from './cost-logger'
+import { generateObject } from './genai'
 import type { Personality } from './personality'
 import { getUserPersonality } from './personality'
 
@@ -53,8 +52,6 @@ export async function generateCharacterConcept(
   const memories = await getActiveMemories(userId)
   const personality = await getUserPersonality(userId)
 
-  const model = google('gemini-3-flash-preview')
-
   const memoriesSummary = formatMemoriesForGeneration(memories)
   const personalitySummary = personality
     ? formatPersonalityForGeneration(personality)
@@ -62,12 +59,8 @@ export async function generateCharacterConcept(
 
   const conceptModel = 'gemini-3-flash-preview'
   const { object, usage } = await generateObject({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'medium' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: conceptModel,
+    thinkingLevel: 'medium',
     schema: characterConceptSchema,
     system: `
 ユーザーの日記から、その人だけのオリジナルキャラクターを創造する。
@@ -104,8 +97,9 @@ ${personalitySummary}
     userId,
     operation: 'character_concept',
     model: conceptModel,
-    inputTokens: usage.inputTokens ?? 0,
-    outputTokens: usage.outputTokens ?? 0,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    thinkingTokens: usage.thinkingTokens,
     metadata: { characterName: object.name, species: object.species },
   })
 
@@ -163,7 +157,6 @@ export async function generateCharacterMessage(
   input: CharacterMessageContext,
 ): Promise<string> {
   const messageModel = 'gemini-3-flash-preview'
-  const model = google(messageModel)
 
   // Build rich context sections
   const contextSections: string[] = []
@@ -207,12 +200,8 @@ export async function generateCharacterMessage(
       : ''
 
   const { object, usage } = await generateObject({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'minimal' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: messageModel,
+    thinkingLevel: 'minimal',
     schema: characterMessageSchema,
     system: `
 「${input.concept.name}」（${input.concept.species}）としてメッセージを生成する。
@@ -243,8 +232,9 @@ ${input.additionalContext ? `補足: ${input.additionalContext}` : ''}
   logAiCost({
     operation: 'character_message',
     model: messageModel,
-    inputTokens: usage.inputTokens ?? 0,
-    outputTokens: usage.outputTokens ?? 0,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    thinkingTokens: usage.thinkingTokens,
     metadata: { context: input.context },
   })
 
@@ -400,14 +390,9 @@ ${needsCelebration ? '- tierCelebration: 嬉しさを表す短い言葉（10文�
     `.trim()
 
   try {
-    const model = google(reactionModel)
     const { object, usage } = await generateObject({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'low' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
+      model: reactionModel,
+      thinkingLevel: 'low',
       schema: characterReactionSchema,
       system: systemPrompt,
       prompt: promptText,
@@ -416,8 +401,9 @@ ${needsCelebration ? '- tierCelebration: 嬉しさを表す短い言葉（10文�
     logAiCost({
       operation: 'character_reaction',
       model: reactionModel,
-      inputTokens: usage.inputTokens ?? 0,
-      outputTokens: usage.outputTokens ?? 0,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      thinkingTokens: usage.thinkingTokens,
       metadata: {
         context: input.context,
         intensity: input.reactionIntensity,
@@ -577,17 +563,10 @@ export async function pickCharacterStyle(input: {
   diaryText: string | null
   moodLabel: string | null
 }): Promise<{ emotion: CharacterEmotion; action: CharacterAction }> {
-  const styleModel = 'gemini-3-flash-preview'
-
   try {
-    const model = google(styleModel)
     const { object } = await generateObject({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'minimal' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       schema: characterStyleSchema,
       prompt: `
 日記の内容に合ったキャラクターの感情とアクションを選んで。
@@ -775,9 +754,8 @@ export async function generateWeeklyTheme(
   const day = now.getDate()
 
   try {
-    const model = google('gemini-2.5-flash-lite')
     const { object } = await generateObject({
-      model,
+      model: 'gemini-2.5-flash-lite',
       schema: themeFlavorSchema,
       prompt: `
 ベーステーマにクリエイティブなフレイバーを加えて。

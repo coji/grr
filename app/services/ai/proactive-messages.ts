@@ -2,15 +2,8 @@
  * AI functions for generating proactive messages
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateText } from 'ai'
+import { generateText } from './genai'
 import { getPersonaBackgroundShort } from './persona'
-
-const modelOptions = {
-  google: {
-    thinkingConfig: { thinkingLevel: 'minimal' },
-  } satisfies GoogleGenerativeAIProviderOptions,
-}
 
 /**
  * Generate a message for 1-year anniversary reminder
@@ -27,10 +20,9 @@ export async function generateAnniversaryMessage({
   const fallback = `1年前の今日、こんなことを書いていたよ。\n\n> ${oneYearAgoEntry.slice(0, 100)}${oneYearAgoEntry.length > 100 ? '...' : ''}\n\nあれから1年経ったんだね。`
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { text } = await generateText({
-      model,
-      providerOptions: modelOptions,
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -82,10 +74,9 @@ export async function generateMilestoneMessage({
   const fallback = `おめでとう！${milestoneDescriptions[milestoneType]}だよ！`
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { text } = await generateText({
-      model,
-      providerOptions: modelOptions,
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -136,7 +127,6 @@ export async function generateWeeklyInsightMessage({
   }
 
   try {
-    const model = google('gemini-3-flash-preview')
     const entrySummary = weekEntries
       .map(
         (e) =>
@@ -145,8 +135,8 @@ export async function generateWeeklyInsightMessage({
       .join('\n')
 
     const { text } = await generateText({
-      model,
-      providerOptions: modelOptions,
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -192,10 +182,9 @@ export async function generateSeasonalMessage({
   const fallback = `今日は${seasonalEvent}だね。体調には気をつけてね。`
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { text } = await generateText({
-      model,
-      providerOptions: modelOptions,
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -241,10 +230,9 @@ export async function generateRandomCheckinMessage({
   const fallback = fallbacks[Math.floor(Math.random() * fallbacks.length)]
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { text } = await generateText({
-      model,
-      providerOptions: modelOptions,
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -285,15 +273,14 @@ export async function generateQuestionMessage({
   const fallback = `最近の日記を読んでいて気になったんだけど、大丈夫？無理しないでね。`
 
   try {
-    const model = google('gemini-3-flash-preview')
     const entrySummary = recentEntries
       .filter((e) => e.detail)
       .map((e) => e.detail)
       .join('\n')
 
     const { text } = await generateText({
-      model,
-      providerOptions: modelOptions,
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -341,10 +328,9 @@ export async function generateBriefFollowupMessage({
   const fallback = `この前「${briefEntry}」って書いてたけど、もしよかったら詳しく聞かせてくれる？`
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { text } = await generateText({
-      model,
-      providerOptions: modelOptions,
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 

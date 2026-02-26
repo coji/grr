@@ -2,8 +2,7 @@
  * Monthly Report Generator
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateText } from 'ai'
+import { generateText } from '~/services/ai/genai'
 import { getPersonaBackground } from '~/services/ai/persona'
 
 interface MonthlyReportContext {
@@ -36,8 +35,6 @@ export async function generateMonthlyReport({
   const fallback = `${monthLabel}も日記を書いてくれてありがとう。来月も穏やかに過ごせますように。`
 
   try {
-    const model = google('gemini-3-flash-preview')
-
     // Summarize entries for the prompt
     const entrySummary = entries
       .map(
@@ -47,12 +44,8 @@ export async function generateMonthlyReport({
       .join('\n')
 
     const { text } = await generateText({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'minimal' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackground(personaName)}
 
