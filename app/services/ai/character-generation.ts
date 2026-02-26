@@ -554,11 +554,83 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 // ============================================
-// Character Image Generation (Gemini Pro Image)
+// Character Style Selection (diary-content-aware)
 // ============================================
 
 export type CharacterEmotion = 'happy' | 'excited' | 'shy' | 'sleepy' | 'love'
 export type CharacterAction = 'pet' | 'talk' | 'wave' | 'dance' | 'sparkle'
+
+const characterStyleSchema = z.object({
+  emotion: z
+    .enum(['happy', 'excited', 'shy', 'sleepy', 'love'])
+    .describe('キャラクターの感情'),
+  action: z
+    .enum(['pet', 'talk', 'wave', 'dance', 'sparkle'])
+    .describe('キャラクターのポーズ/アクション'),
+})
+
+/**
+ * Pick character emotion and action based on diary content and mood.
+ * Uses Gemini Flash with minimal thinking for a fast, content-aware selection.
+ */
+export async function pickCharacterStyle(input: {
+  diaryText: string | null
+  moodLabel: string | null
+}): Promise<{ emotion: CharacterEmotion; action: CharacterAction }> {
+  const styleModel = 'gemini-3-flash-preview'
+
+  try {
+    const model = google(styleModel)
+    const { object } = await generateObject({
+      model,
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: 'minimal' },
+        } satisfies GoogleGenerativeAIProviderOptions,
+      },
+      schema: characterStyleSchema,
+      prompt: `
+日記の内容に合ったキャラクターの感情とアクションを選んで。
+
+## 日記
+${input.diaryText || '（内容なし）'}
+
+## 気分
+${input.moodLabel || '不明'}
+
+## 選択肢
+感情: happy(嬉しい), excited(ワクワク), shy(照れ/穏やか), sleepy(疲れ/眠い), love(大好き/感謝)
+アクション: pet(寄り添う), talk(語りかける), wave(挨拶), dance(踊る/喜ぶ), sparkle(キラキラ/特別)
+      `.trim(),
+    })
+
+    return object
+  } catch {
+    // Fallback: mood-based selection
+    return pickStyleFromMood(input.moodLabel)
+  }
+}
+
+/** Fallback: pick style from mood label when AI call fails */
+function pickStyleFromMood(moodLabel: string | null): {
+  emotion: CharacterEmotion
+  action: CharacterAction
+} {
+  switch (moodLabel) {
+    case 'ほっと安心':
+      return { emotion: 'happy', action: 'sparkle' }
+    case 'おつかれさま':
+      return { emotion: 'sleepy', action: 'pet' }
+    case 'ふつうの日':
+      return { emotion: 'shy', action: 'wave' }
+    default:
+      return { emotion: 'happy', action: 'wave' }
+  }
+}
+
+// ============================================
+// Character Image Generation (Gemini Pro Image)
+// ============================================
 
 const CHARACTER_IMAGE_MODEL = 'gemini-3-pro-image-preview'
 
