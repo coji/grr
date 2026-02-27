@@ -35,6 +35,7 @@ import {
   extractImageId,
   getPoolImageById,
   getRandomPoolImage,
+  pickRandomPoolKey,
   POOL_ACTIVE_DAYS,
 } from './character-image'
 
@@ -126,6 +127,43 @@ describe('getRandomPoolImage', () => {
     const result = await getRandomPoolImage('U123', 1)
     expect(result).toBe(imageData)
     expect(mockR2Get).toHaveBeenCalledWith(key1)
+  })
+})
+
+describe('pickRandomPoolKey', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should return null when pool is empty', async () => {
+    mockR2List.mockResolvedValue({ objects: [] })
+
+    const result = await pickRandomPoolKey('U123', 1)
+    expect(result).toBeNull()
+  })
+
+  it('should return a key from the pool', async () => {
+    const key = 'character/U123/pool/stage1/2026-02-24-abc12345.png'
+    mockR2List.mockResolvedValue({ objects: [{ key }] })
+    mockKvGet.mockResolvedValue(null)
+    mockKvPut.mockResolvedValue(undefined)
+
+    const result = await pickRandomPoolKey('U123', 1)
+    expect(result).toBe(key)
+  })
+
+  it('should avoid repeating the last served key', async () => {
+    const key1 = 'character/U123/pool/stage1/2026-02-24-aaa.png'
+    const key2 = 'character/U123/pool/stage1/2026-02-24-bbb.png'
+
+    mockR2List.mockResolvedValue({
+      objects: [{ key: key1 }, { key: key2 }],
+    })
+    mockKvGet.mockResolvedValue(key1)
+    mockKvPut.mockResolvedValue(undefined)
+
+    const result = await pickRandomPoolKey('U123', 1)
+    expect(result).toBe(key2)
   })
 })
 

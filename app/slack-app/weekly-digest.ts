@@ -2,8 +2,9 @@ import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateWeeklyDigest } from '~/services/ai'
 import { getCharacter } from '~/services/character'
+import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
-import { buildCharacterImageBlockForContext } from './character-blocks'
+import { buildCharacterImageBlockFromPoolId } from './character-blocks'
 import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -62,9 +63,15 @@ export const sendWeeklyDigest = async (env: Env) => {
       // Build character image block if user has a character
       const character = await getCharacter(userId)
       // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
-      const characterBlocks: any[] = character
-        ? [buildCharacterImageBlockForContext(userId, 'weekly_digest')]
-        : []
+      let characterBlocks: any[] = []
+      if (character) {
+        const poolKey = await pickRandomPoolKey(
+          userId,
+          character.evolutionStage,
+        )
+        const imageId = poolKey ? extractImageId(poolKey) : null
+        characterBlocks = [buildCharacterImageBlockFromPoolId(userId, imageId)]
+      }
 
       // ダイジェストメッセージを送信
       await client.chat.postMessage({

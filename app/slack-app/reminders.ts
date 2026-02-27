@@ -4,9 +4,10 @@ import dayjs from '~/lib/dayjs'
 import type { DiaryReminderMoodOption } from '~/services/ai'
 import { generateDiaryReminder } from '~/services/ai'
 import { getCharacter } from '~/services/character'
+import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
 import { getUserMilestones } from '~/services/proactive-messages'
-import { buildCharacterImageBlockForContext } from './character-blocks'
+import { buildCharacterImageBlockFromPoolId } from './character-blocks'
 import {
   DIARY_MOOD_CHOICES,
   DIARY_PERSONA_NAME,
@@ -194,9 +195,15 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       // Build character image block if user has a character
       const character = await getCharacter(userId)
       // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
-      const characterBlocks: any[] = character
-        ? [buildCharacterImageBlockForContext(userId, 'daily_reminder')]
-        : []
+      let characterBlocks: any[] = []
+      if (character) {
+        const poolKey = await pickRandomPoolKey(
+          userId,
+          character.evolutionStage,
+        )
+        const imageId = poolKey ? extractImageId(poolKey) : null
+        characterBlocks = [buildCharacterImageBlockFromPoolId(userId, imageId)]
+      }
 
       // ユーザーのチャンネルにメンション付き＆ボタン付きでメッセージを送信
       const message = await client.chat.postMessage({

@@ -60,6 +60,7 @@ const botToken = context.cloudflare.env.SLACK_BOT_TOKEN // Type error!
 - Register new Slack commands, shortcuts, and views via `registerGrrHandlers` in `app/slack-app/handlers/grr.ts` or sibling modules; keep handler registration centralized in `app/slack-app/app.ts`.
 - Encapsulate Block Kit structures in dedicated builder files inside `app/slack-app/handlers/views/` to keep handler logic concise.
 - Use the provided Slack Web API client (`context.client`) and respect Slack rate limits (queue async work via `context.cloudflare.ctx.waitUntil` if needed for long tasks).
+- **画像ブロックの一貫性**: Slackの画像ブロックはタップ拡大時に再fetchされるため、ランダム選択URLではなく特定画像IDを含むURL（`/character/{userId}/pool/{imageId}.png`）を使う。`pickRandomPoolKey()` + `buildCharacterImageBlockFromPoolId()` パターンを使用すること。
 
 ## AI prompting guidelines (Gemini 3 Flash)
 

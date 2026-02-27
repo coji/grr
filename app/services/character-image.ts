@@ -107,16 +107,16 @@ export async function getPoolImageById(
 }
 
 /**
- * Get a random image from the pool for the given evolution stage.
+ * Pick a random pool key for the given evolution stage.
  * Prefers images within the active window (POOL_ACTIVE_DAYS), but falls back
  * to all pool images if the active pool is empty.
  * Avoids serving the same image consecutively by tracking the last served key.
  * Returns null if no images exist at all.
  */
-export async function getRandomPoolImage(
+export async function pickRandomPoolKey(
   userId: string,
   stage: number,
-): Promise<ArrayBuffer | null> {
+): Promise<string | null> {
   // Try active images first
   let keys = await listActivePoolKeys(userId, stage)
 
@@ -132,11 +132,29 @@ export async function getRandomPoolImage(
   const candidates = keys.length > 1 ? keys.filter((k) => k !== lastKey) : keys
 
   const randomKey = candidates[Math.floor(Math.random() * candidates.length)]
-  const object = await env.CHARACTER_IMAGES.get(randomKey)
-  if (!object) return null
 
   // Remember this key (fire-and-forget)
   setLastServedKey(userId, randomKey).catch(() => {})
+
+  return randomKey
+}
+
+/**
+ * Get a random image from the pool for the given evolution stage.
+ * Prefers images within the active window (POOL_ACTIVE_DAYS), but falls back
+ * to all pool images if the active pool is empty.
+ * Avoids serving the same image consecutively by tracking the last served key.
+ * Returns null if no images exist at all.
+ */
+export async function getRandomPoolImage(
+  userId: string,
+  stage: number,
+): Promise<ArrayBuffer | null> {
+  const randomKey = await pickRandomPoolKey(userId, stage)
+  if (!randomKey) return null
+
+  const object = await env.CHARACTER_IMAGES.get(randomKey)
+  if (!object) return null
 
   return await object.arrayBuffer()
 }

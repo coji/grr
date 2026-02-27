@@ -73,6 +73,8 @@ export function buildCharacterImageBlock(
 /**
  * Build a Slack image block with a specific seed.
  * Use this when you need consistent images across multiple modal updates.
+ *
+ * @deprecated Use buildCharacterImageBlockWithPoolId instead for consistent images.
  */
 export function buildCharacterImageBlockWithSeed(
   userId: string,
@@ -84,6 +86,40 @@ export function buildCharacterImageBlockWithSeed(
     image_url: getCharacterImageUrl(userId, seed),
     alt_text: altText,
   }
+}
+
+/**
+ * Build a Slack image block for a specific pool image.
+ * Use this to ensure the exact same image is shown consistently.
+ */
+export function buildCharacterImageBlockWithPoolId(
+  userId: string,
+  imageId: string,
+  altText = 'キャラクターの画像',
+): ImageBlock {
+  return {
+    type: 'image',
+    image_url: getPoolImageUrl(userId, imageId),
+    alt_text: altText,
+  }
+}
+
+/**
+ * Build a character image block using a specific pool image if available.
+ * Falls back to random pool selection if no imageId is provided.
+ *
+ * This is a convenience wrapper that handles the common pattern of:
+ * - Using a specific pool image when available (for consistent tap-to-enlarge)
+ * - Falling back to random selection when pool is empty
+ */
+export function buildCharacterImageBlockFromPoolId(
+  userId: string,
+  imageId: string | null,
+  altText = 'キャラクターの画像',
+): ImageBlock {
+  return imageId
+    ? buildCharacterImageBlockWithPoolId(userId, imageId, altText)
+    : buildCharacterImageBlock(userId, altText)
 }
 
 // ============================================
@@ -127,7 +163,9 @@ export const MESSAGE_CHARACTER_STYLES: Record<
 
 /**
  * Build an image block for a known message context.
- * Uses daily seed for cache busting.
+ *
+ * @deprecated Use pickRandomPoolKey + buildCharacterImageBlockWithPoolId instead
+ * for consistent images when users tap to enlarge.
  */
 export function buildCharacterImageBlockForContext(
   userId: string,
