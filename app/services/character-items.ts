@@ -229,6 +229,8 @@ export async function tryDiscoverItem(
       receivedFromUserId: null,
       giftedToUserId: null,
       giftedAt: null,
+      isDecorated: 0,
+      decoratedAt: null,
     })
     .execute()
 
@@ -280,6 +282,8 @@ export async function giftItem(
           receivedFromUserId: fromUserId,
           giftedToUserId: null,
           giftedAt: null,
+          isDecorated: 0,
+          decoratedAt: null,
         })
         .execute()
     }
@@ -334,6 +338,106 @@ export async function getGiftableItem(itemDbId: string, ownerUserId: string) {
  */
 export function getItemDefinition(itemId: string): ItemDefinition | undefined {
   return ITEM_CATALOG.find((item) => item.id === itemId)
+}
+
+/**
+ * Get a specific item by database ID and owner (including decorated items).
+ */
+export async function getOwnedItem(itemDbId: string, ownerUserId: string) {
+  return db
+    .selectFrom('characterItems')
+    .selectAll()
+    .where('id', '=', itemDbId)
+    .where('ownerUserId', '=', ownerUserId)
+    .where('giftedToUserId', 'is', null)
+    .executeTakeFirst()
+}
+
+/**
+ * Eat (consume) an item. The item is deleted and happiness is increased.
+ * Returns the happiness bonus earned.
+ */
+export async function eatItem(
+  itemDbId: string,
+  ownerUserId: string,
+): Promise<{ success: boolean; happinessBonus: number }> {
+  const item = await getOwnedItem(itemDbId, ownerUserId)
+  if (!item) {
+    return { success: false, happinessBonus: 0 }
+  }
+
+  // Calculate happiness bonus based on category
+  // Food items give more happiness when eaten
+  const categoryBonus: Record<string, number> = {
+    food: 15,
+    nature: 5,
+    craft: 8,
+    treasure: 10,
+  }
+  const happinessBonus = categoryBonus[item.itemCategory] || 5
+
+  // Delete the item (consumed)
+  await db.deleteFrom('characterItems').where('id', '=', itemDbId).execute()
+
+  return { success: true, happinessBonus }
+}
+
+/**
+ * Decorate with an item. Marks the item as displayed.
+ */
+export async function decorateItem(
+  itemDbId: string,
+  ownerUserId: string,
+): Promise<boolean> {
+  const now = dayjs().utc().toISOString()
+
+  const result = await db
+    .updateTable('characterItems')
+    .set({
+      isDecorated: 1,
+      decoratedAt: now,
+    })
+    .where('id', '=', itemDbId)
+    .where('ownerUserId', '=', ownerUserId)
+    .where('giftedToUserId', 'is', null)
+    .execute()
+
+  return (result[0]?.numUpdatedRows ?? 0n) > 0n
+}
+
+/**
+ * Remove decoration from an item.
+ */
+export async function unDecorateItem(
+  itemDbId: string,
+  ownerUserId: string,
+): Promise<boolean> {
+  const result = await db
+    .updateTable('characterItems')
+    .set({
+      isDecorated: 0,
+      decoratedAt: null,
+    })
+    .where('id', '=', itemDbId)
+    .where('ownerUserId', '=', ownerUserId)
+    .where('giftedToUserId', 'is', null)
+    .execute()
+
+  return (result[0]?.numUpdatedRows ?? 0n) > 0n
+}
+
+/**
+ * Get decorated items for a user.
+ */
+export async function getDecoratedItems(userId: string) {
+  return db
+    .selectFrom('characterItems')
+    .selectAll()
+    .where('ownerUserId', '=', userId)
+    .where('giftedToUserId', 'is', null)
+    .where('isDecorated', '=', 1)
+    .orderBy('decoratedAt', 'desc')
+    .execute()
 }
 
 // ============================================
