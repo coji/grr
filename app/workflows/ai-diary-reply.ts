@@ -34,14 +34,12 @@ import {
   addToPool,
   countTodayGenerations,
   DAILY_GENERATION_CAP,
+  extractImageId,
   getBaseImage,
   putBaseImage,
 } from '~/services/character-image'
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
-import {
-  CHARACTER_IMAGE_BASE_URL,
-  getCacheBuster,
-} from '~/slack-app/character-blocks'
+import { getPoolImageUrl } from '~/slack-app/character-blocks'
 
 // Import constants directly to avoid path issues
 const DIARY_PERSONA_NAME = 'ほたる'
@@ -206,6 +204,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
     // Step 2: Generate character image and add to pool
     // Pre-generates the image so the PNG route can serve it instantly
     // when Slack fetches the image_url from the block.
+    // Returns a URL pointing to the specific generated image (not random pool).
     const characterImageUrl = await step.do(
       'generate-character-image',
       {
@@ -218,15 +217,14 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
         const character = await getCharacter(params.userId)
         if (!character) return null
 
-        const imageUrl = `${CHARACTER_IMAGE_BASE_URL}/character/${params.userId}.png?d=${getCacheBuster()}`
-
         // Check daily generation cap
         const todayCount = await countTodayGenerations(params.userId)
         if (todayCount >= DAILY_GENERATION_CAP) {
           console.log(
             `Daily generation cap reached for ${params.userId} (${todayCount}/${DAILY_GENERATION_CAP})`,
           )
-          return imageUrl
+          // Return null to skip image in the reply (no random fallback)
+          return null
         }
 
         try {
@@ -262,10 +260,12 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
             `Added character image to pool: ${poolKey} (${pngData.byteLength} bytes)`,
           )
 
-          return imageUrl
+          // Return URL pointing to this specific image
+          const imageId = extractImageId(poolKey)
+          return getPoolImageUrl(params.userId, imageId)
         } catch (error) {
           console.error('Failed to generate character image:', error)
-          return imageUrl
+          return null
         }
       },
     )

@@ -32,6 +32,8 @@ import {
   addToPool,
   buildBaseKey,
   DAILY_GENERATION_CAP,
+  extractImageId,
+  getPoolImageById,
   getRandomPoolImage,
   POOL_ACTIVE_DAYS,
 } from './character-image'
@@ -124,6 +126,64 @@ describe('getRandomPoolImage', () => {
     const result = await getRandomPoolImage('U123', 1)
     expect(result).toBe(imageData)
     expect(mockR2Get).toHaveBeenCalledWith(key1)
+  })
+})
+
+describe('extractImageId', () => {
+  it('should extract image ID from pool key', () => {
+    const key = 'character/U123/pool/stage1/2026-02-27-abc12345.png'
+    expect(extractImageId(key)).toBe('2026-02-27-abc12345')
+  })
+
+  it('should handle keys without extension', () => {
+    const key = 'character/U123/pool/stage1/2026-02-27-abc12345'
+    expect(extractImageId(key)).toBe('2026-02-27-abc12345')
+  })
+
+  it('should handle empty key', () => {
+    expect(extractImageId('')).toBe('')
+  })
+})
+
+describe('getPoolImageById', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should return image when found', async () => {
+    const imageData = new ArrayBuffer(16)
+    mockR2Get.mockResolvedValue({
+      arrayBuffer: () => Promise.resolve(imageData),
+    })
+
+    const result = await getPoolImageById('U123', '2026-02-27-abc12345')
+    expect(result).toBe(imageData)
+    expect(mockR2Get).toHaveBeenCalledWith(
+      'character/U123/pool/stage1/2026-02-27-abc12345.png',
+    )
+  })
+
+  it('should search across stages', async () => {
+    const imageData = new ArrayBuffer(16)
+    // Not found in stage 1, 2, found in stage 3
+    mockR2Get
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        arrayBuffer: () => Promise.resolve(imageData),
+      })
+
+    const result = await getPoolImageById('U123', '2026-02-27-abc12345')
+    expect(result).toBe(imageData)
+    expect(mockR2Get).toHaveBeenCalledTimes(3)
+  })
+
+  it('should return null when not found in any stage', async () => {
+    mockR2Get.mockResolvedValue(null)
+
+    const result = await getPoolImageById('U123', '2026-02-27-abc12345')
+    expect(result).toBeNull()
+    expect(mockR2Get).toHaveBeenCalledTimes(5) // Checked all 5 stages
   })
 })
 
