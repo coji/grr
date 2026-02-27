@@ -73,6 +73,8 @@ export function buildCharacterImageBlock(
 /**
  * Build a Slack image block with a specific seed.
  * Use this when you need consistent images across multiple modal updates.
+ *
+ * @deprecated Use buildCharacterImageBlockWithPoolId instead for consistent images.
  */
 export function buildCharacterImageBlockWithSeed(
   userId: string,
@@ -82,6 +84,22 @@ export function buildCharacterImageBlockWithSeed(
   return {
     type: 'image',
     image_url: getCharacterImageUrl(userId, seed),
+    alt_text: altText,
+  }
+}
+
+/**
+ * Build a Slack image block for a specific pool image.
+ * Use this to ensure the exact same image is shown consistently.
+ */
+export function buildCharacterImageBlockWithPoolId(
+  userId: string,
+  imageId: string,
+  altText = 'キャラクターの画像',
+): ImageBlock {
+  return {
+    type: 'image',
+    image_url: getPoolImageUrl(userId, imageId),
     alt_text: altText,
   }
 }

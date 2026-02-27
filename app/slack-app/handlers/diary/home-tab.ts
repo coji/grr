@@ -22,6 +22,7 @@ import {
   recordInteraction,
   type InteractionType,
 } from '~/services/character'
+import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { getHeldItems } from '~/services/character-items'
 import {
   countUnreadEncounters,
@@ -35,8 +36,7 @@ import { db } from '~/services/db'
 import { getActiveMemories } from '~/services/memory'
 import {
   buildCharacterImageBlock,
-  buildCharacterImageBlockWithSeed,
-  getCacheBuster,
+  buildCharacterImageBlockWithPoolId,
 } from '~/slack-app/character-blocks'
 import { getFileTypeEmoji } from './file-utils'
 import { buildOnboardingBlocks } from './onboarding'
@@ -831,8 +831,9 @@ async function handleCharacterInteractionModal(
     return
   }
 
-  // Generate cache buster once and reuse for consistent image throughout interaction
-  const imageCacheBuster = getCacheBuster()
+  // Pick a specific pool image to use consistently throughout this interaction
+  const poolKey = await pickRandomPoolKey(userId, character.evolutionStage)
+  const poolImageId = poolKey ? extractImageId(poolKey) : null
 
   // Open a loading modal immediately to avoid 3-second timeout
   const isPet = opts.messageContext === 'pet'
@@ -853,6 +854,12 @@ async function handleCharacterInteractionModal(
     ? pickRandom(petLoadingTexts)
     : pickRandom(talkLoadingTexts)
 
+  // Helper to build image block - uses specific pool image if available
+  const buildImageBlock = (altText: string) =>
+    poolImageId
+      ? buildCharacterImageBlockWithPoolId(userId, poolImageId, altText)
+      : buildCharacterImageBlock(userId, altText)
+
   const openResult = await client.views.open({
     trigger_id: triggerId,
     view: {
@@ -860,11 +867,7 @@ async function handleCharacterInteractionModal(
       title: { type: 'plain_text', text: `${loadingEmoji} ...` },
       close: { type: 'plain_text', text: '閉じる' },
       blocks: [
-        buildCharacterImageBlockWithSeed(
-          userId,
-          imageCacheBuster,
-          `${character.characterName}の画像`,
-        ),
+        buildImageBlock(`${character.characterName}の画像`),
         {
           type: 'section',
           text: {
@@ -938,14 +941,10 @@ async function handleCharacterInteractionModal(
           : reaction.reactionTitle
 
     // Build reaction blocks - different layout for pet vs talk
-    // Use the same imageCacheBuster from the loading modal for consistent image
+    // Use the same pool image from the loading modal for consistent image
     // biome-ignore lint/suspicious/noExplicitAny: Slack block types
     const blocks: any[] = [
-      buildCharacterImageBlockWithSeed(
-        userId,
-        imageCacheBuster,
-        opts.altText(character.characterName),
-      ),
+      buildImageBlock(opts.altText(character.characterName)),
     ]
 
     if (opts.messageContext === 'pet') {
