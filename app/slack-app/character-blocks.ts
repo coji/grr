@@ -145,7 +145,9 @@ export const MESSAGE_CHARACTER_STYLES: Record<
 
 /**
  * Build an image block for a known message context.
- * Uses daily seed for cache busting.
+ *
+ * @deprecated Use pickRandomPoolKey + buildCharacterImageBlockWithPoolId instead
+ * for consistent images when users tap to enlarge.
  */
 export function buildCharacterImageBlockForContext(
   userId: string,

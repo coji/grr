@@ -140,11 +140,27 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       const energyBar = getProgressBar(character.energy)
       const bondLevel = getBondLevelDisplay(character.bondLevel)
 
+      // Pick a specific pool image for consistent display on tap-to-enlarge
+      const homeTabPoolKey = await pickRandomPoolKey(
+        userId,
+        character.evolutionStage,
+      )
+      const homeTabImageId = homeTabPoolKey
+        ? extractImageId(homeTabPoolKey)
+        : null
+      const homeTabImageBlock = homeTabImageId
+        ? buildCharacterImageBlockWithPoolId(
+            userId,
+            homeTabImageId,
+            `${character.characterName}の画像`,
+          )
+        : buildCharacterImageBlock(userId, `${character.characterName}の画像`)
+
       blocks.push(
         {
           type: 'divider',
         },
-        buildCharacterImageBlock(userId, `${character.characterName}の画像`),
+        homeTabImageBlock,
         {
           type: 'section',
           text: {

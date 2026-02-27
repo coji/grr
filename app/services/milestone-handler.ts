@@ -7,9 +7,13 @@
 
 import { env } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
-import { buildCharacterImageBlockForContext } from '~/slack-app/character-blocks'
+import {
+  buildCharacterImageBlock,
+  buildCharacterImageBlockWithPoolId,
+} from '~/slack-app/character-blocks'
 import { generateMilestoneMessage } from './ai'
 import { getCharacter } from './character'
+import { extractImageId, pickRandomPoolKey } from './character-image'
 import { checkMilestones } from './heartbeat-evaluators'
 import {
   getUserMilestones,
@@ -76,9 +80,14 @@ export async function handleDiaryEntryMilestone(
     // Build character image block if user has a character
     const character = await getCharacter(userId)
     // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
-    const characterBlocks: any[] = character
-      ? [buildCharacterImageBlockForContext(userId, 'milestone')]
-      : []
+    let characterBlocks: any[] = []
+    if (character) {
+      const poolKey = await pickRandomPoolKey(userId, character.evolutionStage)
+      const imageId = poolKey ? extractImageId(poolKey) : null
+      characterBlocks = imageId
+        ? [buildCharacterImageBlockWithPoolId(userId, imageId)]
+        : [buildCharacterImageBlock(userId)]
+    }
 
     const result = await client.chat.postMessage({
       channel: channelId,
