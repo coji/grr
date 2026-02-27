@@ -12,8 +12,15 @@ import type {
   SlackApp,
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
-import { getCharacter } from '~/services/character'
-import { getGiftableItem, giftItem } from '~/services/character-items'
+import { getCharacter, updateCharacter } from '~/services/character'
+import {
+  decorateItem,
+  eatItem,
+  getGiftableItem,
+  getOwnedItem,
+  giftItem,
+  unDecorateItem,
+} from '~/services/character-items'
 import { getWorkspaceCharacters } from '~/services/character-social'
 import { db } from '~/services/db'
 import { getUserDisplayName } from './utils'
@@ -191,6 +198,238 @@ export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
                 error,
               )
             }
+          }
+        }
+      }
+    },
+  )
+
+  // Eat item: show confirmation modal
+  app.action('eat_item_select', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+    const itemDbId = action.actions[0].value
+
+    const item = await getOwnedItem(itemDbId, userId)
+    if (!item) return
+
+    await context.client.views.open({
+      trigger_id: action.trigger_id,
+      view: {
+        type: 'modal',
+        callback_id: 'eat_item_confirm',
+        private_metadata: JSON.stringify({ itemDbId }),
+        title: { type: 'plain_text', text: 'たべる' },
+        submit: { type: 'plain_text', text: 'いただきます！' },
+        close: { type: 'plain_text', text: 'やめる' },
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${item.itemEmoji} *${item.itemName}* をたべる？\n\nたべると元気になるよ！`,
+            },
+          },
+        ],
+      },
+    })
+  })
+
+  // Eat item: confirm and execute
+  app.view(
+    'eat_item_confirm',
+    async () => {
+      // ack only
+      return
+    },
+    async ({ context, payload }) => {
+      const userId = payload.user.id
+      const metadata = JSON.parse(payload.view.private_metadata || '{}')
+      const itemDbId = metadata.itemDbId as string
+
+      if (!itemDbId) return
+
+      const item = await getOwnedItem(itemDbId, userId)
+      if (!item) return
+
+      const { success, happinessBonus } = await eatItem(itemDbId, userId)
+
+      if (success) {
+        const character = await getCharacter(userId)
+        if (character) {
+          // Update happiness
+          const newHappiness = Math.min(
+            100,
+            character.happiness + happinessBonus,
+          )
+          await updateCharacter(userId, { happiness: newHappiness })
+
+          // Send message to diary channel
+          const channelId = await getDiaryChannelId(userId)
+          if (channelId) {
+            const eatMessages = [
+              `もぐもぐ... ${item.itemEmoji} *${item.itemName}* おいしかった！`,
+              `${item.itemEmoji} *${item.itemName}* をぱくっ！しあわせ〜`,
+              `${item.itemEmoji} ごちそうさまでした！元気もりもり！`,
+            ]
+            const message =
+              eatMessages[Math.floor(Math.random() * eatMessages.length)]
+
+            try {
+              await context.client.chat.postMessage({
+                channel: channelId,
+                text: message,
+                blocks: [
+                  {
+                    type: 'section',
+                    text: {
+                      type: 'mrkdwn',
+                      text: `🍴 ${message}\n_しあわせ +${happinessBonus}！_`,
+                    },
+                  },
+                ],
+              })
+            } catch (error) {
+              console.error('Failed to send eat confirmation:', error)
+            }
+          }
+        }
+      }
+    },
+  )
+
+  // Decorate item: show confirmation modal
+  app.action('decorate_item_select', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+    const itemDbId = action.actions[0].value
+
+    const item = await getOwnedItem(itemDbId, userId)
+    if (!item) return
+
+    const isDecorated = item.isDecorated === 1
+
+    await context.client.views.open({
+      trigger_id: action.trigger_id,
+      view: {
+        type: 'modal',
+        callback_id: isDecorated
+          ? 'undecorate_item_confirm'
+          : 'decorate_item_confirm',
+        private_metadata: JSON.stringify({ itemDbId }),
+        title: { type: 'plain_text', text: isDecorated ? 'しまう' : 'かざる' },
+        submit: {
+          type: 'plain_text',
+          text: isDecorated ? 'しまう' : 'かざる！',
+        },
+        close: { type: 'plain_text', text: 'やめる' },
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: isDecorated
+                ? `${item.itemEmoji} *${item.itemName}* をしまう？`
+                : `${item.itemEmoji} *${item.itemName}* をおへやにかざる？`,
+            },
+          },
+        ],
+      },
+    })
+  })
+
+  // Decorate item: confirm and execute
+  app.view(
+    'decorate_item_confirm',
+    async () => {
+      // ack only
+      return
+    },
+    async ({ context, payload }) => {
+      const userId = payload.user.id
+      const metadata = JSON.parse(payload.view.private_metadata || '{}')
+      const itemDbId = metadata.itemDbId as string
+
+      if (!itemDbId) return
+
+      const item = await getOwnedItem(itemDbId, userId)
+      if (!item) return
+
+      const success = await decorateItem(itemDbId, userId)
+
+      if (success) {
+        const channelId = await getDiaryChannelId(userId)
+        if (channelId) {
+          const decorateMessages = [
+            `${item.itemEmoji} *${item.itemName}* をおへやにかざったよ！`,
+            `きらきら✨ ${item.itemEmoji} *${item.itemName}* がおへやを彩るよ！`,
+            `${item.itemEmoji} *${item.itemName}* 、いいところにかざれた！`,
+          ]
+          const message =
+            decorateMessages[
+              Math.floor(Math.random() * decorateMessages.length)
+            ]
+
+          try {
+            await context.client.chat.postMessage({
+              channel: channelId,
+              text: message,
+              blocks: [
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `🏠 ${message}`,
+                  },
+                },
+              ],
+            })
+          } catch (error) {
+            console.error('Failed to send decorate confirmation:', error)
+          }
+        }
+      }
+    },
+  )
+
+  // Undecorate item: confirm and execute
+  app.view(
+    'undecorate_item_confirm',
+    async () => {
+      // ack only
+      return
+    },
+    async ({ context, payload }) => {
+      const userId = payload.user.id
+      const metadata = JSON.parse(payload.view.private_metadata || '{}')
+      const itemDbId = metadata.itemDbId as string
+
+      if (!itemDbId) return
+
+      const item = await getOwnedItem(itemDbId, userId)
+      if (!item) return
+
+      const success = await unDecorateItem(itemDbId, userId)
+
+      if (success) {
+        const channelId = await getDiaryChannelId(userId)
+        if (channelId) {
+          try {
+            await context.client.chat.postMessage({
+              channel: channelId,
+              text: `${item.itemEmoji} ${item.itemName} をしまったよ`,
+              blocks: [
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `📦 ${item.itemEmoji} *${item.itemName}* をしまったよ`,
+                  },
+                },
+              ],
+            })
+          } catch (error) {
+            console.error('Failed to send undecorate confirmation:', error)
           }
         }
       }

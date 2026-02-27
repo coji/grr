@@ -269,6 +269,8 @@ export interface Database {
     receivedFromUserId: string | null
     giftedToUserId: string | null
     giftedAt: string | null
+    isDecorated: number // 0 or 1
+    decoratedAt: string | null
   }
 
   aiCostLogs: {

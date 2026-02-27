@@ -1218,6 +1218,10 @@ async function buildSocialBlocks(userId: string): Promise<any[]> {
   // --- Held Items ---
   const items = await getHeldItems(userId)
   if (items.length > 0) {
+    // Separate decorated and regular items
+    const decoratedItems = items.filter((item) => item.isDecorated === 1)
+    const regularItems = items.filter((item) => item.isDecorated !== 1)
+
     blocks.push(
       { type: 'divider' },
       {
@@ -1230,22 +1234,94 @@ async function buildSocialBlocks(userId: string): Promise<any[]> {
       },
     )
 
-    for (const item of items.slice(0, 5)) {
-      const origin = item.receivedFromUserId ? 'もらいもの' : '散歩中に見つけた'
-
+    // Show decorated items first with special styling
+    if (decoratedItems.length > 0) {
       blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `${item.itemEmoji} *${item.itemName}*  _${origin}_`,
-        },
-        accessory: {
-          type: 'button',
-          text: { type: 'plain_text', text: 'あげる', emoji: true },
-          action_id: 'gift_item_select',
-          value: item.id,
-        },
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `✨ *おへやにかざってるもの* (${decoratedItems.length})`,
+          },
+        ],
       })
+
+      for (const item of decoratedItems.slice(0, 3)) {
+        const origin = item.receivedFromUserId
+          ? 'もらいもの'
+          : '散歩中に見つけた'
+
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `🏠 ${item.itemEmoji} *${item.itemName}*  _${origin}_`,
+          },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: 'しまう', emoji: true },
+            action_id: 'decorate_item_select',
+            value: item.id,
+          },
+        })
+      }
+    }
+
+    // Show regular items with appropriate actions
+    for (const item of regularItems.slice(0, 5)) {
+      const isReceived = !!item.receivedFromUserId
+      const origin = isReceived ? 'もらいもの' : '散歩中に見つけた'
+
+      if (isReceived) {
+        // Received items: show たべる and かざる buttons
+        blocks.push(
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${item.itemEmoji} *${item.itemName}*  _${origin}_`,
+            },
+          },
+          {
+            type: 'actions',
+            elements: [
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: 'たべる 🍴', emoji: true },
+                action_id: 'eat_item_select',
+                value: item.id,
+              },
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: 'かざる 🏠', emoji: true },
+                action_id: 'decorate_item_select',
+                value: item.id,
+              },
+              {
+                type: 'button',
+                text: { type: 'plain_text', text: 'あげる', emoji: true },
+                action_id: 'gift_item_select',
+                value: item.id,
+              },
+            ],
+          },
+        )
+      } else {
+        // Found items: show あげる button only
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${item.itemEmoji} *${item.itemName}*  _${origin}_`,
+          },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: 'あげる', emoji: true },
+            action_id: 'gift_item_select',
+            value: item.id,
+          },
+        })
+      }
     }
   }
 
