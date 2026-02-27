@@ -92,7 +92,7 @@ export const sendWeeklyDigest = async (env: Env) => {
             elements: [
               {
                 type: 'mrkdwn',
-                text: `今週は ${entries.length}日記録しました`,
+                text: `今週は ${new Set(entries.map((e) => e.entryDate)).size}日記録しました`,
               },
             ],
           },
