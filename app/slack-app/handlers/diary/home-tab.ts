@@ -36,6 +36,7 @@ import { getActiveMemories } from '~/services/memory'
 import {
   buildCharacterImageBlock,
   buildCharacterImageBlockWithSeed,
+  buildRoomImageBlock,
   getCacheBuster,
 } from '~/slack-app/character-blocks'
 import { getFileTypeEmoji } from './file-utils'
@@ -1234,17 +1235,20 @@ async function buildSocialBlocks(userId: string): Promise<any[]> {
       },
     )
 
-    // Show decorated items first with special styling
+    // Show decorated items first with room image and special styling
     if (decoratedItems.length > 0) {
-      blocks.push({
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `✨ *おへやにかざってるもの* (${decoratedItems.length})`,
-          },
-        ],
-      })
+      blocks.push(
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `✨ *おへやにかざってるもの* (${decoratedItems.length})`,
+            },
+          ],
+        },
+        buildRoomImageBlock(userId, `${userId}のお部屋`),
+      )
 
       for (const item of decoratedItems.slice(0, 3)) {
         const origin = item.receivedFromUserId

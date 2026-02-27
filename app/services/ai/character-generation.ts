@@ -914,3 +914,100 @@ One surprising detail that gives character.
 
   throw new Error('No image data in response')
 }
+
+// ============================================
+// Decorated Room Image Generation
+// ============================================
+
+export interface DecoratedItem {
+  itemName: string
+  itemEmoji: string
+  itemCategory: string
+}
+
+/**
+ * Generate a decorated room image showing the character in their cozy room
+ * with the items they've chosen to display.
+ * Returns a PNG ArrayBuffer.
+ */
+export async function generateDecoratedRoomImage(input: {
+  userId: string
+  concept: CharacterConcept
+  evolutionStage: number
+  decoratedItems: DecoratedItem[]
+}): Promise<ArrayBuffer> {
+  const theme = await generateWeeklyTheme()
+
+  // Format decorated items for the prompt
+  const itemsDescription =
+    input.decoratedItems.length > 0
+      ? input.decoratedItems
+          .map((item) => `${item.itemEmoji} ${item.itemName}`)
+          .join(', ')
+      : 'シンプルで居心地のいい空間'
+
+  const prompt = `
+Cozy character room illustration, warm and inviting interior scene.
+
+Character in the room: ${input.concept.name} (${input.concept.species})
+Appearance: ${input.concept.appearance}
+Size: small, cute character in their personal space
+
+Decorated items displayed in the room:
+${itemsDescription}
+
+Seasonal atmosphere: ${theme.desc}
+
+Style requirements:
+- Soft, warm lighting
+- Cozy interior with personal touches
+- Items naturally placed as decorations (shelves, desk, windowsill)
+- Character relaxing happily in their space
+- Illustration style: cute, warm, inviting
+- Square composition, detailed background
+  `.trim()
+
+  const genai = new GoogleGenAI({ apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY })
+  const response = await genai.models.generateContent({
+    model: CHARACTER_IMAGE_MODEL,
+    contents: [prompt],
+    config: {
+      responseModalities: ['image', 'text'],
+      imageConfig: {
+        aspectRatio: '1:1',
+        imageSize: '1K',
+      },
+    },
+  })
+
+  const parts = response.candidates?.[0]?.content?.parts
+  if (!parts) throw new Error('No response from image generation model')
+
+  for (const part of parts) {
+    if (part.inlineData?.data) {
+      const buffer = Uint8Array.from(atob(part.inlineData.data), (c) =>
+        c.charCodeAt(0),
+      )
+
+      // Log cost
+      const usage = response.usageMetadata
+      logAiCost({
+        userId: input.userId,
+        operation: 'decorated_room_image',
+        model: CHARACTER_IMAGE_MODEL,
+        inputTokens: usage?.promptTokenCount ?? 0,
+        outputTokens: usage?.candidatesTokenCount ?? 0,
+        thinkingTokens: usage?.thoughtsTokenCount ?? 0,
+        metadata: {
+          decoratedItemCount: input.decoratedItems.length,
+          evolutionStage: input.evolutionStage,
+          imageBytes: buffer.byteLength,
+        },
+      })
+
+      return buffer.buffer as ArrayBuffer
+    }
+  }
+
+  throw new Error('No image data in response')
+}

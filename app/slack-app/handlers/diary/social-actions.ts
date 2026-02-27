@@ -23,6 +23,7 @@ import {
 } from '~/services/character-items'
 import { getWorkspaceCharacters } from '~/services/character-social'
 import { db } from '~/services/db'
+import { deleteRoomImage } from '~/services/room-image'
 import { getUserDisplayName } from './utils'
 
 export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
@@ -358,6 +359,11 @@ export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
       const success = await decorateItem(itemDbId, userId)
 
       if (success) {
+        // Delete cached room image so it will be regenerated with the new decoration
+        await deleteRoomImage(userId).catch((err) =>
+          console.error('Failed to delete room image:', err),
+        )
+
         const channelId = await getDiaryChannelId(userId)
         if (channelId) {
           const decorateMessages = [
@@ -412,6 +418,11 @@ export function registerSocialActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
       const success = await unDecorateItem(itemDbId, userId)
 
       if (success) {
+        // Delete cached room image so it will be regenerated without this decoration
+        await deleteRoomImage(userId).catch((err) =>
+          console.error('Failed to delete room image:', err),
+        )
+
         const channelId = await getDiaryChannelId(userId)
         if (channelId) {
           try {

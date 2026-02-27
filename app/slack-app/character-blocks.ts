@@ -15,6 +15,7 @@ import type {
 } from '~/services/ai/character-generation'
 
 export const CHARACTER_IMAGE_BASE_URL = 'https://grr.techtalkjp.workers.dev'
+export const ROOM_IMAGE_BASE_URL = 'https://grr.techtalkjp.workers.dev'
 
 // ============================================
 // URL Builders
@@ -36,6 +37,16 @@ export function getCharacterImageUrl(userId: string, seed?: string): string {
 
 export function getCacheBuster(): string {
   return Date.now().toString()
+}
+
+/**
+ * Build a decorated room image URL with a seed for cache busting.
+ */
+export function getRoomImageUrl(userId: string, seed?: string): string {
+  if (!seed) {
+    return `${ROOM_IMAGE_BASE_URL}/room/${userId}.png`
+  }
+  return `${ROOM_IMAGE_BASE_URL}/room/${userId}.png?v=${seed}`
 }
 
 // ============================================
@@ -71,6 +82,25 @@ export function buildCharacterImageBlockWithSeed(
   return {
     type: 'image',
     image_url: getCharacterImageUrl(userId, seed),
+    alt_text: altText,
+  }
+}
+
+// ============================================
+// Room Image Block Builders
+// ============================================
+
+/**
+ * Build a Slack image block for the decorated room.
+ * Uses cache buster so the image refreshes when decorations change.
+ */
+export function buildRoomImageBlock(
+  userId: string,
+  altText = 'キャラクターのお部屋',
+): ImageBlock {
+  return {
+    type: 'image',
+    image_url: getRoomImageUrl(userId, getCacheBuster()),
     alt_text: altText,
   }
 }
