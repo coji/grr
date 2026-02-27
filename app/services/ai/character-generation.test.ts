@@ -33,6 +33,7 @@ import {
   generateCharacterImage,
   generateCharacterMessage,
   generateCharacterReaction,
+  generateDecoratedRoomImage,
   generateWeeklyTheme,
   getWeeklyTheme,
   type CharacterConcept,
@@ -597,5 +598,124 @@ describe('generateWeeklyTheme (AI-enhanced)', () => {
     // Should return the base theme
     expect(theme.label).toBe('バレンタイン')
     expect(theme.desc).toContain('Valentine')
+  })
+})
+
+describe('generateDecoratedRoomImage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should generate room image with decorated items', async () => {
+    const mockImageData = btoa('fake-room-png')
+    mockGenerateContent.mockResolvedValue({
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inlineData: {
+                  data: mockImageData,
+                  mimeType: 'image/png',
+                },
+              },
+            ],
+          },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 300,
+        candidatesTokenCount: 1500,
+        totalTokenCount: 1800,
+      },
+    })
+
+    const result = await generateDecoratedRoomImage({
+      userId: 'U_TEST',
+      concept: mockConcept,
+      evolutionStage: 3,
+      decoratedItems: [
+        { itemName: '光る石', itemEmoji: '💎', itemCategory: 'nature' },
+        { itemName: '手作りクッキー', itemEmoji: '🍪', itemCategory: 'food' },
+      ],
+    })
+
+    expect(result).toBeInstanceOf(ArrayBuffer)
+    expect(mockGenerateContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gemini-3.1-flash-image-preview',
+        config: expect.objectContaining({
+          responseModalities: ['image', 'text'],
+          imageConfig: {
+            aspectRatio: '1:1',
+            imageSize: '1K',
+          },
+        }),
+      }),
+    )
+
+    // Check prompt includes decorated items and character info
+    const call = mockGenerateContent.mock.calls[0][0]
+    const prompt = call.contents[0] as string
+    expect(prompt).toContain('💎 光る石')
+    expect(prompt).toContain('🍪 手作りクッキー')
+    expect(prompt).toContain('モカ')
+  })
+
+  it('should throw when no image data in response', async () => {
+    mockGenerateContent.mockResolvedValue({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: 'No image generated' }],
+          },
+        },
+      ],
+    })
+
+    await expect(
+      generateDecoratedRoomImage({
+        userId: 'U_TEST',
+        concept: mockConcept,
+        evolutionStage: 1,
+        decoratedItems: [],
+      }),
+    ).rejects.toThrow('No image data in response')
+  })
+
+  it('should use fallback description when no decorated items', async () => {
+    const mockImageData = btoa('fake-room-png')
+    mockGenerateContent.mockResolvedValue({
+      candidates: [
+        {
+          content: {
+            parts: [
+              {
+                inlineData: {
+                  data: mockImageData,
+                  mimeType: 'image/png',
+                },
+              },
+            ],
+          },
+        },
+      ],
+      usageMetadata: {
+        promptTokenCount: 200,
+        candidatesTokenCount: 1000,
+        totalTokenCount: 1200,
+      },
+    })
+
+    await generateDecoratedRoomImage({
+      userId: 'U_TEST',
+      concept: mockConcept,
+      evolutionStage: 2,
+      decoratedItems: [],
+    })
+
+    const call = mockGenerateContent.mock.calls[0][0]
+    const prompt = call.contents[0] as string
+    expect(prompt).toContain('シンプルで居心地のいい空間')
   })
 })

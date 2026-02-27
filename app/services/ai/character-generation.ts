@@ -790,6 +790,33 @@ export async function generateWeeklyTheme(
 const CHARACTER_IMAGE_MODEL = 'gemini-3.1-flash-image-preview'
 
 /**
+ * Extract the first PNG image from a Gemini image generation response.
+ * Throws if no image data is found.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: Google GenAI SDK response type
+function extractImageBuffer(response: any): {
+  buffer: ArrayBuffer
+  byteLength: number
+} {
+  const parts = response.candidates?.[0]?.content?.parts
+  if (!parts) throw new Error('No response from image generation model')
+
+  for (const part of parts) {
+    if (part.inlineData?.data) {
+      const bytes = Uint8Array.from(atob(part.inlineData.data), (c) =>
+        c.charCodeAt(0),
+      )
+      return {
+        buffer: bytes.buffer as ArrayBuffer,
+        byteLength: bytes.byteLength,
+      }
+    }
+  }
+
+  throw new Error('No image data in response')
+}
+
+/**
  * Generate a character PNG image using Gemini's native image generation.
  * When baseImage is provided, it's used as a visual reference to maintain
  * character consistency across multiple generations.
@@ -881,38 +908,27 @@ One surprising detail that gives character.
     },
   })
 
-  const parts = response.candidates?.[0]?.content?.parts
-  if (!parts) throw new Error('No response from image generation model')
+  const { buffer, byteLength } = extractImageBuffer(response)
 
-  for (const part of parts) {
-    if (part.inlineData?.data) {
-      const buffer = Uint8Array.from(atob(part.inlineData.data), (c) =>
-        c.charCodeAt(0),
-      )
+  // Log cost (fire-and-forget)
+  const usage = response.usageMetadata
+  logAiCost({
+    userId: input.userId,
+    operation: 'character_image',
+    model: CHARACTER_IMAGE_MODEL,
+    inputTokens: usage?.promptTokenCount ?? 0,
+    outputTokens: usage?.candidatesTokenCount ?? 0,
+    thinkingTokens: usage?.thoughtsTokenCount ?? 0,
+    metadata: {
+      variant: isVariant,
+      emotion: input.emotion,
+      action: input.action,
+      evolutionStage: input.evolutionStage,
+      imageBytes: byteLength,
+    },
+  })
 
-      // Log cost (fire-and-forget)
-      const usage = response.usageMetadata
-      logAiCost({
-        userId: input.userId,
-        operation: 'character_image',
-        model: CHARACTER_IMAGE_MODEL,
-        inputTokens: usage?.promptTokenCount ?? 0,
-        outputTokens: usage?.candidatesTokenCount ?? 0,
-        thinkingTokens: usage?.thoughtsTokenCount ?? 0,
-        metadata: {
-          variant: isVariant,
-          emotion: input.emotion,
-          action: input.action,
-          evolutionStage: input.evolutionStage,
-          imageBytes: buffer.byteLength,
-        },
-      })
-
-      return buffer.buffer as ArrayBuffer
-    }
-  }
-
-  throw new Error('No image data in response')
+  return buffer
 }
 
 // ============================================
@@ -947,24 +963,19 @@ export async function generateDecoratedRoomImage(input: {
       : 'シンプルで居心地のいい空間'
 
   const prompt = `
-Cozy character room illustration, warm and inviting interior scene.
+Cozy character room illustration, warm soft lighting.
 
-Character in the room: ${input.concept.name} (${input.concept.species})
+Character: ${input.concept.name} (${input.concept.species})
 Appearance: ${input.concept.appearance}
-Size: small, cute character in their personal space
+The character is relaxing happily in their personal space.
 
-Decorated items displayed in the room:
+Decorated items on shelves and desk:
 ${itemsDescription}
 
-Seasonal atmosphere: ${theme.desc}
+Seasonal setting: ${theme.desc}
 
-Style requirements:
-- Soft, warm lighting
-- Cozy interior with personal touches
-- Items naturally placed as decorations (shelves, desk, windowsill)
-- Character relaxing happily in their space
-- Illustration style: cute, warm, inviting
-- Square composition, detailed background
+Style: Cute, warm, inviting illustration with detailed background.
+Items placed naturally as room decorations.
   `.trim()
 
   const genai = new GoogleGenAI({ apiKey: env.GOOGLE_GENERATIVE_AI_API_KEY })
@@ -980,34 +991,23 @@ Style requirements:
     },
   })
 
-  const parts = response.candidates?.[0]?.content?.parts
-  if (!parts) throw new Error('No response from image generation model')
+  const { buffer, byteLength } = extractImageBuffer(response)
 
-  for (const part of parts) {
-    if (part.inlineData?.data) {
-      const buffer = Uint8Array.from(atob(part.inlineData.data), (c) =>
-        c.charCodeAt(0),
-      )
+  // Log cost
+  const usage = response.usageMetadata
+  logAiCost({
+    userId: input.userId,
+    operation: 'decorated_room_image',
+    model: CHARACTER_IMAGE_MODEL,
+    inputTokens: usage?.promptTokenCount ?? 0,
+    outputTokens: usage?.candidatesTokenCount ?? 0,
+    thinkingTokens: usage?.thoughtsTokenCount ?? 0,
+    metadata: {
+      decoratedItemCount: input.decoratedItems.length,
+      evolutionStage: input.evolutionStage,
+      imageBytes: byteLength,
+    },
+  })
 
-      // Log cost
-      const usage = response.usageMetadata
-      logAiCost({
-        userId: input.userId,
-        operation: 'decorated_room_image',
-        model: CHARACTER_IMAGE_MODEL,
-        inputTokens: usage?.promptTokenCount ?? 0,
-        outputTokens: usage?.candidatesTokenCount ?? 0,
-        thinkingTokens: usage?.thoughtsTokenCount ?? 0,
-        metadata: {
-          decoratedItemCount: input.decoratedItems.length,
-          evolutionStage: input.evolutionStage,
-          imageBytes: buffer.byteLength,
-        },
-      })
-
-      return buffer.buffer as ArrayBuffer
-    }
-  }
-
-  throw new Error('No image data in response')
+  return buffer
 }
