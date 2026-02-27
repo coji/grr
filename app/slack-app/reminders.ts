@@ -7,10 +7,7 @@ import { getCharacter } from '~/services/character'
 import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
 import { getUserMilestones } from '~/services/proactive-messages'
-import {
-  buildCharacterImageBlock,
-  buildCharacterImageBlockWithPoolId,
-} from './character-blocks'
+import { buildCharacterImageBlockFromPoolId } from './character-blocks'
 import {
   DIARY_MOOD_CHOICES,
   DIARY_PERSONA_NAME,
@@ -205,9 +202,7 @@ export const sendDailyDiaryReminders = async (env: Env) => {
           character.evolutionStage,
         )
         const imageId = poolKey ? extractImageId(poolKey) : null
-        characterBlocks = imageId
-          ? [buildCharacterImageBlockWithPoolId(userId, imageId)]
-          : [buildCharacterImageBlock(userId)]
+        characterBlocks = [buildCharacterImageBlockFromPoolId(userId, imageId)]
       }
 
       // ユーザーのチャンネルにメンション付き＆ボタン付きでメッセージを送信

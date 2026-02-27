@@ -25,10 +25,7 @@ import {
   getFollowupWithEntry,
   markFollowupAsSent,
 } from '~/services/pending-followups'
-import {
-  buildCharacterImageBlock,
-  buildCharacterImageBlockWithPoolId,
-} from './character-blocks'
+import { buildCharacterImageBlockFromPoolId } from './character-blocks'
 import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -197,9 +194,9 @@ async function processEventFollowups(
           character.evolutionStage,
         )
         const imageId = poolKey ? extractImageId(poolKey) : null
-        characterBlocks = imageId
-          ? [buildCharacterImageBlockWithPoolId(followup.userId, imageId)]
-          : [buildCharacterImageBlock(followup.userId)]
+        characterBlocks = [
+          buildCharacterImageBlockFromPoolId(followup.userId, imageId),
+        ]
       }
 
       const result = await client.chat.postMessage({
@@ -427,12 +424,10 @@ function buildProactiveMessageBlocks(
   // Add character image if user has a character
   if (characterImage.hasCharacter) {
     blocks.push(
-      characterImage.poolImageId
-        ? buildCharacterImageBlockWithPoolId(
-            message.userId,
-            characterImage.poolImageId,
-          )
-        : buildCharacterImageBlock(message.userId),
+      buildCharacterImageBlockFromPoolId(
+        message.userId,
+        characterImage.poolImageId,
+      ),
     )
   }
 

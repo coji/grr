@@ -104,6 +104,24 @@ export function buildCharacterImageBlockWithPoolId(
   }
 }
 
+/**
+ * Build a character image block using a specific pool image if available.
+ * Falls back to random pool selection if no imageId is provided.
+ *
+ * This is a convenience wrapper that handles the common pattern of:
+ * - Using a specific pool image when available (for consistent tap-to-enlarge)
+ * - Falling back to random selection when pool is empty
+ */
+export function buildCharacterImageBlockFromPoolId(
+  userId: string,
+  imageId: string | null,
+  altText = 'キャラクターの画像',
+): ImageBlock {
+  return imageId
+    ? buildCharacterImageBlockWithPoolId(userId, imageId, altText)
+    : buildCharacterImageBlock(userId, altText)
+}
+
 // ============================================
 // Context-based styles (used by workflow for image generation)
 // ============================================

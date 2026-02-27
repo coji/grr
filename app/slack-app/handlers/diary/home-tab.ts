@@ -34,10 +34,7 @@ import {
 } from '~/services/character-social'
 import { db } from '~/services/db'
 import { getActiveMemories } from '~/services/memory'
-import {
-  buildCharacterImageBlock,
-  buildCharacterImageBlockWithPoolId,
-} from '~/slack-app/character-blocks'
+import { buildCharacterImageBlockFromPoolId } from '~/slack-app/character-blocks'
 import { getFileTypeEmoji } from './file-utils'
 import { buildOnboardingBlocks } from './onboarding'
 import { TOKYO_TZ } from './utils'
@@ -148,13 +145,11 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       const homeTabImageId = homeTabPoolKey
         ? extractImageId(homeTabPoolKey)
         : null
-      const homeTabImageBlock = homeTabImageId
-        ? buildCharacterImageBlockWithPoolId(
-            userId,
-            homeTabImageId,
-            `${character.characterName}の画像`,
-          )
-        : buildCharacterImageBlock(userId, `${character.characterName}の画像`)
+      const homeTabImageBlock = buildCharacterImageBlockFromPoolId(
+        userId,
+        homeTabImageId,
+        `${character.characterName}の画像`,
+      )
 
       blocks.push(
         {
@@ -872,9 +867,7 @@ async function handleCharacterInteractionModal(
 
   // Helper to build image block - uses specific pool image if available
   const buildImageBlock = (altText: string) =>
-    poolImageId
-      ? buildCharacterImageBlockWithPoolId(userId, poolImageId, altText)
-      : buildCharacterImageBlock(userId, altText)
+    buildCharacterImageBlockFromPoolId(userId, poolImageId, altText)
 
   const openResult = await client.views.open({
     trigger_id: triggerId,

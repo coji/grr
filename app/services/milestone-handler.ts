@@ -7,10 +7,7 @@
 
 import { env } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
-import {
-  buildCharacterImageBlock,
-  buildCharacterImageBlockWithPoolId,
-} from '~/slack-app/character-blocks'
+import { buildCharacterImageBlockFromPoolId } from '~/slack-app/character-blocks'
 import { generateMilestoneMessage } from './ai'
 import { getCharacter } from './character'
 import { extractImageId, pickRandomPoolKey } from './character-image'
@@ -84,9 +81,7 @@ export async function handleDiaryEntryMilestone(
     if (character) {
       const poolKey = await pickRandomPoolKey(userId, character.evolutionStage)
       const imageId = poolKey ? extractImageId(poolKey) : null
-      characterBlocks = imageId
-        ? [buildCharacterImageBlockWithPoolId(userId, imageId)]
-        : [buildCharacterImageBlock(userId)]
+      characterBlocks = [buildCharacterImageBlockFromPoolId(userId, imageId)]
     }
 
     const result = await client.chat.postMessage({

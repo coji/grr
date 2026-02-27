@@ -4,10 +4,7 @@ import { generateWeeklyDigest } from '~/services/ai'
 import { getCharacter } from '~/services/character'
 import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
-import {
-  buildCharacterImageBlock,
-  buildCharacterImageBlockWithPoolId,
-} from './character-blocks'
+import { buildCharacterImageBlockFromPoolId } from './character-blocks'
 import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -73,9 +70,7 @@ export const sendWeeklyDigest = async (env: Env) => {
           character.evolutionStage,
         )
         const imageId = poolKey ? extractImageId(poolKey) : null
-        characterBlocks = imageId
-          ? [buildCharacterImageBlockWithPoolId(userId, imageId)]
-          : [buildCharacterImageBlock(userId)]
+        characterBlocks = [buildCharacterImageBlockFromPoolId(userId, imageId)]
       }
 
       // ダイジェストメッセージを送信
