@@ -1,7 +1,6 @@
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateObject } from 'ai'
 import { z } from 'zod'
 import dayjs from '~/lib/dayjs'
+import { generateObject } from './genai'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -61,14 +60,9 @@ export async function detectFutureEvents({
   const dayOfWeek = tokyoNow.format('dddd') // e.g., "木曜日"
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { object } = await generateObject({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'minimal' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       schema: futureEventSchema,
       system: `
 あなたは日記テキストから「未来のイベント」を検出するアシスタントです。

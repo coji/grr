@@ -9,11 +9,10 @@
  * - All generated content is purely about the characters' fictional adventures
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateObject } from 'ai'
 import { z } from 'zod'
 import type { ChannelLocation } from '~/services/channel-locations'
 import { logAiCost } from './cost-logger'
+import { generateObject } from './genai'
 
 // ============================================
 // Privacy Constraints (included in all prompts)
@@ -60,7 +59,6 @@ interface EncounterContext {
 export async function generateEncounterEpisode(
   context: EncounterContext,
 ): Promise<string> {
-  const model = google('gemini-3-flash-preview')
   const modelId = 'gemini-3-flash-preview'
 
   const locationContext = context.location
@@ -68,12 +66,8 @@ export async function generateEncounterEpisode(
     : ''
 
   const { object, usage } = await generateObject({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'low' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: modelId,
+    thinkingLevel: 'low',
     schema: encounterEpisodeSchema,
     system: `
 ## タスク
@@ -100,8 +94,9 @@ ${context.characterA.name}と${context.characterB.name}の偶然の出会いを�
   logAiCost({
     operation: 'encounter_episode',
     model: modelId,
-    inputTokens: usage.inputTokens ?? 0,
-    outputTokens: usage.outputTokens ?? 0,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    thinkingTokens: usage.thinkingTokens,
     metadata: {
       characterA: context.characterA.name,
       characterB: context.characterB.name,
@@ -150,7 +145,6 @@ interface AdventureContext {
 export async function generateAdventureEpisode(
   context: AdventureContext,
 ): Promise<{ mainEpisode: string; highlights: Record<string, string> }> {
-  const model = google('gemini-3-flash-preview')
   const modelId = 'gemini-3-flash-preview'
 
   const participantList = context.participants
@@ -167,12 +161,8 @@ export async function generateAdventureEpisode(
   const schema = createAdventureSchema(userIds)
 
   const { object, usage } = await generateObject({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'low' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: modelId,
+    thinkingLevel: 'low',
     schema,
     system: `
 ## タスク
@@ -197,8 +187,9 @@ ${participantList}
   logAiCost({
     operation: 'adventure_episode',
     model: modelId,
-    inputTokens: usage.inputTokens ?? 0,
-    outputTokens: usage.outputTokens ?? 0,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    thinkingTokens: usage.thinkingTokens,
     metadata: {
       theme: context.theme.id,
       participantCount: context.participants.length,

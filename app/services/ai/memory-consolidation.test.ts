@@ -7,12 +7,8 @@ import {
   type ConsolidationPlan,
 } from './memory-consolidation'
 
-// Mock AI SDK
-vi.mock('@ai-sdk/google', () => ({
-  google: vi.fn(() => 'mock-model'),
-}))
-
-vi.mock('ai', () => ({
+// Mock genai wrapper
+vi.mock('./genai', () => ({
   generateObject: vi.fn(),
 }))
 

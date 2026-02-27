@@ -10,13 +10,12 @@
  * - Changes are detected and hinted at naturally in night records
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateObject } from 'ai'
 import { z } from 'zod'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
 import type { UserMemory } from '~/services/memory'
 import { getActiveMemories } from '~/services/memory'
+import { generateObject } from './genai'
 
 // Minimum days between personality updates
 const MIN_UPDATE_INTERVAL_DAYS = 7
@@ -147,20 +146,14 @@ export async function generatePersonality(
     )
   }
 
-  const model = google('gemini-3-flash-preview')
-
   const memoriesSummary = formatMemoriesForPersonality(memories)
   const existingPersonalitySummary = existingPersonality
     ? formatExistingPersonality(existingPersonality)
     : ''
 
   const { object } = await generateObject({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'medium' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: 'gemini-3-flash-preview',
+    thinkingLevel: 'medium',
     schema: personalitySchema,
     system: `
 あなたは「ほたる」の内面を言語化する役割です。

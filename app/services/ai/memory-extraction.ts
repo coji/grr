@@ -8,11 +8,10 @@
  * incorporates Slack unfurl (link preview) information for richer context.
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateObject } from 'ai'
 import { z } from 'zod'
 import type { UserMemory } from '~/services/memory'
 import type { UnfurlInfo } from '~/slack-app/handlers/diary/unfurl-utils'
+import { generateObject } from './genai'
 
 export type MemoryAction = 'new' | 'update' | 'confirm'
 
@@ -100,8 +99,6 @@ export async function extractMemoriesFromEntry(
   }
 
   try {
-    const model = google('gemini-3-flash-preview')
-
     const existingMemoriesSummary = formatExistingMemories(
       context.existingMemories,
     )
@@ -109,12 +106,8 @@ export async function extractMemoriesFromEntry(
     const unfurlSection = formatUnfurlInfo(context.unfurlInfo)
 
     const { object } = await generateObject({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'minimal' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       schema: extractedMemorySchema,
       system: `
 あなたは日記から「記憶」を抽出するアシスタントです。

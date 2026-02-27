@@ -10,10 +10,9 @@
  * merge into general impressions, and unimportant details fade.
  */
 
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateObject } from 'ai'
 import { z } from 'zod'
 import type { UserMemory } from '~/services/memory'
+import { generateObject } from './genai'
 
 /** Threshold: trigger consolidation when active memory count exceeds this */
 export const CONSOLIDATION_THRESHOLD = 20
@@ -78,8 +77,6 @@ export async function generateConsolidationPlan(
     return { keep: memories.map((m) => m.id), merge: [], deactivate: [] }
   }
 
-  const model = google('gemini-3-flash-preview')
-
   const memoriesList = memories
     .map(
       (m) =>
@@ -88,12 +85,8 @@ export async function generateConsolidationPlan(
     .join('\n')
 
   const { object } = await generateObject({
-    model,
-    providerOptions: {
-      google: {
-        thinkingConfig: { thinkingLevel: 'low' },
-      } satisfies GoogleGenerativeAIProviderOptions,
-    },
+    model: 'gemini-3-flash-preview',
+    thinkingLevel: 'low',
     schema: consolidationSchema,
     system: `
 ## タスク

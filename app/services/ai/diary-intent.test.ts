@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { inferDiaryReplyIntent } from './diary-intent'
 
-// Mock AI SDK
-vi.mock('@ai-sdk/google', () => ({
-  google: vi.fn(() => 'mock-model'),
-}))
-
-vi.mock('ai', () => ({
+// Mock genai wrapper
+vi.mock('./genai', () => ({
   generateObject: vi.fn(),
 }))
 
-import { generateObject } from 'ai'
+import { generateObject } from './genai'
 
 describe('inferDiaryReplyIntent', () => {
   beforeEach(() => {
@@ -23,13 +19,8 @@ describe('inferDiaryReplyIntent', () => {
         intent: 'comfort',
         rationale: 'ユーザーが疲れを表現している',
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     const result = await inferDiaryReplyIntent({
       personaName: 'Hotaru',
@@ -41,7 +32,7 @@ describe('inferDiaryReplyIntent', () => {
     expect(result.rationale).toBe('ユーザーが疲れを表現している')
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model',
+        model: 'gemini-3-flash-preview',
         schema: expect.any(Object),
         system: expect.stringContaining('## タスク'),
         prompt: expect.stringContaining('U123'),
@@ -55,13 +46,8 @@ describe('inferDiaryReplyIntent', () => {
         intent: 'praise',
         rationale: 'ユーザーが成果を報告している',
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     const result = await inferDiaryReplyIntent({
       personaName: 'Hotaru',
@@ -79,13 +65,8 @@ describe('inferDiaryReplyIntent', () => {
         intent: 'tough_feedback',
         rationale: 'ユーザーが率直な意見を求めている',
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     const result = await inferDiaryReplyIntent({
       personaName: 'Hotaru',
@@ -103,13 +84,8 @@ describe('inferDiaryReplyIntent', () => {
         intent: 'reprimand',
         rationale: 'ユーザーが叱咤激励を求めている',
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     const result = await inferDiaryReplyIntent({
       personaName: 'Hotaru',
@@ -159,13 +135,8 @@ describe('inferDiaryReplyIntent', () => {
         intent: 'comfort',
         rationale: 'テスト',
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     await inferDiaryReplyIntent({
       personaName: 'Hotaru',

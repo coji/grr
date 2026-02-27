@@ -1,5 +1,4 @@
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateText } from 'ai'
+import { generateText } from './genai'
 import { getPersonaBackgroundShort } from './persona'
 
 export interface FollowupMessageContext {
@@ -25,14 +24,9 @@ export async function generateFollowupMessage({
   const fallbackMessage = `「${eventDescription}」、どうだった？`
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { text } = await generateText({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'minimal' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 

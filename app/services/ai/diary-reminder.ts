@@ -1,5 +1,4 @@
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateText } from 'ai'
+import { generateText } from './genai'
 import { getPersonaBackground } from './persona'
 
 export interface DiaryReminderMoodOption {
@@ -60,14 +59,9 @@ export async function generateDiaryReminder({
   }
 
   try {
-    const model = google('gemini-3-flash-preview')
     const { text } = await generateText({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'minimal' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackground(personaName)}
 

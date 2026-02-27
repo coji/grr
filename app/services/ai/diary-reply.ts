@@ -1,11 +1,10 @@
-import { google, type GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
-import { generateText } from 'ai'
 import dayjs from '~/lib/dayjs'
 import { getMemoryContextForReply } from '~/services/memory-retrieval'
 import {
   inferDiaryReplyIntent,
   type DiaryReplyIntentType,
 } from './diary-intent'
+import { generateText } from './genai'
 import { getPersonaBackground } from './persona'
 import { getUserPersonality, type Personality } from './personality'
 
@@ -112,16 +111,10 @@ export async function generateDiaryReply({
     .join('\n')
 
   try {
-    // Use gemini-3-flash-preview for better multimodal capabilities
-    const model = google('gemini-3-flash-preview')
-
-    // Build content array with text and images
-    const content: Array<
-      | { type: 'text'; text: string }
-      | { type: 'file'; data: Buffer; mediaType: string }
-    > = [
+    // Build content parts for multimodal input
+    // biome-ignore lint/suspicious/noExplicitAny: Google GenAI SDK part types
+    const parts: any[] = [
       {
-        type: 'text',
         text: [
           `ユーザーID: <@${userId}>`,
           detailSummary,
@@ -133,27 +126,17 @@ export async function generateDiaryReply({
     // Add image attachments if present
     if (imageAttachments && imageAttachments.length > 0) {
       for (const attachment of imageAttachments) {
-        content.push({
-          type: 'file',
-          data: attachment.buffer,
-          mediaType: attachment.mimeType,
+        const base64 = Buffer.from(attachment.buffer).toString('base64')
+        parts.push({
+          inlineData: { data: base64, mimeType: attachment.mimeType },
         })
       }
     }
 
     const { text } = await generateText({
-      model,
-      providerOptions: {
-        google: {
-          thinkingConfig: { thinkingLevel: 'medium' },
-        } satisfies GoogleGenerativeAIProviderOptions,
-      },
-      messages: [
-        {
-          role: 'user',
-          content,
-        },
-      ],
+      model: 'gemini-3-flash-preview',
+      thinkingLevel: 'medium',
+      contents: [{ role: 'user', parts }],
       system: `
 ${getPersonaBackground(personaName)}
 ${personalityContext ? `\n${personalityContext}\n` : ''}

@@ -1,16 +1,9 @@
 import { vi } from 'vitest'
 
-// Mock @ai-sdk/google
-export const mockGoogle = vi.fn(() => 'mock-model')
-
-// Mock AI SDK functions
+// Mock genai wrapper functions
 export const mockGenerateText = vi.fn(async () => ({
   text: 'Mock AI response text',
-  finishReason: 'stop' as const,
-  usage: { promptTokens: 10, completionTokens: 20 },
-  rawCall: { rawPrompt: null, rawSettings: {} },
-  warnings: undefined,
-  request: {},
+  usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
 }))
 
 export const mockGenerateObject = vi.fn(async () => ({
@@ -18,20 +11,12 @@ export const mockGenerateObject = vi.fn(async () => ({
     intent: 'comfort',
     rationale: 'Mock intent classification',
   },
-  finishReason: 'stop' as const,
-  usage: { promptTokens: 10, completionTokens: 20 },
-  rawCall: { rawPrompt: null, rawSettings: {} },
-  warnings: undefined,
-  request: {},
+  usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
 }))
 
 // Setup mocks - call this in test files
 export const setupAIMocks = () => {
-  vi.mock('@ai-sdk/google', () => ({
-    google: mockGoogle,
-  }))
-
-  vi.mock('ai', () => ({
+  vi.mock('~/services/ai/genai', () => ({
     generateText: mockGenerateText,
     generateObject: mockGenerateObject,
   }))

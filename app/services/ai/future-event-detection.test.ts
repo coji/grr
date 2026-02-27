@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectFutureEvents } from './future-event-detection'
 
-// Mock AI SDK
-vi.mock('@ai-sdk/google', () => ({
-  google: vi.fn(() => 'mock-model'),
-}))
-
-vi.mock('ai', () => ({
+// Mock genai wrapper
+vi.mock('./genai', () => ({
   generateObject: vi.fn(),
 }))
 
-import { generateObject } from 'ai'
+import { generateObject } from './genai'
 
 describe('detectFutureEvents', () => {
   beforeEach(() => {
@@ -27,13 +23,8 @@ describe('detectFutureEvents', () => {
           },
         ],
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     const result = await detectFutureEvents({
       entryText: '明日、大事なプレゼンがあります',
@@ -46,7 +37,7 @@ describe('detectFutureEvents', () => {
     expect(result[0].followUpDate).toBe('2026-02-21') // Day after the event
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'mock-model',
+        model: 'gemini-3-flash-preview',
         schema: expect.any(Object),
         system: expect.stringContaining('未来のイベント'),
         prompt: expect.stringContaining('明日、大事なプレゼンがあります'),
@@ -62,13 +53,8 @@ describe('detectFutureEvents', () => {
           { description: 'デート', daysUntilEvent: 3 },
         ],
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     const result = await detectFutureEvents({
       entryText: '明後日に面接、3日後にデートがある',
@@ -89,13 +75,8 @@ describe('detectFutureEvents', () => {
       object: {
         events: [],
       },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     const result = await detectFutureEvents({
       entryText: '今日は疲れました',
@@ -147,13 +128,8 @@ describe('detectFutureEvents', () => {
   it('should include current date and day of week in system prompt', async () => {
     vi.mocked(generateObject).mockResolvedValue({
       object: { events: [] },
-      finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20 },
-      rawCall: { rawPrompt: null, rawSettings: {} },
-      warnings: undefined,
-      request: {},
-      // biome-ignore lint/suspicious/noExplicitAny: Mock object for testing
-    } as any)
+      usage: { inputTokens: 10, outputTokens: 20, thinkingTokens: 0 },
+    })
 
     await detectFutureEvents({
       entryText: 'テスト',
