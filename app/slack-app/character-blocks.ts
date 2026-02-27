@@ -34,6 +34,17 @@ export function getCharacterImageUrl(userId: string, seed?: string): string {
   return `${CHARACTER_IMAGE_BASE_URL}/character/${userId}/${seed}.png`
 }
 
+/**
+ * Build a URL for a specific pool image.
+ * This ensures the exact generated image is displayed.
+ *
+ * @param userId - The user's Slack ID
+ * @param imageId - The image ID (e.g., "2026-02-27-abc12345")
+ */
+export function getPoolImageUrl(userId: string, imageId: string): string {
+  return `${CHARACTER_IMAGE_BASE_URL}/character/${userId}/pool/${imageId}.png`
+}
+
 export function getCacheBuster(): string {
   return Date.now().toString()
 }

@@ -77,6 +77,36 @@ export async function addToPool(
 }
 
 /**
+ * Extract the image ID from an R2 pool key.
+ * Key format: character/{userId}/pool/stage{N}/{date}-{id}.png
+ * Returns: {date}-{id} (without .png extension)
+ */
+export function extractImageId(poolKey: string): string {
+  const filename = poolKey.split('/').pop() ?? ''
+  return filename.replace(/\.png$/, '')
+}
+
+/**
+ * Get a specific pool image by its ID.
+ * Returns null if not found.
+ */
+export async function getPoolImageById(
+  userId: string,
+  imageId: string,
+): Promise<ArrayBuffer | null> {
+  // Search across all stages (1-5) for the image
+  for (let stage = 1; stage <= 5; stage++) {
+    const prefix = buildStagePoolPrefix(userId, stage)
+    const key = `${prefix}${imageId}.png`
+    const object = await env.CHARACTER_IMAGES.get(key)
+    if (object) {
+      return await object.arrayBuffer()
+    }
+  }
+  return null
+}
+
+/**
  * Get a random image from the pool for the given evolution stage.
  * Prefers images within the active window (POOL_ACTIVE_DAYS), but falls back
  * to all pool images if the active pool is empty.
