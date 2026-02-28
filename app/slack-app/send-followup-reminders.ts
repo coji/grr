@@ -184,26 +184,10 @@ async function processEventFollowups(
         originalEntryText: originalEntry,
       })
 
-      // Build character image block if user has a character
-      const character = await getCharacter(followup.userId)
-      // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
-      let characterBlocks: any[] = []
-      if (character) {
-        const poolKey = await pickRandomPoolKey(
-          followup.userId,
-          character.evolutionStage,
-        )
-        const imageId = poolKey ? extractImageId(poolKey) : null
-        characterBlocks = [
-          buildCharacterImageBlockFromPoolId(followup.userId, imageId),
-        ]
-      }
-
       const result = await client.chat.postMessage({
         channel: followup.channelId,
         text: `<@${followup.userId}> ${followupText}`,
         blocks: [
-          ...characterBlocks,
           {
             type: 'section',
             text: {
