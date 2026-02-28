@@ -2,8 +2,6 @@ import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateFollowupMessage } from '~/services/ai'
 import { CONSOLIDATION_THRESHOLD } from '~/services/ai/memory-consolidation'
-import { getCharacter } from '~/services/character'
-import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
 import {
   evaluateAnniversaryMessages,
@@ -25,7 +23,6 @@ import {
   getFollowupWithEntry,
   markFollowupAsSent,
 } from '~/services/pending-followups'
-import { buildCharacterImageBlockFromPoolId } from './character-blocks'
 import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -184,26 +181,10 @@ async function processEventFollowups(
         originalEntryText: originalEntry,
       })
 
-      // Build character image block if user has a character
-      const character = await getCharacter(followup.userId)
-      // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
-      let characterBlocks: any[] = []
-      if (character) {
-        const poolKey = await pickRandomPoolKey(
-          followup.userId,
-          character.evolutionStage,
-        )
-        const imageId = poolKey ? extractImageId(poolKey) : null
-        characterBlocks = [
-          buildCharacterImageBlockFromPoolId(followup.userId, imageId),
-        ]
-      }
-
       const result = await client.chat.postMessage({
         channel: followup.channelId,
         text: `<@${followup.userId}> ${followupText}`,
         blocks: [
-          ...characterBlocks,
           {
             type: 'section',
             text: {
@@ -373,22 +354,10 @@ async function processProactiveMessages(
     }
 
     try {
-      const character = await getCharacter(message.userId)
-      let poolImageId: string | null = null
-      if (character) {
-        const poolKey = await pickRandomPoolKey(
-          message.userId,
-          character.evolutionStage,
-        )
-        poolImageId = poolKey ? extractImageId(poolKey) : null
-      }
       const result = await client.chat.postMessage({
         channel: message.channelId,
         text: `<@${message.userId}> ${message.text}`,
-        blocks: buildProactiveMessageBlocks(message, {
-          hasCharacter: !!character,
-          poolImageId,
-        }),
+        blocks: buildProactiveMessageBlocks(message),
       })
 
       if (result.ok && result.ts) {
@@ -415,21 +384,10 @@ async function processProactiveMessages(
  */
 function buildProactiveMessageBlocks(
   message: ProactiveMessageResult,
-  characterImage: { hasCharacter: boolean; poolImageId: string | null },
   // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
 ): any[] {
   // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
   const blocks: any[] = []
-
-  // Add character image if user has a character
-  if (characterImage.hasCharacter) {
-    blocks.push(
-      buildCharacterImageBlockFromPoolId(
-        message.userId,
-        characterImage.poolImageId,
-      ),
-    )
-  }
 
   blocks.push({
     type: 'section',
