@@ -163,6 +163,21 @@ async function processEventFollowups(
       continue
     }
 
+    // Check if user has reminders disabled
+    const userSettings = await db
+      .selectFrom('userDiarySettings')
+      .select('reminderEnabled')
+      .where('userId', '=', followup.userId)
+      .executeTakeFirst()
+
+    if (userSettings && userSettings.reminderEnabled === 0) {
+      console.log(
+        `[HEARTBEAT] Skipping follow-up for ${followup.userId}: reminders disabled`,
+      )
+      skippedCount++
+      continue
+    }
+
     const shouldSend = await evaluateFollowup(followup.userId, followup.id)
 
     if (!shouldSend.send) {

@@ -36,8 +36,8 @@ export default {
     })
   },
   async scheduled(controller, env) {
-    // 毎日13時(UTC) = JST 22時: 日記リマインダー
-    if (controller.cron === '0 13 * * *') {
+    // 毎時: ユーザーごとの設定時刻(各自のタイムゾーン)に合わせて日記リマインダーを送信
+    if (controller.cron === '0 * * * *') {
       await sendDailyDiaryReminders(env)
     }
 
