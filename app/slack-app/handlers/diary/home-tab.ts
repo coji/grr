@@ -431,7 +431,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       .where('userId', '=', userId)
       .executeTakeFirst()
 
-    const reminderHour = settings?.reminderHour ?? 13
+    const reminderHour = settings?.reminderHour ?? 21
     const reminderEnabled = settings?.reminderEnabled ?? 1
     const skipWeekends = settings?.skipWeekends ?? 0
 
@@ -493,7 +493,7 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
             block_id: 'reminder_hour',
             label: {
               type: 'plain_text',
-              text: 'リマインダー時刻',
+              text: 'リマインダー時刻（日本時間）',
             },
             element: {
               type: 'static_select',
@@ -501,14 +501,14 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
               initial_option: {
                 text: {
                   type: 'plain_text',
-                  text: `${reminderHour}:00`,
+                  text: `${reminderHour}:00 JST`,
                 },
                 value: reminderHour.toString(),
               },
               options: Array.from({ length: 24 }, (_, i) => ({
                 text: {
                   type: 'plain_text',
-                  text: `${i}:00`,
+                  text: `${i}:00 JST`,
                 },
                 value: i.toString(),
               })),

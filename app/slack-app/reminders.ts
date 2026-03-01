@@ -132,7 +132,10 @@ async function getReminderContext(
 }
 
 export const sendDailyDiaryReminders = async (env: Env) => {
-  console.log('sendDailyDiaryReminders started')
+  const tokyoNow = dayjs().tz(TOKYO_TZ)
+  const currentJstHour = tokyoNow.hour()
+  console.log(`sendDailyDiaryReminders started (JST hour: ${currentJstHour})`)
+
   const client = new SlackAPIClient(env.SLACK_BOT_TOKEN)
   const auth = await client.auth.test()
   if (!auth.ok) {
@@ -142,7 +145,6 @@ export const sendDailyDiaryReminders = async (env: Env) => {
 
   const botUserId = auth.user_id
   const allUsers = await fetchAllWorkspaceUsers(client)
-  const tokyoNow = dayjs().tz(TOKYO_TZ)
   const entryDate = tokyoNow.format('YYYY-MM-DD')
 
   for (const member of allUsers) {
@@ -180,15 +182,24 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       // ユーザーのリマインダー設定を確認
       const userSettings = await db
         .selectFrom('userDiarySettings')
-        .select(['reminderEnabled', 'skipWeekends', 'diaryChannelId'])
+        .select([
+          'reminderEnabled',
+          'reminderHour',
+          'skipWeekends',
+          'diaryChannelId',
+        ])
         .where('userId', '=', userId)
         .executeTakeFirst()
 
       // reminderEnabled が 0 の場合はスキップ
       if (userSettings && userSettings.reminderEnabled === 0) {
-        console.log(
-          `Skipping reminder for user ${userId}: reminders disabled in settings`,
-        )
+        continue
+      }
+
+      // ユーザーの希望時刻 (JST) と現在のJST時刻を比較
+      // デフォルト 21時 (JST)
+      const userReminderHour = userSettings?.reminderHour ?? 21
+      if (userReminderHour !== currentJstHour) {
         continue
       }
 
