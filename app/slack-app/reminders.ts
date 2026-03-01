@@ -10,7 +10,7 @@ import {
   DIARY_PERSONA_NAME,
 } from './handlers/diary-constants'
 
-const TOKYO_TZ = 'Asia/Tokyo'
+const DEFAULT_TZ = 'Asia/Tokyo'
 
 const REMINDER_MOOD_OPTIONS: ReadonlyArray<DiaryReminderMoodOption> =
   DIARY_MOOD_CHOICES.map(({ emoji, label }) => ({
@@ -54,11 +54,30 @@ const fetchAllWorkspaceUsers = async (client: SlackAPIClient) => {
 }
 
 /**
+ * Get user's timezone from Slack API
+ * Returns the IANA timezone string (e.g., "America/Los_Angeles", "Asia/Tokyo")
+ */
+async function getUserTimezone(
+  client: SlackAPIClient,
+  userId: string,
+): Promise<string> {
+  try {
+    const response = await client.users.info({ user: userId })
+    if (response.ok && response.user?.tz) {
+      return response.user.tz
+    }
+  } catch (error) {
+    console.error(`Failed to get timezone for user ${userId}:`, error)
+  }
+  return DEFAULT_TZ
+}
+
+/**
  * Get context for personalized reminder variations
  */
 async function getReminderContext(
   userId: string,
-  tokyoNow: dayjs.Dayjs,
+  userNow: dayjs.Dayjs,
 ): Promise<{
   daysSinceLastEntry?: number
   currentStreak?: number
@@ -74,8 +93,8 @@ async function getReminderContext(
     recentMoodTrend?: 'positive' | 'negative' | 'neutral'
   } = {}
 
-  // Day of week context
-  const dayOfWeek = tokyoNow.day()
+  // Day of week context (in user's timezone)
+  const dayOfWeek = userNow.day()
   context.isWeekStart = dayOfWeek === 1 // Monday
   context.isWeekEnd = dayOfWeek === 5 || dayOfWeek === 6 // Friday or Saturday
 
@@ -86,8 +105,9 @@ async function getReminderContext(
       context.currentStreak = milestones.currentStreak
 
       if (milestones.lastEntryDate) {
-        const lastEntry = dayjs(milestones.lastEntryDate).tz(TOKYO_TZ)
-        context.daysSinceLastEntry = tokyoNow.diff(lastEntry, 'day')
+        // Use UTC for day diff calculation (timezone doesn't affect day count)
+        const lastEntry = dayjs(milestones.lastEntryDate).utc()
+        context.daysSinceLastEntry = userNow.diff(lastEntry, 'day')
       }
     }
 
@@ -132,9 +152,9 @@ async function getReminderContext(
 }
 
 export const sendDailyDiaryReminders = async (env: Env) => {
-  const tokyoNow = dayjs().tz(TOKYO_TZ)
-  const currentJstHour = tokyoNow.hour()
-  console.log(`sendDailyDiaryReminders started (JST hour: ${currentJstHour})`)
+  const utcNow = dayjs().utc()
+  const currentUtcHour = utcNow.hour()
+  console.log(`sendDailyDiaryReminders started (UTC hour: ${currentUtcHour})`)
 
   const client = new SlackAPIClient(env.SLACK_BOT_TOKEN)
   const auth = await client.auth.test()
@@ -145,13 +165,56 @@ export const sendDailyDiaryReminders = async (env: Env) => {
 
   const botUserId = auth.user_id
   const allUsers = await fetchAllWorkspaceUsers(client)
-  const entryDate = tokyoNow.format('YYYY-MM-DD')
 
   for (const member of allUsers) {
     try {
       if (!isHuman(member, botUserId)) continue
       if (!member.id) continue
       const userId = member.id
+
+      // ユーザーのリマインダー設定を確認 (早期にスキップ判定)
+      const userSettings = await db
+        .selectFrom('userDiarySettings')
+        .select([
+          'reminderEnabled',
+          'reminderHour',
+          'skipWeekends',
+          'diaryChannelId',
+        ])
+        .where('userId', '=', userId)
+        .executeTakeFirst()
+
+      // reminderEnabled が 0 の場合はスキップ
+      if (userSettings && userSettings.reminderEnabled === 0) {
+        continue
+      }
+
+      // ユーザーのタイムゾーンを取得して現在時刻を計算
+      const userTz = await getUserTimezone(client, userId)
+      const userNow = dayjs().tz(userTz)
+      const currentUserHour = userNow.hour()
+
+      // ユーザーの希望時刻とユーザーのタイムゾーンでの現在時刻を比較
+      // デフォルト 21時
+      const userReminderHour = userSettings?.reminderHour ?? 21
+      if (userReminderHour !== currentUserHour) {
+        continue
+      }
+
+      // skipWeekends が有効で、かつ土日の場合はスキップ (ユーザーのタイムゾーンで判定)
+      const dayOfWeek = userNow.day() // 0: Sunday, 6: Saturday
+      if (
+        userSettings?.skipWeekends === 1 &&
+        (dayOfWeek === 0 || dayOfWeek === 6)
+      ) {
+        console.log(
+          `Skipping reminder for user ${userId}: skipWeekends enabled and today is weekend`,
+        )
+        continue
+      }
+
+      // ユーザーのタイムゾーンでの日付を使用
+      const entryDate = userNow.format('YYYY-MM-DD')
 
       const existing = await db
         .selectFrom('diaryEntries')
@@ -179,47 +242,11 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         continue
       }
 
-      // ユーザーのリマインダー設定を確認
-      const userSettings = await db
-        .selectFrom('userDiarySettings')
-        .select([
-          'reminderEnabled',
-          'reminderHour',
-          'skipWeekends',
-          'diaryChannelId',
-        ])
-        .where('userId', '=', userId)
-        .executeTakeFirst()
-
-      // reminderEnabled が 0 の場合はスキップ
-      if (userSettings && userSettings.reminderEnabled === 0) {
-        continue
-      }
-
-      // ユーザーの希望時刻 (JST) と現在のJST時刻を比較
-      // デフォルト 21時 (JST)
-      const userReminderHour = userSettings?.reminderHour ?? 21
-      if (userReminderHour !== currentJstHour) {
-        continue
-      }
-
-      // skipWeekends が有効で、かつ土日の場合はスキップ
-      const dayOfWeek = tokyoNow.day() // 0: Sunday, 6: Saturday
-      if (
-        userSettings?.skipWeekends === 1 &&
-        (dayOfWeek === 0 || dayOfWeek === 6)
-      ) {
-        console.log(
-          `Skipping reminder for user ${userId}: skipWeekends enabled and today is weekend`,
-        )
-        continue
-      }
-
       // 設定で指定されたチャンネルがあればそちらを優先
       const channelId = userSettings?.diaryChannelId ?? previousEntry.channelId
 
       // Get context for reminder variations
-      const reminderContext = await getReminderContext(userId, tokyoNow)
+      const reminderContext = await getReminderContext(userId, userNow)
 
       const reminderText = await generateDiaryReminder({
         personaName: DIARY_PERSONA_NAME,

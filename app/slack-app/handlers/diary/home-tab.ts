@@ -431,6 +431,21 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
       .where('userId', '=', userId)
       .executeTakeFirst()
 
+    // ユーザーのタイムゾーンを取得
+    let userTimezone = 'Asia/Tokyo'
+    try {
+      const userInfo = await context.client.users.info({ user: userId })
+      if (userInfo.ok && userInfo.user?.tz) {
+        userTimezone = userInfo.user.tz
+      }
+    } catch (error) {
+      console.error('Failed to get user timezone:', error)
+    }
+
+    // タイムゾーンの短縮表示名を作成
+    const tzShortName =
+      userTimezone.split('/').pop()?.replace('_', ' ') || userTimezone
+
     const reminderHour = settings?.reminderHour ?? 21
     const reminderEnabled = settings?.reminderEnabled ?? 1
     const skipWeekends = settings?.skipWeekends ?? 0
@@ -453,6 +468,15 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
           text: 'キャンセル',
         },
         blocks: [
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `🌍 タイムゾーン: *${tzShortName}* (Slackの設定に連動)`,
+              },
+            ],
+          },
           {
             type: 'input',
             block_id: 'reminder_enabled',
@@ -493,7 +517,11 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
             block_id: 'reminder_hour',
             label: {
               type: 'plain_text',
-              text: 'リマインダー時刻（日本時間）',
+              text: 'リマインダー時刻',
+            },
+            hint: {
+              type: 'plain_text',
+              text: `あなたのタイムゾーン (${tzShortName}) での時刻`,
             },
             element: {
               type: 'static_select',
@@ -501,14 +529,14 @@ export function registerHomeTabHandler(app: SlackApp<SlackEdgeAppEnv>) {
               initial_option: {
                 text: {
                   type: 'plain_text',
-                  text: `${reminderHour}:00 JST`,
+                  text: `${reminderHour}:00`,
                 },
                 value: reminderHour.toString(),
               },
               options: Array.from({ length: 24 }, (_, i) => ({
                 text: {
                   type: 'plain_text',
-                  text: `${i}:00 JST`,
+                  text: `${i}:00`,
                 },
                 value: i.toString(),
               })),
