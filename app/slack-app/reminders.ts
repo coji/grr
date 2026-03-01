@@ -177,7 +177,35 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         continue
       }
 
-      const channelId = previousEntry.channelId
+      // ユーザーのリマインダー設定を確認
+      const userSettings = await db
+        .selectFrom('userDiarySettings')
+        .select(['reminderEnabled', 'skipWeekends', 'diaryChannelId'])
+        .where('userId', '=', userId)
+        .executeTakeFirst()
+
+      // reminderEnabled が 0 の場合はスキップ
+      if (userSettings && userSettings.reminderEnabled === 0) {
+        console.log(
+          `Skipping reminder for user ${userId}: reminders disabled in settings`,
+        )
+        continue
+      }
+
+      // skipWeekends が有効で、かつ土日の場合はスキップ
+      const dayOfWeek = tokyoNow.day() // 0: Sunday, 6: Saturday
+      if (
+        userSettings?.skipWeekends === 1 &&
+        (dayOfWeek === 0 || dayOfWeek === 6)
+      ) {
+        console.log(
+          `Skipping reminder for user ${userId}: skipWeekends enabled and today is weekend`,
+        )
+        continue
+      }
+
+      // 設定で指定されたチャンネルがあればそちらを優先
+      const channelId = userSettings?.diaryChannelId ?? previousEntry.channelId
 
       // Get context for reminder variations
       const reminderContext = await getReminderContext(userId, tokyoNow)
