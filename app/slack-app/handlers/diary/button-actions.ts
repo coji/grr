@@ -105,29 +105,14 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
       return
     }
 
-    const now = dayjs().utc().toISOString()
-
-    // エントリがなければ作成、あれば何もしない（reminderSentAtのみのエントリ）
+    // エントリがなければ作成
     if (!existingEntry) {
-      await db
-        .insertInto('diaryEntries')
-        .values({
-          id: nanoid(),
-          userId,
-          channelId,
-          messageTs: action.message?.ts ?? '',
-          entryDate,
-          moodEmoji: null,
-          moodValue: null,
-          moodLabel: null,
-          detail: null,
-          reminderSentAt: now,
-          moodRecordedAt: null,
-          detailRecordedAt: null,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .execute()
+      await ensureDiaryEntryExists(
+        userId,
+        channelId,
+        entryDate,
+        action.message?.ts ?? '',
+      )
     }
 
     // メッセージを気分選択ボタン付きで更新
@@ -143,42 +128,7 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
             text: `<@${userId}> おかえり！今日の気分を教えてね。`,
           },
         },
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: '😄 ほっと安心',
-                emoji: true,
-              },
-              action_id: 'diary_quick_mood_good',
-              value: entryDate,
-              style: 'primary',
-            },
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: '😐 ふつうの日',
-                emoji: true,
-              },
-              action_id: 'diary_quick_mood_normal',
-              value: entryDate,
-            },
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: '😫 おつかれさま',
-                emoji: true,
-              },
-              action_id: 'diary_quick_mood_tired',
-              value: entryDate,
-            },
-          ],
-        },
+        buildMoodSelectionActionsBlock(entryDate),
       ],
     })
   })
@@ -245,34 +195,12 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     await clearReengagementHistory(userId)
 
     // 今日のエントリを作成
-    const existingEntry = await db
-      .selectFrom('diaryEntries')
-      .select('id')
-      .where('userId', '=', userId)
-      .where('entryDate', '=', entryDate)
-      .executeTakeFirst()
-
-    if (!existingEntry) {
-      await db
-        .insertInto('diaryEntries')
-        .values({
-          id: nanoid(),
-          userId,
-          channelId,
-          messageTs: action.message?.ts ?? '',
-          entryDate,
-          moodEmoji: null,
-          moodValue: null,
-          moodLabel: null,
-          detail: null,
-          reminderSentAt: now,
-          moodRecordedAt: null,
-          detailRecordedAt: null,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .execute()
-    }
+    await ensureDiaryEntryExists(
+      userId,
+      channelId,
+      entryDate,
+      action.message?.ts ?? '',
+    )
 
     // メッセージを気分選択ボタン付きで更新
     await context.client.chat.update({
@@ -287,42 +215,7 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
             text: `<@${userId}> おかえりなさい！また一緒に日記を書いていこうね。今日の気分を教えてね。`,
           },
         },
-        {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: '😄 ほっと安心',
-                emoji: true,
-              },
-              action_id: 'diary_quick_mood_good',
-              value: entryDate,
-              style: 'primary',
-            },
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: '😐 ふつうの日',
-                emoji: true,
-              },
-              action_id: 'diary_quick_mood_normal',
-              value: entryDate,
-            },
-            {
-              type: 'button',
-              text: {
-                type: 'plain_text',
-                text: '😫 おつかれさま',
-                emoji: true,
-              },
-              action_id: 'diary_quick_mood_tired',
-              value: entryDate,
-            },
-          ],
-        },
+        buildMoodSelectionActionsBlock(entryDate),
       ],
     })
   })
@@ -394,6 +287,71 @@ async function handleQuickMoodAction(
       },
     ],
   })
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+function buildMoodSelectionActionsBlock(entryDate: string): any {
+  return {
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: '😄 ほっと安心', emoji: true },
+        action_id: 'diary_quick_mood_good',
+        value: entryDate,
+        style: 'primary',
+      },
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: '😐 ふつうの日', emoji: true },
+        action_id: 'diary_quick_mood_normal',
+        value: entryDate,
+      },
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: '😫 おつかれさま', emoji: true },
+        action_id: 'diary_quick_mood_tired',
+        value: entryDate,
+      },
+    ],
+  }
+}
+
+async function ensureDiaryEntryExists(
+  userId: string,
+  channelId: string,
+  entryDate: string,
+  messageTs: string,
+): Promise<void> {
+  const existing = await db
+    .selectFrom('diaryEntries')
+    .select('id')
+    .where('userId', '=', userId)
+    .where('entryDate', '=', entryDate)
+    .executeTakeFirst()
+
+  if (existing) return
+
+  const now = dayjs().utc().toISOString()
+  await db
+    .insertInto('diaryEntries')
+    .values({
+      id: nanoid(),
+      userId,
+      channelId,
+      messageTs,
+      entryDate,
+      moodEmoji: null,
+      moodValue: null,
+      moodLabel: null,
+      detail: null,
+      reminderSentAt: now,
+      moodRecordedAt: null,
+      detailRecordedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .execute()
 }
 
 async function calculateMoodStreak(userId: string, entryDate: string) {
