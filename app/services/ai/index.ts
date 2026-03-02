@@ -22,6 +22,10 @@ export {
   type DetectFutureEventsContext,
   type FutureEvent,
 } from './future-event-detection'
+export {
+  generateAutoPauseMessage,
+  generateGentleReengagementMessage,
+} from './gentle-reengagement'
 export { getPersonaBackground } from './persona'
 export {
   clearPersonalityChangePending,
