@@ -61,7 +61,7 @@ export async function detectFutureEvents({
 
   try {
     const { object } = await generateObject({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       schema: futureEventSchema,
       system: `

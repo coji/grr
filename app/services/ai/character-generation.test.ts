@@ -93,7 +93,7 @@ describe('generateCharacterConcept', () => {
     expect(getUserPersonality).toHaveBeenCalledWith('U123')
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-flash-lite-preview',
         schema: expect.any(Object),
         system: expect.stringContaining('オリジナルキャラクター'),
         prompt: expect.stringContaining('コーヒーが好き'),

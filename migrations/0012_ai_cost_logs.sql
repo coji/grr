@@ -4,7 +4,7 @@ CREATE TABLE ai_cost_logs (
   id TEXT PRIMARY KEY,
   user_id TEXT,                    -- Associated user (nullable for system-level calls)
   operation TEXT NOT NULL,         -- e.g. 'character_image', 'diary_reply', 'character_concept'
-  model TEXT NOT NULL,             -- e.g. 'gemini-3-pro-image-preview', 'gemini-3-flash-preview'
+  model TEXT NOT NULL,             -- e.g. 'gemini-3-pro-image-preview', 'gemini-3.1-flash-lite-preview'
   input_tokens INTEGER NOT NULL DEFAULT 0,
   output_tokens INTEGER NOT NULL DEFAULT 0,
   thinking_tokens INTEGER NOT NULL DEFAULT 0,

@@ -21,7 +21,7 @@ export async function generateAnniversaryMessage({
 
   try {
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
@@ -75,7 +75,7 @@ export async function generateMilestoneMessage({
 
   try {
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
@@ -135,7 +135,7 @@ export async function generateWeeklyInsightMessage({
       .join('\n')
 
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
@@ -183,7 +183,7 @@ export async function generateSeasonalMessage({
 
   try {
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
@@ -231,7 +231,7 @@ export async function generateRandomCheckinMessage({
 
   try {
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
@@ -279,7 +279,7 @@ export async function generateQuestionMessage({
       .join('\n')
 
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
@@ -329,7 +329,7 @@ export async function generateBriefFollowupMessage({
 
   try {
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}
