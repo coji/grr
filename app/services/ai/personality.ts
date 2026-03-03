@@ -152,7 +152,7 @@ export async function generatePersonality(
     : ''
 
   const { object } = await generateObject({
-    model: 'gemini-3.1-flash-lite-preview',
+    model: 'gemini-3-flash-preview',
     thinkingLevel: 'medium',
     schema: personalitySchema,
     system: `

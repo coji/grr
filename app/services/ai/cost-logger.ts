@@ -23,6 +23,7 @@ const MODEL_PRICING: Record<
     thinking: 1.5,
   },
   'gemini-3-pro-image-preview': { input: 2.0, output: 12.0, thinking: 2.0 },
+  'gemini-3-flash-preview': { input: 0.5, output: 3.0, thinking: 3.0 },
   'gemini-3.1-flash-lite-preview': { input: 0.25, output: 1.5, thinking: 1.5 },
   'gemini-3.1-pro-preview': { input: 2.0, output: 12.0, thinking: 2.0 },
   // Gemini 2.5 series

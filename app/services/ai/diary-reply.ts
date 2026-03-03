@@ -134,7 +134,7 @@ export async function generateDiaryReply({
     }
 
     const { text } = await generateText({
-      model: 'gemini-3.1-flash-lite-preview',
+      model: 'gemini-3-flash-preview',
       thinkingLevel: 'medium',
       contents: [{ role: 'user', parts }],
       system: `
