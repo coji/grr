@@ -5,8 +5,8 @@
  * These messages are designed to be non-intrusive and supportive.
  */
 
-import { generateText } from './genai'
-import { getPersonaBackgroundShort } from './persona'
+import { generateText } from '~/services/ai/genai'
+import { getPersonaBackgroundShort } from '~/services/ai/persona'
 
 /**
  * Generate a gentle re-engagement message for users who haven't responded to reminders.
@@ -29,7 +29,7 @@ export async function generateGentleReengagementMessage({
   try {
     const { text } = await generateText({
       model: 'gemini-3-flash-preview',
-      thinkingLevel: 'minimal',
+      thinkingLevel: 'low',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -45,7 +45,7 @@ ${getPersonaBackgroundShort(personaName)}
     })
 
     const trimmed = text.trim()
-    return trimmed.length <= 80 ? trimmed : fallback
+    return trimmed.length > 0 && trimmed.length <= 80 ? trimmed : fallback
   } catch (error) {
     console.error('generateGentleReengagementMessage failed', error)
     return fallback
@@ -72,7 +72,7 @@ export async function generateAutoPauseMessage({
   try {
     const { text } = await generateText({
       model: 'gemini-3-flash-preview',
-      thinkingLevel: 'minimal',
+      thinkingLevel: 'low',
       system: `
 ${getPersonaBackgroundShort(personaName)}
 
@@ -92,7 +92,7 @@ ${getPersonaBackgroundShort(personaName)}
     })
 
     const trimmed = text.trim()
-    return trimmed.length <= 150 ? trimmed : fallback
+    return trimmed.length > 0 && trimmed.length <= 150 ? trimmed : fallback
   } catch (error) {
     console.error('generateAutoPauseMessage failed', error)
     return fallback

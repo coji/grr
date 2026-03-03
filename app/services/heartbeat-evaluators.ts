@@ -16,7 +16,6 @@ import {
   generateSeasonalMessage,
   generateWeeklyInsightMessage,
 } from './ai'
-import { db } from './db'
 import {
   countConsecutiveNoResponseDays,
   getActiveUsers,
@@ -580,15 +579,8 @@ export async function evaluateAutoPauseReminders(
       personaName,
     })
 
-    // Update user settings to disable reminders
-    await db
-      .updateTable('userDiarySettings')
-      .set({
-        reminderEnabled: 0,
-        updatedAt: dayjs().utc().toISOString(),
-      })
-      .where('userId', '=', userId)
-      .execute()
+    // Note: DB update to disable reminders is deferred to sender
+    // (only after successful message delivery)
 
     results.push({
       userId,

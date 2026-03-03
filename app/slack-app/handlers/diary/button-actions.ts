@@ -74,9 +74,22 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     const action = payload as MessageBlockAction<ButtonAction>
     const userId = action.user.id
     const channelId = action.channel?.id
-    const entryDate = action.actions[0].value
+    const rawEntryDate = action.actions[0].value
+    const messageTs = action.message?.ts
 
     if (!channelId) return
+    if (!messageTs) {
+      console.error(
+        'diary_resume_from_reengagement: missing message.ts for action',
+      )
+      return
+    }
+
+    // 'today' sentinelの場合は現在日付を計算
+    const entryDate =
+      rawEntryDate === 'today'
+        ? dayjs().tz('Asia/Tokyo').format('YYYY-MM-DD')
+        : rawEntryDate
 
     // 今日のエントリがあるか確認
     const existingEntry = await db
@@ -90,7 +103,7 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     if (existingEntry?.moodRecordedAt) {
       await context.client.chat.update({
         channel: channelId,
-        ts: action.message?.ts,
+        ts: messageTs,
         text: 'おかえり！今日はもう日記を書いてくれていたね。',
         blocks: [
           {
@@ -107,18 +120,13 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
 
     // エントリがなければ作成
     if (!existingEntry) {
-      await ensureDiaryEntryExists(
-        userId,
-        channelId,
-        entryDate,
-        action.message?.ts ?? '',
-      )
+      await ensureDiaryEntryExists(userId, channelId, entryDate, messageTs)
     }
 
     // メッセージを気分選択ボタン付きで更新
     await context.client.chat.update({
       channel: channelId,
-      ts: action.message?.ts,
+      ts: messageTs,
       text: 'おかえり！今日の気分を教えてね。',
       blocks: [
         {
@@ -175,9 +183,20 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     const action = payload as MessageBlockAction<ButtonAction>
     const userId = action.user.id
     const channelId = action.channel?.id
-    const entryDate = action.actions[0].value
+    const rawEntryDate = action.actions[0].value
+    const messageTs = action.message?.ts
 
     if (!channelId) return
+    if (!messageTs) {
+      console.error('diary_restart_after_pause: missing message.ts for action')
+      return
+    }
+
+    // 'today' sentinelの場合は現在日付を計算
+    const entryDate =
+      rawEntryDate === 'today'
+        ? dayjs().tz('Asia/Tokyo').format('YYYY-MM-DD')
+        : rawEntryDate
 
     const now = dayjs().utc().toISOString()
 
@@ -195,17 +214,12 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     await clearReengagementHistory(userId)
 
     // 今日のエントリを作成
-    await ensureDiaryEntryExists(
-      userId,
-      channelId,
-      entryDate,
-      action.message?.ts ?? '',
-    )
+    await ensureDiaryEntryExists(userId, channelId, entryDate, messageTs)
 
     // メッセージを気分選択ボタン付きで更新
     await context.client.chat.update({
       channel: channelId,
-      ts: action.message?.ts,
+      ts: messageTs,
       text: 'おかえりなさい！また一緒に日記を書いていこうね。今日の気分を教えてね。',
       blocks: [
         {
@@ -323,6 +337,7 @@ async function ensureDiaryEntryExists(
   entryDate: string,
   messageTs: string,
 ): Promise<void> {
+  // Check for existing entry by userId + entryDate first
   const existing = await db
     .selectFrom('diaryEntries')
     .select('id')
@@ -333,6 +348,9 @@ async function ensureDiaryEntryExists(
   if (existing) return
 
   const now = dayjs().utc().toISOString()
+
+  // Use onConflict to handle race conditions from Slack retries
+  // (message_ts has a unique constraint)
   await db
     .insertInto('diaryEntries')
     .values({
@@ -351,6 +369,7 @@ async function ensureDiaryEntryExists(
       createdAt: now,
       updatedAt: now,
     })
+    .onConflict((oc) => oc.column('messageTs').doNothing())
     .execute()
 }
 

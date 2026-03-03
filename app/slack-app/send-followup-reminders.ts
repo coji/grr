@@ -425,6 +425,19 @@ async function processProactiveMessages(
 
       if (result.ok && result.ts) {
         await recordMessageSent(message, result.ts)
+
+        // For auto_pause, disable reminders only after successful send
+        if (message.messageType === 'auto_pause') {
+          await db
+            .updateTable('userDiarySettings')
+            .set({
+              reminderEnabled: 0,
+              updatedAt: dayjs().utc().toISOString(),
+            })
+            .where('userId', '=', message.userId)
+            .execute()
+        }
+
         sentToUsers.add(message.userId)
         sentCount++
         console.log(
@@ -485,7 +498,8 @@ function buildProactiveMessageBlocks(
           type: 'button',
           text: { type: 'plain_text', text: '✏️ また日記書く', emoji: true },
           action_id: 'diary_resume_from_reengagement',
-          value: dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD'),
+          // Use 'today' sentinel - the handler computes the actual date at click time
+          value: 'today',
           style: 'primary',
         },
         {
@@ -506,7 +520,8 @@ function buildProactiveMessageBlocks(
           type: 'button',
           text: { type: 'plain_text', text: '🌸 また始める', emoji: true },
           action_id: 'diary_restart_after_pause',
-          value: dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD'),
+          // Use 'today' sentinel - the handler computes the actual date at click time
+          value: 'today',
           style: 'primary',
         },
       ],
