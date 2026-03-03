@@ -84,7 +84,7 @@ AIプロンプトを追加・編集する際は、**[docs/gemini-3-prompting-gui
 | モデル                           | thinkingLevel | 用途                         |
 | -------------------------------- | ------------- | ---------------------------- |
 | `gemini-2.5-flash-lite`          | ❌ 非対応     | 軽量タスク（テーマ生成など） |
-| `gemini-3-flash-preview`         | ✅ 対応       | 標準タスク                   |
+| `gemini-3.1-flash-lite-preview`  | ✅ 対応       | 標準タスク                   |
 | `gemini-3.1-flash-image-preview` | -             | 画像生成専用                 |
 
 ### プロンプト構造の統一

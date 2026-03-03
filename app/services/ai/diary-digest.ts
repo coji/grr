@@ -55,7 +55,7 @@ ${entriesText}
 上記を踏まえて、週次ダイジェストメッセージを生成してください。`
 
   const { text } = await generateText({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.1-flash-lite-preview',
     // 週次ダイジェストは要約タスクなのでlowで十分
     thinkingLevel: 'low',
     system: systemPrompt,
@@ -110,7 +110,7 @@ ${entriesText}
 上記を踏まえて、さりげない気遣いのメッセージを生成してください。`
 
   const { text } = await generateText({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.1-flash-lite-preview',
     // 気遣いメッセージは単純なタスクなのでlowで十分
     thinkingLevel: 'low',
     system: systemPrompt,

@@ -59,7 +59,7 @@ interface EncounterContext {
 export async function generateEncounterEpisode(
   context: EncounterContext,
 ): Promise<string> {
-  const modelId = 'gemini-3-flash-preview'
+  const modelId = 'gemini-3.1-flash-lite-preview'
 
   const locationContext = context.location
     ? `場所: 「${context.location.locationName}」${context.location.topic ? `（${context.location.topic}）` : ''}`
@@ -145,7 +145,7 @@ interface AdventureContext {
 export async function generateAdventureEpisode(
   context: AdventureContext,
 ): Promise<{ mainEpisode: string; highlights: Record<string, string> }> {
-  const modelId = 'gemini-3-flash-preview'
+  const modelId = 'gemini-3.1-flash-lite-preview'
 
   const participantList = context.participants
     .map(

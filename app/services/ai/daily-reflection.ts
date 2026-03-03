@@ -99,7 +99,7 @@ ${entriesText}
 上記を踏まえて、ふりかえりメモを作成してください。`
 
   const { text } = await generateText({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.1-flash-lite-preview',
     thinkingLevel: 'medium',
     system: systemPrompt,
     prompt: userPrompt,

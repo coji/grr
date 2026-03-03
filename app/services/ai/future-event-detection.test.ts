@@ -37,7 +37,7 @@ describe('detectFutureEvents', () => {
     expect(result[0].followUpDate).toBe('2026-02-21') // Day after the event
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-flash-lite-preview',
         schema: expect.any(Object),
         system: expect.stringContaining('未来のイベント'),
         prompt: expect.stringContaining('明日、大事なプレゼンがあります'),

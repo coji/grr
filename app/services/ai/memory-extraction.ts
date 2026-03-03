@@ -106,7 +106,7 @@ export async function extractMemoriesFromEntry(
     const unfurlSection = formatUnfurlInfo(context.unfurlInfo)
 
     const { object } = await generateObject({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       schema: extractedMemorySchema,
       system: `

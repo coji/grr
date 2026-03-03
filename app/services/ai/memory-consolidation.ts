@@ -85,7 +85,7 @@ export async function generateConsolidationPlan(
     .join('\n')
 
   const { object } = await generateObject({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.1-flash-lite-preview',
     thinkingLevel: 'low',
     schema: consolidationSchema,
     system: `

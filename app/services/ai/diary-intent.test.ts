@@ -32,7 +32,7 @@ describe('inferDiaryReplyIntent', () => {
     expect(result.rationale).toBe('ユーザーが疲れを表現している')
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3.1-flash-lite-preview',
         schema: expect.any(Object),
         system: expect.stringContaining('## タスク'),
         prompt: expect.stringContaining('U123'),

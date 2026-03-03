@@ -25,7 +25,7 @@ export async function generateFollowupMessage({
 
   try {
     const { text } = await generateText({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
 ${getPersonaBackgroundShort(personaName)}

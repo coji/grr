@@ -57,7 +57,7 @@ export async function generateCharacterConcept(
     ? formatPersonalityForGeneration(personality)
     : ''
 
-  const conceptModel = 'gemini-3-flash-preview'
+  const conceptModel = 'gemini-3.1-flash-lite-preview'
   const { object, usage } = await generateObject({
     model: conceptModel,
     thinkingLevel: 'medium',
@@ -156,7 +156,7 @@ export interface CharacterMessageContext {
 export async function generateCharacterMessage(
   input: CharacterMessageContext,
 ): Promise<string> {
-  const messageModel = 'gemini-3-flash-preview'
+  const messageModel = 'gemini-3.1-flash-lite-preview'
 
   // Build rich context sections
   const contextSections: string[] = []
@@ -301,7 +301,7 @@ export async function generateCharacterReaction(
     reactionIntensity: 'normal' | 'good' | 'great' | 'legendary'
   },
 ): Promise<CharacterReaction> {
-  const reactionModel = 'gemini-3-flash-preview'
+  const reactionModel = 'gemini-3.1-flash-lite-preview'
 
   // Build rich context sections
   const contextSections: string[] = []
@@ -565,7 +565,7 @@ export async function pickCharacterStyle(input: {
 }): Promise<{ emotion: CharacterEmotion; action: CharacterAction }> {
   try {
     const { object } = await generateObject({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       schema: characterStyleSchema,
       prompt: `

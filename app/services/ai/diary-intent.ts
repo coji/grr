@@ -54,7 +54,7 @@ export async function inferDiaryReplyIntent({
 
   try {
     const { object } = await generateObject({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       schema: intentSchema,
       system: `
