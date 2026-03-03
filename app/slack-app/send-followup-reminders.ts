@@ -7,7 +7,9 @@ import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
 import {
   evaluateAnniversaryMessages,
+  evaluateAutoPauseReminders,
   evaluateBriefFollowupMessages,
+  evaluateGentleReengagementMessages,
   evaluateQuestionMessages,
   evaluateRandomCheckinMessages,
   evaluateSeasonalMessages,
@@ -344,6 +346,37 @@ async function processProactiveMessages(
     )
   }
 
+  try {
+    // Gentle re-engagement messages (無反応フォローアップ)
+    const reengagementMessages =
+      await evaluateGentleReengagementMessages(DIARY_PERSONA_NAME)
+    allMessages.push(...reengagementMessages)
+    if (reengagementMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${reengagementMessages.length} gentle re-engagement messages`,
+      )
+    }
+  } catch (error) {
+    console.error(
+      '[HEARTBEAT] Failed to evaluate gentle re-engagement messages:',
+      error,
+    )
+  }
+
+  try {
+    // Auto-pause reminders (リマインダー自動停止)
+    const autoPauseMessages =
+      await evaluateAutoPauseReminders(DIARY_PERSONA_NAME)
+    allMessages.push(...autoPauseMessages)
+    if (autoPauseMessages.length > 0) {
+      console.log(
+        `[HEARTBEAT] Found ${autoPauseMessages.length} auto-pause messages`,
+      )
+    }
+  } catch (error) {
+    console.error('[HEARTBEAT] Failed to evaluate auto-pause messages:', error)
+  }
+
   if (allMessages.length === 0) {
     console.log('[HEARTBEAT] No proactive messages to send')
     return
@@ -392,6 +425,19 @@ async function processProactiveMessages(
 
       if (result.ok && result.ts) {
         await recordMessageSent(message, result.ts)
+
+        // For auto_pause, disable reminders only after successful send
+        if (message.messageType === 'auto_pause') {
+          await db
+            .updateTable('userDiarySettings')
+            .set({
+              reminderEnabled: 0,
+              updatedAt: dayjs().utc().toISOString(),
+            })
+            .where('userId', '=', message.userId)
+            .execute()
+        }
+
         sentToUsers.add(message.userId)
         sentCount++
         console.log(
@@ -420,8 +466,13 @@ function buildProactiveMessageBlocks(
   // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
   const blocks: any[] = []
 
+  // Skip character image for gentle_reengagement and auto_pause (keep it simple)
+  const skipImage =
+    message.messageType === 'gentle_reengagement' ||
+    message.messageType === 'auto_pause'
+
   // Add character image if user has a character
-  if (characterImage.hasCharacter) {
+  if (characterImage.hasCharacter && !skipImage) {
     blocks.push(
       buildCharacterImageBlockFromPoolId(
         message.userId,
@@ -437,6 +488,45 @@ function buildProactiveMessageBlocks(
       text: `<@${message.userId}> ${message.text}`,
     },
   })
+
+  // Add action buttons for gentle_reengagement
+  if (message.messageType === 'gentle_reengagement') {
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '✏️ また日記書く', emoji: true },
+          action_id: 'diary_resume_from_reengagement',
+          // Use 'today' sentinel - the handler computes the actual date at click time
+          value: 'today',
+          style: 'primary',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '💤 しばらくお休み', emoji: true },
+          action_id: 'diary_pause_reminders',
+        },
+      ],
+    })
+  }
+
+  // Add action button for auto_pause
+  if (message.messageType === 'auto_pause') {
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: '🌸 また始める', emoji: true },
+          action_id: 'diary_restart_after_pause',
+          // Use 'today' sentinel - the handler computes the actual date at click time
+          value: 'today',
+          style: 'primary',
+        },
+      ],
+    })
+  }
 
   // Add context based on message type
   const contextMap: Record<string, string> = {

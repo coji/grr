@@ -117,6 +117,8 @@ export interface Database {
       | 'monthly_report'
       | 'question'
       | 'brief_followup'
+      | 'gentle_reengagement'
+      | 'auto_pause'
     messageKey: string | null
     metadata: string | null
     messageTs: string | null

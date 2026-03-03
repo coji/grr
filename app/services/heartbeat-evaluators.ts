@@ -8,18 +8,23 @@
 import dayjs from '~/lib/dayjs'
 import {
   generateAnniversaryMessage,
+  generateAutoPauseMessage,
   generateBriefFollowupMessage,
+  generateGentleReengagementMessage,
   generateQuestionMessage,
   generateRandomCheckinMessage,
   generateSeasonalMessage,
   generateWeeklyInsightMessage,
 } from './ai'
 import {
+  countConsecutiveNoResponseDays,
   getActiveUsers,
   getAnniversaryEntry,
   getBriefEntries,
   getLastMessageOfType,
   getRecentEntries,
+  getReengagementCount,
+  hasEverWrittenDiary,
   recordProactiveMessage,
   wasMessageSent,
   type ProactiveMessageType,
@@ -440,6 +445,154 @@ export function checkMilestones(
   }
 
   return newMilestones
+}
+
+/**
+ * Evaluate and generate gentle re-engagement messages
+ *
+ * Triggers:
+ * - User has reminderEnabled = 1
+ * - No response (moodRecordedAt is null) for 5+ consecutive days
+ * - User has written at least one diary entry before
+ * - Haven't sent gentle_reengagement in the last 14 days
+ * - Haven't sent 3 or more gentle_reengagement messages total
+ */
+export async function evaluateGentleReengagementMessages(
+  personaName: string,
+): Promise<ProactiveMessageResult[]> {
+  const results: ProactiveMessageResult[] = []
+  const today = dayjs().tz(TOKYO_TZ)
+  const todayStr = today.format('YYYY-MM-DD')
+
+  const users = await getActiveUsers()
+
+  for (const { userId, channelId } of users) {
+    // Check if user has ever written a diary (not a brand new user)
+    const hasWritten = await hasEverWrittenDiary(userId)
+    if (!hasWritten) {
+      continue
+    }
+
+    // Check consecutive no-response days
+    const noResponseDays = await countConsecutiveNoResponseDays(userId)
+    if (noResponseDays < 5) {
+      continue
+    }
+
+    // Check if we've sent too many re-engagements (max 3)
+    const reengagementCount = await getReengagementCount(userId)
+    if (reengagementCount >= 3) {
+      continue
+    }
+
+    // Check cooldown (14 days since last gentle_reengagement)
+    const lastReengagement = await getLastMessageOfType(
+      userId,
+      'gentle_reengagement',
+    )
+    if (lastReengagement) {
+      const daysSinceLast = today.diff(dayjs(lastReengagement.sentAt), 'day')
+      if (daysSinceLast < 14) {
+        continue
+      }
+    }
+
+    const messageKey = `gentle_reengagement:${todayStr}:${reengagementCount + 1}`
+
+    // Check if already sent today
+    if (await wasMessageSent(userId, 'gentle_reengagement', messageKey)) {
+      continue
+    }
+
+    const text = await generateGentleReengagementMessage({
+      personaName,
+    })
+
+    results.push({
+      userId,
+      channelId,
+      messageType: 'gentle_reengagement',
+      messageKey,
+      text,
+      metadata: { noResponseDays, attemptNumber: reengagementCount + 1 },
+    })
+  }
+
+  return results
+}
+
+/**
+ * Evaluate and auto-pause reminders for users who have not responded
+ * after 3 gentle re-engagement messages.
+ *
+ * Triggers:
+ * - User has exactly 3 gentle_reengagement messages sent
+ * - Last gentle_reengagement was sent 14+ days ago
+ * - User still has reminderEnabled = 1
+ * - User still has not responded (no mood recorded since last re-engagement)
+ */
+export async function evaluateAutoPauseReminders(
+  personaName: string,
+): Promise<ProactiveMessageResult[]> {
+  const results: ProactiveMessageResult[] = []
+  const today = dayjs().tz(TOKYO_TZ)
+  const todayStr = today.format('YYYY-MM-DD')
+
+  const users = await getActiveUsers()
+
+  for (const { userId, channelId } of users) {
+    // Check if user has exactly 3 re-engagement messages
+    const reengagementCount = await getReengagementCount(userId)
+    if (reengagementCount !== 3) {
+      continue
+    }
+
+    // Check if already sent auto_pause
+    const lastAutoPause = await getLastMessageOfType(userId, 'auto_pause')
+    if (lastAutoPause) {
+      continue
+    }
+
+    // Check if last re-engagement was 14+ days ago
+    const lastReengagement = await getLastMessageOfType(
+      userId,
+      'gentle_reengagement',
+    )
+    if (!lastReengagement) {
+      continue
+    }
+    const daysSinceLast = today.diff(dayjs(lastReengagement.sentAt), 'day')
+    if (daysSinceLast < 14) {
+      continue
+    }
+
+    // Check if user still has no response
+    const noResponseDays = await countConsecutiveNoResponseDays(userId)
+    if (noResponseDays < 5) {
+      // User responded at some point, don't auto-pause
+      continue
+    }
+
+    const messageKey = `auto_pause:${todayStr}`
+
+    const text = await generateAutoPauseMessage({
+      personaName,
+    })
+
+    // Note: DB update to disable reminders is deferred to sender
+    // (only after successful message delivery)
+
+    results.push({
+      userId,
+      channelId,
+      messageType: 'auto_pause',
+      messageKey,
+      text,
+      metadata: { noResponseDays, reengagementCount },
+    })
+  }
+
+  return results
 }
 
 /**

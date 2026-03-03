@@ -4,7 +4,10 @@ import dayjs from '~/lib/dayjs'
 import type { DiaryReminderMoodOption } from '~/services/ai'
 import { generateDiaryReminder } from '~/services/ai'
 import { db } from '~/services/db'
-import { getUserMilestones } from '~/services/proactive-messages'
+import {
+  countConsecutiveNoResponseDays,
+  getUserMilestones,
+} from '~/services/proactive-messages'
 import {
   DIARY_MOOD_CHOICES,
   DIARY_PERSONA_NAME,
@@ -224,6 +227,16 @@ export const sendDailyDiaryReminders = async (env: Env) => {
         .executeTakeFirst()
 
       if (existing) continue
+
+      // 3日以上連続で無反応ならリマインダーを送らない
+      // （HEARTBEAT の gentle_reengagement が Day 5 からフォローする）
+      const noResponseDays = await countConsecutiveNoResponseDays(userId)
+      if (noResponseDays >= 3) {
+        console.log(
+          `Skipping reminder for user ${userId}: ${noResponseDays} consecutive no-response days`,
+        )
+        continue
+      }
 
       // ユーザーの過去のエントリから最新のチャンネルIDを取得
       const previousEntry = await db

@@ -1,3 +1,4 @@
+import { nanoid } from 'nanoid'
 import type {
   ButtonAction,
   MessageBlockAction,
@@ -7,6 +8,7 @@ import type {
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
+import { clearReengagementHistory } from '~/services/proactive-messages'
 import { DIARY_MOOD_CHOICES } from '../diary-constants'
 
 export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
@@ -63,6 +65,171 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
             text: `<@${userId}> 今日の日記はスキップしました。また明日！`,
           },
         },
+      ],
+    })
+  })
+
+  // リエンゲージメントから日記を再開
+  app.action('diary_resume_from_reengagement', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+    const channelId = action.channel?.id
+    const rawEntryDate = action.actions[0].value
+    const messageTs = action.message?.ts
+
+    if (!channelId) return
+    if (!messageTs) {
+      console.error(
+        'diary_resume_from_reengagement: missing message.ts for action',
+      )
+      return
+    }
+
+    // 'today' sentinelの場合は現在日付を計算
+    const entryDate =
+      rawEntryDate === 'today'
+        ? dayjs().tz('Asia/Tokyo').format('YYYY-MM-DD')
+        : rawEntryDate
+
+    // 今日のエントリがあるか確認
+    const existingEntry = await db
+      .selectFrom('diaryEntries')
+      .select(['id', 'moodRecordedAt'])
+      .where('userId', '=', userId)
+      .where('entryDate', '=', entryDate)
+      .executeTakeFirst()
+
+    // 既に気分を記録済みの場合はメッセージのみ更新
+    if (existingEntry?.moodRecordedAt) {
+      await context.client.chat.update({
+        channel: channelId,
+        ts: messageTs,
+        text: 'おかえり！今日はもう日記を書いてくれていたね。',
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `<@${userId}> おかえり！今日はもう日記を書いてくれていたね。`,
+            },
+          },
+        ],
+      })
+      return
+    }
+
+    // エントリがなければ作成
+    if (!existingEntry) {
+      await ensureDiaryEntryExists(userId, channelId, entryDate, messageTs)
+    }
+
+    // メッセージを気分選択ボタン付きで更新
+    await context.client.chat.update({
+      channel: channelId,
+      ts: messageTs,
+      text: 'おかえり！今日の気分を教えてね。',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `<@${userId}> おかえり！今日の気分を教えてね。`,
+          },
+        },
+        buildMoodSelectionActionsBlock(entryDate),
+      ],
+    })
+  })
+
+  // リマインダーを一時停止
+  app.action('diary_pause_reminders', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+    const channelId = action.channel?.id
+
+    if (!channelId) return
+
+    const now = dayjs().utc().toISOString()
+
+    // リマインダーを無効化
+    await db
+      .updateTable('userDiarySettings')
+      .set({
+        reminderEnabled: 0,
+        updatedAt: now,
+      })
+      .where('userId', '=', userId)
+      .execute()
+
+    // メッセージを更新
+    await context.client.chat.update({
+      channel: channelId,
+      ts: action.message?.ts,
+      text: 'リマインダーをお休みしました。また書きたくなったらいつでも戻ってきてね！',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `<@${userId}> リマインダーをお休みしました。また書きたくなったらいつでも戻ってきてね！\n\n_再開するには \`/grr設定\` からできるよ_`,
+          },
+        },
+      ],
+    })
+  })
+
+  // 自動停止後にリマインダーを再開
+  app.action('diary_restart_after_pause', async ({ payload, context }) => {
+    const action = payload as MessageBlockAction<ButtonAction>
+    const userId = action.user.id
+    const channelId = action.channel?.id
+    const rawEntryDate = action.actions[0].value
+    const messageTs = action.message?.ts
+
+    if (!channelId) return
+    if (!messageTs) {
+      console.error('diary_restart_after_pause: missing message.ts for action')
+      return
+    }
+
+    // 'today' sentinelの場合は現在日付を計算
+    const entryDate =
+      rawEntryDate === 'today'
+        ? dayjs().tz('Asia/Tokyo').format('YYYY-MM-DD')
+        : rawEntryDate
+
+    const now = dayjs().utc().toISOString()
+
+    // リマインダーを再度有効化
+    await db
+      .updateTable('userDiarySettings')
+      .set({
+        reminderEnabled: 1,
+        updatedAt: now,
+      })
+      .where('userId', '=', userId)
+      .execute()
+
+    // リエンゲージメント履歴をクリア（カウントリセット）
+    await clearReengagementHistory(userId)
+
+    // 今日のエントリを作成
+    await ensureDiaryEntryExists(userId, channelId, entryDate, messageTs)
+
+    // メッセージを気分選択ボタン付きで更新
+    await context.client.chat.update({
+      channel: channelId,
+      ts: messageTs,
+      text: 'おかえりなさい！また一緒に日記を書いていこうね。今日の気分を教えてね。',
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `<@${userId}> おかえりなさい！また一緒に日記を書いていこうね。今日の気分を教えてね。`,
+          },
+        },
+        buildMoodSelectionActionsBlock(entryDate),
       ],
     })
   })
@@ -134,6 +301,76 @@ async function handleQuickMoodAction(
       },
     ],
   })
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
+function buildMoodSelectionActionsBlock(entryDate: string): any {
+  return {
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: '😄 ほっと安心', emoji: true },
+        action_id: 'diary_quick_mood_good',
+        value: entryDate,
+        style: 'primary',
+      },
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: '😐 ふつうの日', emoji: true },
+        action_id: 'diary_quick_mood_normal',
+        value: entryDate,
+      },
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: '😫 おつかれさま', emoji: true },
+        action_id: 'diary_quick_mood_tired',
+        value: entryDate,
+      },
+    ],
+  }
+}
+
+async function ensureDiaryEntryExists(
+  userId: string,
+  channelId: string,
+  entryDate: string,
+  messageTs: string,
+): Promise<void> {
+  // Check for existing entry by userId + entryDate first
+  const existing = await db
+    .selectFrom('diaryEntries')
+    .select('id')
+    .where('userId', '=', userId)
+    .where('entryDate', '=', entryDate)
+    .executeTakeFirst()
+
+  if (existing) return
+
+  const now = dayjs().utc().toISOString()
+
+  // Use onConflict to handle race conditions from Slack retries
+  // (message_ts has a unique constraint)
+  await db
+    .insertInto('diaryEntries')
+    .values({
+      id: nanoid(),
+      userId,
+      channelId,
+      messageTs,
+      entryDate,
+      moodEmoji: null,
+      moodValue: null,
+      moodLabel: null,
+      detail: null,
+      reminderSentAt: now,
+      moodRecordedAt: null,
+      detailRecordedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflict((oc) => oc.column('messageTs').doNothing())
+    .execute()
 }
 
 async function calculateMoodStreak(userId: string, entryDate: string) {

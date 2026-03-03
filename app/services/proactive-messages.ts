@@ -310,3 +310,71 @@ export async function getBriefEntries(
       detail: e.detail as string,
     }))
 }
+
+/**
+ * Count consecutive days without response (moodRecordedAt is null).
+ * Used to determine when to send gentle re-engagement messages.
+ */
+export async function countConsecutiveNoResponseDays(
+  userId: string,
+): Promise<number> {
+  const recentEntries = await db
+    .selectFrom('diaryEntries')
+    .select(['entryDate', 'moodRecordedAt'])
+    .where('userId', '=', userId)
+    .orderBy('entryDate', 'desc')
+    .limit(30)
+    .execute()
+
+  if (recentEntries.length === 0) return 0
+
+  let count = 0
+  for (const entry of recentEntries) {
+    if (entry.moodRecordedAt !== null) break
+    count++
+  }
+  return count
+}
+
+/**
+ * Get the count of gentle_reengagement messages sent to a user.
+ * Used to determine if we should stop sending (max 3).
+ */
+export async function getReengagementCount(userId: string): Promise<number> {
+  const result = await db
+    .selectFrom('proactiveMessages')
+    .select(db.fn.count<number>('id').as('count'))
+    .where('userId', '=', userId)
+    .where('messageType', '=', 'gentle_reengagement')
+    .executeTakeFirst()
+
+  return Number(result?.count ?? 0)
+}
+
+/**
+ * Clear re-engagement history for a user.
+ * Called when user actively restarts after auto-pause.
+ */
+export async function clearReengagementHistory(userId: string): Promise<void> {
+  await db
+    .deleteFrom('proactiveMessages')
+    .where('userId', '=', userId)
+    .where('messageType', 'in', ['gentle_reengagement', 'auto_pause'])
+    .execute()
+}
+
+/**
+ * Check if a user has ever written a diary entry with content.
+ * Used to avoid sending re-engagement to users who never started.
+ */
+export async function hasEverWrittenDiary(userId: string): Promise<boolean> {
+  const entry = await db
+    .selectFrom('diaryEntries')
+    .select('id')
+    .where('userId', '=', userId)
+    .where('moodRecordedAt', 'is not', null)
+    .limit(1)
+    .executeTakeFirst()
+
+  return !!entry
+}
