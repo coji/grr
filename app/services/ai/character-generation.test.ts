@@ -563,6 +563,39 @@ describe('getWeeklyTheme (base theme)', () => {
     expect(day28.label).toBe('こたつ') // Week 4 January theme
     expect(day31.label).toBe('こたつ') // Same week 4 theme
   })
+
+  // endDay tests: themes should transition after their end date
+  it('should show Hinamatsuri on March 3rd (endDay)', () => {
+    const mar3 = new Date(2026, 2, 3)
+    const theme = getWeeklyTheme(mar3)
+
+    expect(theme.label).toBe('ひなまつり')
+  })
+
+  it('should NOT show Hinamatsuri on March 4th (past endDay)', () => {
+    // March 4th is past the endDay of 3, so should show next theme
+    const mar4 = new Date(2026, 2, 4)
+    const theme = getWeeklyTheme(mar4)
+
+    expect(theme.label).toBe('春の訪れ')
+    expect(theme.desc).toContain('early spring')
+  })
+
+  it('should show New Year theme until January 3rd', () => {
+    const jan3 = new Date(2026, 0, 3)
+    const theme = getWeeklyTheme(jan3)
+
+    expect(theme.label).toBe('お正月')
+  })
+
+  it('should NOT show New Year theme on January 4th (past endDay)', () => {
+    // January 4th is past the endDay of 3, so should show 初詣
+    const jan4 = new Date(2026, 0, 4)
+    const theme = getWeeklyTheme(jan4)
+
+    expect(theme.label).toBe('初詣')
+    expect(theme.desc).toContain('shrine visit')
+  })
 })
 
 describe('generateWeeklyTheme (AI-enhanced)', () => {

@@ -612,16 +612,29 @@ function pickStyleFromMood(moodLabel: string | null): {
 // ============================================
 
 /**
+ * Theme definition with optional end date.
+ * If endDay is specified, the theme ends on that day of the month,
+ * transitioning to the next theme afterward.
+ */
+interface SeasonalTheme {
+  label: string
+  desc: string
+  /** Day of month when this theme ends (inclusive). If omitted, uses week-based logic. */
+  endDay?: number
+}
+
+/**
  * Base seasonal themes organized by month (0-indexed: 0=January, 11=December).
  * Each month has 4 themes to cycle through weekly for variety.
  * These serve as the foundation for AI-enhanced themes.
  */
-const MONTHLY_THEMES: Record<number, Array<{ label: string; desc: string }>> = {
+const MONTHLY_THEMES: Record<number, SeasonalTheme[]> = {
   // January: New Year, cold winter
   0: [
     {
       label: 'お正月',
       desc: 'New Year celebration, mochi, sunrise, kadomatsu',
+      endDay: 3, // 三が日まで
     },
     { label: '初詣', desc: 'shrine visit, winter clothes, omikuji fortune' },
     { label: '雪景色', desc: 'snowy landscape, snowflakes falling gently' },
@@ -636,7 +649,11 @@ const MONTHLY_THEMES: Record<number, Array<{ label: string; desc: string }>> = {
   ],
   // March: Hinamatsuri, early spring
   2: [
-    { label: 'ひなまつり', desc: 'Hinamatsuri dolls, peach blossoms' },
+    {
+      label: 'ひなまつり',
+      desc: 'Hinamatsuri dolls, peach blossoms',
+      endDay: 3, // 3/3まで
+    },
     { label: '春の訪れ', desc: 'early spring, melting snow, first flowers' },
     {
       label: '桜のつぼみ',
@@ -728,6 +745,9 @@ const themeFlavorSchema = z.object({
 /**
  * Get the base weekly theme based on month and week of month.
  * Provides a seasonal foundation for image generation.
+ *
+ * If a theme has `endDay` set, it will only be shown until that day,
+ * transitioning to the next theme afterward.
  */
 export function getWeeklyTheme(date?: Date): { label: string; desc: string } {
   const now = date ?? new Date()
@@ -737,7 +757,15 @@ export function getWeeklyTheme(date?: Date): { label: string; desc: string } {
   const monthThemes = MONTHLY_THEMES[month]
   const weekOfMonth = Math.min(Math.floor((dayOfMonth - 1) / 7), 3)
 
-  return monthThemes[weekOfMonth]
+  const candidateTheme = monthThemes[weekOfMonth]
+
+  // If this theme has an endDay and we're past it, use the next theme
+  if (candidateTheme.endDay && dayOfMonth > candidateTheme.endDay) {
+    const nextIndex = Math.min(weekOfMonth + 1, 3)
+    return monthThemes[nextIndex]
+  }
+
+  return candidateTheme
 }
 
 /**
