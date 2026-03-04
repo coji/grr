@@ -612,16 +612,31 @@ function pickStyleFromMood(moodLabel: string | null): {
 // ============================================
 
 /**
+ * Theme definition with optional start/end dates.
+ * - startDay: Theme starts from this day (overrides week-based selection)
+ * - endDay: Theme ends on this day (transitions to next theme afterward)
+ */
+interface SeasonalTheme {
+  label: string
+  desc: string
+  /** Day of month when this theme starts (inclusive). If omitted, uses week-based logic. */
+  startDay?: number
+  /** Day of month when this theme ends (inclusive). If omitted, uses week-based logic. */
+  endDay?: number
+}
+
+/**
  * Base seasonal themes organized by month (0-indexed: 0=January, 11=December).
  * Each month has 4 themes to cycle through weekly for variety.
  * These serve as the foundation for AI-enhanced themes.
  */
-const MONTHLY_THEMES: Record<number, Array<{ label: string; desc: string }>> = {
+const MONTHLY_THEMES: Record<number, SeasonalTheme[]> = {
   // January: New Year, cold winter
   0: [
     {
       label: 'お正月',
       desc: 'New Year celebration, mochi, sunrise, kadomatsu',
+      endDay: 3, // 三が日まで
     },
     { label: '初詣', desc: 'shrine visit, winter clothes, omikuji fortune' },
     { label: '雪景色', desc: 'snowy landscape, snowflakes falling gently' },
@@ -629,14 +644,23 @@ const MONTHLY_THEMES: Record<number, Array<{ label: string; desc: string }>> = {
   ],
   // February: Still cold, Valentine's, approaching spring
   1: [
-    { label: 'バレンタイン', desc: 'Valentine chocolates, hearts, ribbon' },
+    {
+      label: 'バレンタイン',
+      desc: 'Valentine chocolates, hearts, ribbon',
+      startDay: 8,
+      endDay: 14, // 2/8〜2/14
+    },
     { label: '冬の夜空', desc: 'crisp winter night sky, bright stars' },
     { label: '梅の花', desc: 'early plum blossoms, end of winter' },
     { label: 'ぬくぬく', desc: 'cozy indoor scene, warm drink, blanket' },
   ],
   // March: Hinamatsuri, early spring
   2: [
-    { label: 'ひなまつり', desc: 'Hinamatsuri dolls, peach blossoms' },
+    {
+      label: 'ひなまつり',
+      desc: 'Hinamatsuri dolls, peach blossoms',
+      endDay: 3, // 3/3まで
+    },
     { label: '春の訪れ', desc: 'early spring, melting snow, first flowers' },
     {
       label: '桜のつぼみ',
@@ -673,7 +697,11 @@ const MONTHLY_THEMES: Record<number, Array<{ label: string; desc: string }>> = {
   ],
   // July: Tanabata, early summer
   6: [
-    { label: '七夕', desc: 'Tanabata festival, bamboo wishes, night sky' },
+    {
+      label: '七夕',
+      desc: 'Tanabata festival, bamboo wishes, night sky',
+      endDay: 7, // 7/7まで
+    },
     { label: '夏の始まり', desc: 'early summer, cicadas, blue sky' },
     { label: '風鈴', desc: 'wind chime, summer breeze, veranda' },
     { label: '海開き', desc: 'beach opening, ocean waves, summer vacation' },
@@ -708,7 +736,12 @@ const MONTHLY_THEMES: Record<number, Array<{ label: string; desc: string }>> = {
   ],
   // December: Winter holidays
   11: [
-    { label: 'クリスマス', desc: 'Christmas tree, gifts, twinkling lights' },
+    {
+      label: 'クリスマス',
+      desc: 'Christmas tree, gifts, twinkling lights',
+      startDay: 20,
+      endDay: 25, // 12/20〜12/25
+    },
     { label: '冬至', desc: 'winter solstice, yuzu bath, warm and cozy' },
     { label: '年末', desc: 'year-end, reflection, preparing for new year' },
     { label: 'イルミネーション', desc: 'winter illumination, city lights' },
@@ -728,6 +761,10 @@ const themeFlavorSchema = z.object({
 /**
  * Get the base weekly theme based on month and week of month.
  * Provides a seasonal foundation for image generation.
+ *
+ * Date-based selection (startDay/endDay) takes priority over week-based logic:
+ * - If a theme has startDay/endDay, it's shown within that date range
+ * - Otherwise, uses the default week-of-month calculation
  */
 export function getWeeklyTheme(date?: Date): { label: string; desc: string } {
   const now = date ?? new Date()
@@ -735,9 +772,44 @@ export function getWeeklyTheme(date?: Date): { label: string; desc: string } {
   const dayOfMonth = now.getDate()
 
   const monthThemes = MONTHLY_THEMES[month]
-  const weekOfMonth = Math.min(Math.floor((dayOfMonth - 1) / 7), 3)
 
-  return monthThemes[weekOfMonth]
+  // First, check if any theme with date range should be active
+  for (const theme of monthThemes) {
+    if (theme.startDay && theme.endDay) {
+      // Both start and end defined: show within range
+      if (dayOfMonth >= theme.startDay && dayOfMonth <= theme.endDay) {
+        return theme
+      }
+    }
+  }
+
+  // Fall back to week-based selection
+  const weekOfMonth = Math.min(Math.floor((dayOfMonth - 1) / 7), 3)
+  let candidateTheme = monthThemes[weekOfMonth]
+
+  // Skip themes with startDay+endDay (they're date-based, not week-based)
+  // Also skip themes with endDay only if we're past it
+  while (candidateTheme) {
+    const hasDateRange = candidateTheme.startDay && candidateTheme.endDay
+    const isPastEndDay =
+      candidateTheme.endDay &&
+      !candidateTheme.startDay &&
+      dayOfMonth > candidateTheme.endDay
+
+    if (!hasDateRange && !isPastEndDay) {
+      return candidateTheme
+    }
+
+    // Move to next theme
+    const nextIndex = monthThemes.indexOf(candidateTheme) + 1
+    if (nextIndex >= monthThemes.length) {
+      // No more themes, return the last one
+      return monthThemes[monthThemes.length - 1]
+    }
+    candidateTheme = monthThemes[nextIndex]
+  }
+
+  return candidateTheme
 }
 
 /**

@@ -488,10 +488,10 @@ describe('getWeeklyTheme (base theme)', () => {
     expect(theme.desc).toContain('cozy')
   })
 
-  it('should return Valentine theme for early February', () => {
-    // February 5th - should be week 1 (days 1-7) = 'バレンタイン'
-    const feb5 = new Date(2026, 1, 5)
-    const theme = getWeeklyTheme(feb5)
+  it('should return Valentine theme during Valentine period', () => {
+    // February 10th - within Valentine date range (2/8-2/14)
+    const feb10 = new Date(2026, 1, 10)
+    const theme = getWeeklyTheme(feb10)
 
     expect(theme.label).toBe('バレンタイン')
     expect(theme.desc).toContain('Valentine')
@@ -524,10 +524,10 @@ describe('getWeeklyTheme (base theme)', () => {
     expect(theme.desc).toContain('fireworks')
   })
 
-  it('should return Christmas theme for December', () => {
-    // December 1st - should be week 1 = 'クリスマス'
-    const dec1 = new Date(2026, 11, 1)
-    const theme = getWeeklyTheme(dec1)
+  it('should return Christmas theme during Christmas period', () => {
+    // December 22nd - within Christmas date range (12/20-12/25)
+    const dec22 = new Date(2026, 11, 22)
+    const theme = getWeeklyTheme(dec22)
 
     expect(theme.label).toBe('クリスマス')
     expect(theme.desc).toContain('Christmas')
@@ -544,13 +544,14 @@ describe('getWeeklyTheme (base theme)', () => {
 
   it('should cycle through 4 themes within a month', () => {
     // Test all 4 weeks of February
-    const week1 = getWeeklyTheme(new Date(2026, 1, 1)) // days 1-7
-    const week2 = getWeeklyTheme(new Date(2026, 1, 8)) // days 8-14
+    // Note: バレンタイン is date-based (2/8-2/14), not week-based
+    const week1 = getWeeklyTheme(new Date(2026, 1, 1)) // days 1-7 -> 冬の夜空 (バレンタイン skipped)
+    const week2 = getWeeklyTheme(new Date(2026, 1, 10)) // days 8-14 -> バレンタイン (date range)
     const week3 = getWeeklyTheme(new Date(2026, 1, 15)) // days 15-21
     const week4 = getWeeklyTheme(new Date(2026, 1, 22)) // days 22+
 
-    expect(week1.label).toBe('バレンタイン')
-    expect(week2.label).toBe('冬の夜空')
+    expect(week1.label).toBe('冬の夜空')
+    expect(week2.label).toBe('バレンタイン')
     expect(week3.label).toBe('梅の花')
     expect(week4.label).toBe('ぬくぬく')
   })
@@ -562,6 +563,78 @@ describe('getWeeklyTheme (base theme)', () => {
 
     expect(day28.label).toBe('こたつ') // Week 4 January theme
     expect(day31.label).toBe('こたつ') // Same week 4 theme
+  })
+
+  // endDay tests: themes should transition after their end date
+  it('should show Hinamatsuri on March 3rd (endDay)', () => {
+    const mar3 = new Date(2026, 2, 3)
+    const theme = getWeeklyTheme(mar3)
+
+    expect(theme.label).toBe('ひなまつり')
+  })
+
+  it('should NOT show Hinamatsuri on March 4th (past endDay)', () => {
+    // March 4th is past the endDay of 3, so should show next theme
+    const mar4 = new Date(2026, 2, 4)
+    const theme = getWeeklyTheme(mar4)
+
+    expect(theme.label).toBe('春の訪れ')
+    expect(theme.desc).toContain('early spring')
+  })
+
+  it('should show New Year theme until January 3rd', () => {
+    const jan3 = new Date(2026, 0, 3)
+    const theme = getWeeklyTheme(jan3)
+
+    expect(theme.label).toBe('お正月')
+  })
+
+  it('should NOT show New Year theme on January 4th (past endDay)', () => {
+    // January 4th is past the endDay of 3, so should show 初詣
+    const jan4 = new Date(2026, 0, 4)
+    const theme = getWeeklyTheme(jan4)
+
+    expect(theme.label).toBe('初詣')
+    expect(theme.desc).toContain('shrine visit')
+  })
+
+  it('should show Tanabata on July 7th (endDay)', () => {
+    const jul7 = new Date(2026, 6, 7)
+    const theme = getWeeklyTheme(jul7)
+
+    expect(theme.label).toBe('七夕')
+  })
+
+  it('should NOT show Tanabata on July 8th (past endDay)', () => {
+    const jul8 = new Date(2026, 6, 8)
+    const theme = getWeeklyTheme(jul8)
+
+    expect(theme.label).toBe('夏の始まり')
+  })
+
+  // startDay + endDay tests: themes with date ranges
+  it('should show Valentine theme from Feb 8-14 (startDay + endDay)', () => {
+    const feb7 = new Date(2026, 1, 7)
+    const feb8 = new Date(2026, 1, 8)
+    const feb14 = new Date(2026, 1, 14)
+    const feb15 = new Date(2026, 1, 15)
+
+    expect(getWeeklyTheme(feb7).label).not.toBe('バレンタイン') // before range
+    expect(getWeeklyTheme(feb8).label).toBe('バレンタイン') // start of range
+    expect(getWeeklyTheme(feb14).label).toBe('バレンタイン') // Valentine's Day!
+    expect(getWeeklyTheme(feb15).label).not.toBe('バレンタイン') // after range
+  })
+
+  it('should show Christmas theme from Dec 20-25 (startDay + endDay)', () => {
+    const dec19 = new Date(2026, 11, 19)
+    const dec20 = new Date(2026, 11, 20)
+    const dec25 = new Date(2026, 11, 25)
+    const dec26 = new Date(2026, 11, 26)
+
+    expect(getWeeklyTheme(dec19).label).not.toBe('クリスマス') // before range
+    expect(getWeeklyTheme(dec20).label).toBe('クリスマス') // start of range
+    expect(getWeeklyTheme(dec25).label).toBe('クリスマス') // Christmas Day!
+    expect(getWeeklyTheme(dec26).label).not.toBe('クリスマス') // after range
   })
 })
 
@@ -592,7 +665,7 @@ describe('generateWeeklyTheme (AI-enhanced)', () => {
   it('should fall back to base theme if AI fails', async () => {
     vi.mocked(generateObject).mockRejectedValue(new Error('AI unavailable'))
 
-    const theme = await generateWeeklyTheme(new Date(2026, 1, 5)) // February week 1
+    const theme = await generateWeeklyTheme(new Date(2026, 1, 10)) // February within Valentine range
 
     // Should return the base theme
     expect(theme.label).toBe('バレンタイン')
