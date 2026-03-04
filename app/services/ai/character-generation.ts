@@ -690,7 +690,11 @@ const MONTHLY_THEMES: Record<number, SeasonalTheme[]> = {
   ],
   // July: Tanabata, early summer
   6: [
-    { label: '七夕', desc: 'Tanabata festival, bamboo wishes, night sky' },
+    {
+      label: '七夕',
+      desc: 'Tanabata festival, bamboo wishes, night sky',
+      endDay: 7, // 7/7まで
+    },
     { label: '夏の始まり', desc: 'early summer, cicadas, blue sky' },
     { label: '風鈴', desc: 'wind chime, summer breeze, veranda' },
     { label: '海開き', desc: 'beach opening, ocean waves, summer vacation' },

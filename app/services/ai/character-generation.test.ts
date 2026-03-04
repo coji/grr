@@ -596,6 +596,20 @@ describe('getWeeklyTheme (base theme)', () => {
     expect(theme.label).toBe('初詣')
     expect(theme.desc).toContain('shrine visit')
   })
+
+  it('should show Tanabata on July 7th (endDay)', () => {
+    const jul7 = new Date(2026, 6, 7)
+    const theme = getWeeklyTheme(jul7)
+
+    expect(theme.label).toBe('七夕')
+  })
+
+  it('should NOT show Tanabata on July 8th (past endDay)', () => {
+    const jul8 = new Date(2026, 6, 8)
+    const theme = getWeeklyTheme(jul8)
+
+    expect(theme.label).toBe('夏の始まり')
+  })
 })
 
 describe('generateWeeklyTheme (AI-enhanced)', () => {
