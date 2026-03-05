@@ -101,7 +101,7 @@ describe('generateCharacterConcept', () => {
     )
   })
 
-  it('should handle empty memories gracefully', async () => {
+  it('should use creative seeds when memories are empty', async () => {
     vi.mocked(getActiveMemories).mockResolvedValue([])
     vi.mocked(getUserPersonality).mockResolvedValue(null)
     vi.mocked(generateObject).mockResolvedValue(
@@ -111,9 +111,10 @@ describe('generateCharacterConcept', () => {
     const result = await generateCharacterConcept('U123')
 
     expect(result).toEqual(mockConcept)
+    // Should include creative hints instead of "no memories" message
     expect(generateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        prompt: expect.stringContaining('まだ記憶がありません'),
+        prompt: expect.stringContaining('創造のヒント'),
       }),
     )
   })
