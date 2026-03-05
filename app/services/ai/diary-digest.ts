@@ -1,7 +1,15 @@
 import { generateText } from './genai'
+import {
+  getPersonaBackground,
+  getPersonaWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 
 interface DiaryDigestOptions {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   entries: Array<{
     date: string
@@ -18,7 +26,15 @@ interface DiaryDigestOptions {
 export async function generateWeeklyDigest(
   options: DiaryDigestOptions,
 ): Promise<string> {
-  const { personaName, userId, entries, weekStart, weekEnd } = options
+  const { personaName, characterInfo, userId, entries, weekStart, weekEnd } =
+    options
+
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
 
   const entriesText = entries
     .map((entry) => {
@@ -28,7 +44,7 @@ export async function generateWeeklyDigest(
     })
     .join('\n\n')
 
-  const systemPrompt = `あなたは「${personaName}」というAIアシスタントです。
+  const systemPrompt = `${personaPrompt}
 
 ## タスク
 ${weekStart}〜${weekEnd}の日記を振り返り、温かく寄り添うメッセージを生成する。
@@ -68,7 +84,10 @@ ${entriesText}
  * 気分トリガーの応援メッセージを生成する
  */
 export async function generateMoodSupportMessage(options: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   consecutiveLowMoodDays: number
   recentEntries: Array<{
@@ -77,7 +96,20 @@ export async function generateMoodSupportMessage(options: {
     detail: string | null
   }>
 }): Promise<string> {
-  const { personaName, userId, consecutiveLowMoodDays, recentEntries } = options
+  const {
+    personaName,
+    characterInfo,
+    userId,
+    consecutiveLowMoodDays,
+    recentEntries,
+  } = options
+
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
 
   const entriesText = recentEntries
     .map((entry) => {
@@ -87,7 +119,8 @@ export async function generateMoodSupportMessage(options: {
     })
     .join('\n\n')
 
-  const systemPrompt = `あなたは「${personaName}」というAIアシスタントです。
+  const systemPrompt = `${personaPrompt}
+
 ユーザーが${consecutiveLowMoodDays}日連続で低い気分を記録しています。
 
 ## タスク

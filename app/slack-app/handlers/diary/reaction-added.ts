@@ -1,7 +1,8 @@
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
+import { getCharacterPersonaInfo } from '~/services/character'
 import { db } from '~/services/db'
-import { DIARY_MOOD_CHOICES, DIARY_PERSONA_NAME } from '../diary-constants'
+import { DIARY_MOOD_CHOICES } from '../diary-constants'
 
 export function registerReactionAddedHandler(app: SlackApp<SlackEdgeAppEnv>) {
   app.event('reaction_added', async ({ payload, context }) => {
@@ -42,11 +43,13 @@ export function registerReactionAddedHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
     if (!entry.moodRecordedAt) {
       const label = choice ? `「${choice.label}」` : `「:${event.reaction}:」`
+      const characterInfo = await getCharacterPersonaInfo(entry.userId)
+      const characterName = characterInfo?.name ?? '日記アシスタント'
       await context.client.chat
         .postMessage({
           channel: channelId,
           thread_ts: messageTs,
-          text: `${DIARY_PERSONA_NAME}が今日のきもち${label}をそっと受け取ったよ。いつもおつかれさま。`,
+          text: `${characterName}が今日のきもち${label}をそっと受け取ったよ。いつもおつかれさま。`,
         })
         .catch(() => {})
     }

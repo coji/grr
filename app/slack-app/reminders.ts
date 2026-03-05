@@ -3,15 +3,13 @@ import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import type { DiaryReminderMoodOption } from '~/services/ai'
 import { generateDiaryReminder } from '~/services/ai'
+import { getCharacterPersonaInfo } from '~/services/character'
 import { db } from '~/services/db'
 import {
   countConsecutiveNoResponseDays,
   getUserMilestones,
 } from '~/services/proactive-messages'
-import {
-  DIARY_MOOD_CHOICES,
-  DIARY_PERSONA_NAME,
-} from './handlers/diary-constants'
+import { DIARY_MOOD_CHOICES } from './handlers/diary-constants'
 
 const DEFAULT_TZ = 'Asia/Tokyo'
 
@@ -261,8 +259,11 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       // Get context for reminder variations
       const reminderContext = await getReminderContext(userId, userNow)
 
+      // Get character info for personalized reminder
+      const characterInfo = await getCharacterPersonaInfo(userId)
+
       const reminderText = await generateDiaryReminder({
-        personaName: DIARY_PERSONA_NAME,
+        characterInfo,
         userId,
         moodOptions: REMINDER_MOOD_OPTIONS,
         context: reminderContext,

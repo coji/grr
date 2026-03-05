@@ -1,8 +1,15 @@
 import { generateText } from './genai'
-import { getPersonaBackgroundShort } from './persona'
+import {
+  getPersonaBackgroundShort,
+  getPersonaShortWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 
 export interface FollowupMessageContext {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   eventDescription: string
   originalEntryText?: string | null
@@ -17,10 +24,18 @@ export interface FollowupMessageContext {
  */
 export async function generateFollowupMessage({
   personaName,
+  characterInfo,
   userId,
   eventDescription,
   originalEntryText,
 }: FollowupMessageContext): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
+
   const fallbackMessage = `「${eventDescription}」、どうだった？`
 
   try {
@@ -28,7 +43,7 @@ export async function generateFollowupMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 以前日記に書いていた未来のイベントについてフォローアップする。

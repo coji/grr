@@ -5,7 +5,11 @@ import {
   type DiaryReplyIntentType,
 } from './diary-intent'
 import { generateText } from './genai'
-import { getPersonaBackground } from './persona'
+import {
+  getPersonaBackground,
+  getPersonaWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 import { getUserPersonality, type Personality } from './personality'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -17,7 +21,10 @@ export interface ImageAttachment {
 }
 
 export interface DiaryReplyContext {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   moodLabel?: string | null
   latestEntry?: string | null
@@ -28,6 +35,7 @@ export interface DiaryReplyContext {
 
 export async function generateDiaryReply({
   personaName,
+  characterInfo,
   userId,
   moodLabel,
   latestEntry,
@@ -35,8 +43,18 @@ export async function generateDiaryReply({
   mentionMessage,
   imageAttachments,
 }: DiaryReplyContext): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
+
+  // Get display name for intent analysis (character name or persona name)
+  const displayName = characterInfo?.name ?? personaName ?? '日記アシスタント'
+
   const intentAnalysis = await inferDiaryReplyIntent({
-    personaName,
+    personaName: displayName,
     userId,
     latestEntry,
     mentionMessage,
@@ -138,7 +156,7 @@ export async function generateDiaryReply({
       thinkingLevel: 'medium',
       contents: [{ role: 'user', parts }],
       system: `
-${getPersonaBackground(personaName)}
+${personaPrompt}
 ${personalityContext ? `\n${personalityContext}\n` : ''}
 ${memoryContext ? `\n${memoryContext}\n` : ''}
 ## タスク

@@ -1,11 +1,10 @@
 import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateWeeklyDigest } from '~/services/ai'
-import { getCharacter } from '~/services/character'
+import { getCharacter, getCharacterPersonaInfo } from '~/services/character'
 import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
 import { buildCharacterImageBlockFromPoolId } from './character-blocks'
-import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -44,9 +43,12 @@ export const sendWeeklyDigest = async (env: Env) => {
 
       if (entries.length === 0) continue
 
+      // Get character info for personalized digest
+      const characterInfo = await getCharacterPersonaInfo(userId)
+
       // AIでダイジェストを生成
       const digestMessage = await generateWeeklyDigest({
-        personaName: DIARY_PERSONA_NAME,
+        characterInfo,
         userId,
         entries: entries.map((e) => ({
           date: e.entryDate,

@@ -301,6 +301,31 @@ export function characterToConcept(character: UserCharacter): CharacterConcept {
   }
 }
 
+/**
+ * Convert UserCharacter to CharacterPersonaInfo for persona functions
+ */
+export function characterToPersonaInfo(
+  character: UserCharacter,
+): import('./ai/persona').CharacterPersonaInfo {
+  return {
+    name: character.characterName,
+    species: character.characterSpecies,
+    personality: character.characterPersonality,
+    catchphrase: character.characterCatchphrase,
+  }
+}
+
+/**
+ * Get persona info for a user (returns null if no character exists)
+ */
+export async function getCharacterPersonaInfo(
+  userId: string,
+): Promise<import('./ai/persona').CharacterPersonaInfo | null> {
+  const character = await getCharacter(userId)
+  if (!character) return null
+  return characterToPersonaInfo(character)
+}
+
 // ============================================
 // Character Lifecycle (Diary Integration)
 // ============================================

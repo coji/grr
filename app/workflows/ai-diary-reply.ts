@@ -29,7 +29,11 @@ import {
 } from '~/services/ai/character-generation'
 import type { ImageAttachment } from '~/services/ai/diary-reply'
 import { getEntryAttachments } from '~/services/attachments'
-import { characterToConcept, getCharacter } from '~/services/character'
+import {
+  characterToConcept,
+  characterToPersonaInfo,
+  getCharacter,
+} from '~/services/character'
 import {
   addToPool,
   countTodayGenerations,
@@ -41,8 +45,7 @@ import {
 import { downloadSlackFiles } from '~/services/slack-file-downloader'
 import { getPoolImageUrl } from '~/slack-app/character-blocks'
 
-// Import constants directly to avoid path issues
-const DIARY_PERSONA_NAME = 'ほたる'
+// Supportive reactions for diary entries
 const SUPPORTIVE_REACTIONS = [
   'sparkles',
   'star',
@@ -90,6 +93,12 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
         },
       },
       async (): Promise<string> => {
+        // Fetch character info for persona (may be null for new users)
+        const character = await getCharacter(params.userId)
+        const characterInfo = character
+          ? characterToPersonaInfo(character)
+          : null
+
         let imageAttachments: ImageAttachment[] | undefined
         try {
           const attachments = await getEntryAttachments(params.entryId)
@@ -190,7 +199,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
 
         // Generate AI reply with downloaded images (if any)
         return await generateDiaryReply({
-          personaName: DIARY_PERSONA_NAME,
+          characterInfo,
           userId: params.userId,
           moodLabel: params.moodLabel,
           latestEntry: params.latestEntry,
@@ -353,8 +362,14 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
     // Step 5: Add supportive reaction
     await step.do('add-supportive-reaction', async (): Promise<void> => {
       try {
+        // Fetch character info for persona
+        const character = await getCharacter(params.userId)
+        const characterInfo = character
+          ? characterToPersonaInfo(character)
+          : null
+
         const reactionName = await generateSupportiveReaction({
-          personaName: DIARY_PERSONA_NAME,
+          characterInfo,
           userId: params.userId,
           messageText: params.mentionMessage || '',
           moodLabel: params.moodLabel,

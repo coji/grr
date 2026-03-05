@@ -6,12 +6,12 @@
 
 import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
+import { getCharacterPersonaInfo } from '~/services/character'
 import { db } from '~/services/db'
 import {
   getLastMessageOfType,
   recordProactiveMessage,
 } from '~/services/proactive-messages'
-import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 import { generateMonthlyReport } from './monthly-report-generator'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -94,9 +94,12 @@ export const sendMonthlyReport = async (env: Env) => {
       // 統計を計算
       const stats = calculateMonthStats(entries)
 
+      // Get character info for personalized report
+      const characterInfo = await getCharacterPersonaInfo(userId)
+
       // AIでレポートを生成
       const reportMessage = await generateMonthlyReport({
-        personaName: DIARY_PERSONA_NAME,
+        characterInfo,
         userId,
         entries: entries.map((e) => ({
           date: e.entryDate,

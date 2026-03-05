@@ -2,7 +2,7 @@ import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateFollowupMessage } from '~/services/ai'
 import { CONSOLIDATION_THRESHOLD } from '~/services/ai/memory-consolidation'
-import { getCharacter } from '~/services/character'
+import { getCharacter, getCharacterPersonaInfo } from '~/services/character'
 import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
 import {
@@ -28,7 +28,6 @@ import {
   markFollowupAsSent,
 } from '~/services/pending-followups'
 import { buildCharacterImageBlockFromPoolId } from './character-blocks'
-import { DIARY_PERSONA_NAME } from './handlers/diary-constants'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
@@ -194,8 +193,9 @@ async function processEventFollowups(
       const followupWithEntry = await getFollowupWithEntry(followup.id)
       const originalEntry = followupWithEntry?.entryDetail ?? null
 
+      const characterInfo = await getCharacterPersonaInfo(followup.userId)
       const followupText = await generateFollowupMessage({
-        personaName: DIARY_PERSONA_NAME,
+        characterInfo,
         userId: followup.userId,
         eventDescription: followup.eventDescription,
         originalEntryText: originalEntry,
@@ -257,8 +257,7 @@ async function processProactiveMessages(
   // Evaluate all types of proactive messages
   try {
     // Anniversary messages (1年前リマインド)
-    const anniversaryMessages =
-      await evaluateAnniversaryMessages(DIARY_PERSONA_NAME)
+    const anniversaryMessages = await evaluateAnniversaryMessages()
     allMessages.push(...anniversaryMessages)
     if (anniversaryMessages.length > 0) {
       console.log(
@@ -271,7 +270,7 @@ async function processProactiveMessages(
 
   try {
     // Seasonal messages (季節の挨拶)
-    const seasonalMessages = await evaluateSeasonalMessages(DIARY_PERSONA_NAME)
+    const seasonalMessages = await evaluateSeasonalMessages()
     allMessages.push(...seasonalMessages)
     if (seasonalMessages.length > 0) {
       console.log(
@@ -284,8 +283,7 @@ async function processProactiveMessages(
 
   try {
     // Weekly insight messages (週イチ気づき)
-    const weeklyMessages =
-      await evaluateWeeklyInsightMessages(DIARY_PERSONA_NAME)
+    const weeklyMessages = await evaluateWeeklyInsightMessages()
     allMessages.push(...weeklyMessages)
     if (weeklyMessages.length > 0) {
       console.log(
@@ -301,7 +299,7 @@ async function processProactiveMessages(
 
   try {
     // Question intervention messages (問いかけ型介入)
-    const questionMessages = await evaluateQuestionMessages(DIARY_PERSONA_NAME)
+    const questionMessages = await evaluateQuestionMessages()
     allMessages.push(...questionMessages)
     if (questionMessages.length > 0) {
       console.log(
@@ -314,8 +312,7 @@ async function processProactiveMessages(
 
   try {
     // Brief entry follow-up messages (続きを聞かせて)
-    const briefMessages =
-      await evaluateBriefFollowupMessages(DIARY_PERSONA_NAME)
+    const briefMessages = await evaluateBriefFollowupMessages()
     allMessages.push(...briefMessages)
     if (briefMessages.length > 0) {
       console.log(
@@ -331,8 +328,7 @@ async function processProactiveMessages(
 
   try {
     // Random check-in messages (ランダムな一言) - evaluated last due to low probability
-    const randomMessages =
-      await evaluateRandomCheckinMessages(DIARY_PERSONA_NAME)
+    const randomMessages = await evaluateRandomCheckinMessages()
     allMessages.push(...randomMessages)
     if (randomMessages.length > 0) {
       console.log(
@@ -348,8 +344,7 @@ async function processProactiveMessages(
 
   try {
     // Gentle re-engagement messages (無反応フォローアップ)
-    const reengagementMessages =
-      await evaluateGentleReengagementMessages(DIARY_PERSONA_NAME)
+    const reengagementMessages = await evaluateGentleReengagementMessages()
     allMessages.push(...reengagementMessages)
     if (reengagementMessages.length > 0) {
       console.log(
@@ -365,8 +360,7 @@ async function processProactiveMessages(
 
   try {
     // Auto-pause reminders (リマインダー自動停止)
-    const autoPauseMessages =
-      await evaluateAutoPauseReminders(DIARY_PERSONA_NAME)
+    const autoPauseMessages = await evaluateAutoPauseReminders()
     allMessages.push(...autoPauseMessages)
     if (autoPauseMessages.length > 0) {
       console.log(
