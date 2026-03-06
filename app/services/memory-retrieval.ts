@@ -287,9 +287,9 @@ function truncateToTokens(text: string, maxTokens: number): string {
   let tokens = 0
 
   for (const line of lines) {
-    const lineTokens = estimateTokens(line + '\n')
+    const lineTokens = estimateTokens(`${line}\n`)
     if (tokens + lineTokens > maxTokens) break
-    result += line + '\n'
+    result += `${line}\n`
     tokens += lineTokens
   }
 

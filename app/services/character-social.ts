@@ -98,13 +98,6 @@ export async function setInteractionEnabled(
 // Encounter Logic
 // ============================================
 
-interface EncounterCandidate {
-  userIdA: string
-  userIdB: string
-  probability: number
-  sharedChannels: ChannelLocation[]
-}
-
 /**
  * Check how many encounters a user has had today.
  */
@@ -212,8 +205,6 @@ export async function getRecentEncounters(userId: string, limit = 5) {
  * Mark encounters as read for a specific user.
  */
 export async function markEncountersRead(userId: string): Promise<void> {
-  const now = dayjs().utc().toISOString()
-
   await db
     .updateTable('characterEncounters')
     .set({ readByA: 1 })
