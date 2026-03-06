@@ -942,7 +942,7 @@ export async function generateWeeklyTheme(
 
 ## 出力フォーマット
 - label: ベースをアレンジ（例: お正月→初日の出、雪景色→粉雪の朝）
-- desc: 具体的な情景を英語で描写
+- desc: 具体的な情景を英語で描写（80文字以内、シンプルに）
       `.trim(),
     })
 
