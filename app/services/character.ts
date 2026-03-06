@@ -327,6 +327,22 @@ export async function getCharacterPersonaInfo(
 }
 
 /**
+ * Get character persona info with graceful error handling.
+ * Returns null on failure (e.g., database errors) instead of throwing.
+ */
+export async function getCharacterPersonaInfoSafe(
+  userId: string,
+): Promise<import('./ai/persona').CharacterPersonaInfo | null> {
+  return getCharacterPersonaInfo(userId).catch((error) => {
+    console.warn(
+      `Failed to load character info for ${userId}; continuing with default persona`,
+      error,
+    )
+    return null
+  })
+}
+
+/**
  * Batch-fetch persona info for multiple users
  * Returns a Map keyed by userId
  */

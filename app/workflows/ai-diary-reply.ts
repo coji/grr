@@ -33,6 +33,7 @@ import {
   characterToConcept,
   characterToPersonaInfo,
   getCharacter,
+  getCharacterPersonaInfoSafe,
 } from '~/services/character'
 import {
   addToPool,
@@ -94,17 +95,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
       },
       async (): Promise<string> => {
         // Fetch character info for persona (best-effort, fallback to default persona)
-        const characterInfo = await getCharacter(params.userId)
-          .then((character) =>
-            character ? characterToPersonaInfo(character) : null,
-          )
-          .catch((error) => {
-            console.warn(
-              `Failed to load character info for ${params.userId}; continuing with default persona`,
-              error,
-            )
-            return null
-          })
+        const characterInfo = await getCharacterPersonaInfoSafe(params.userId)
 
         let imageAttachments: ImageAttachment[] | undefined
         try {

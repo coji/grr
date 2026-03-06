@@ -3,7 +3,7 @@ import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import type { DiaryReminderMoodOption } from '~/services/ai'
 import { generateDiaryReminder } from '~/services/ai'
-import { getCharacterPersonaInfo } from '~/services/character'
+import { getCharacterPersonaInfoSafe } from '~/services/character'
 import { db } from '~/services/db'
 import {
   countConsecutiveNoResponseDays,
@@ -260,15 +260,7 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       const reminderContext = await getReminderContext(userId, userNow)
 
       // Get character info for personalized reminder (best-effort, fallback to default persona)
-      const characterInfo = await getCharacterPersonaInfo(userId).catch(
-        (error) => {
-          console.warn(
-            `Failed to load character info for ${userId}; continuing with default persona`,
-            error,
-          )
-          return null
-        },
-      )
+      const characterInfo = await getCharacterPersonaInfoSafe(userId)
 
       const reminderText = await generateDiaryReminder({
         characterInfo,

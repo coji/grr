@@ -2,7 +2,7 @@ import { SlackAPIClient } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateFollowupMessage } from '~/services/ai'
 import { CONSOLIDATION_THRESHOLD } from '~/services/ai/memory-consolidation'
-import { getCharacter, getCharacterPersonaInfo } from '~/services/character'
+import { getCharacter, getCharacterPersonaInfoSafe } from '~/services/character'
 import { extractImageId, pickRandomPoolKey } from '~/services/character-image'
 import { db } from '~/services/db'
 import {
@@ -193,15 +193,7 @@ async function processEventFollowups(
       const followupWithEntry = await getFollowupWithEntry(followup.id)
       const originalEntry = followupWithEntry?.entryDetail ?? null
 
-      const characterInfo = await getCharacterPersonaInfo(
-        followup.userId,
-      ).catch((error) => {
-        console.warn(
-          `Failed to load character info for ${followup.userId}; continuing with default persona`,
-          error,
-        )
-        return null
-      })
+      const characterInfo = await getCharacterPersonaInfoSafe(followup.userId)
       const followupText = await generateFollowupMessage({
         characterInfo,
         userId: followup.userId,

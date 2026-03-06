@@ -34,6 +34,23 @@ import { getSeasonalEventsForDate } from './seasonal-events'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
+// Major seasonal events that trigger greetings (subset of all events)
+const MAJOR_SEASONAL_EVENTS = [
+  '立春',
+  '春分',
+  '立夏',
+  '夏至',
+  '立秋',
+  '秋分',
+  '立冬',
+  '冬至',
+  '元日',
+  '節分',
+  '七夕',
+  'クリスマス',
+  '大晦日',
+] as const
+
 export interface ProactiveMessageResult {
   userId: string
   channelId: string
@@ -110,23 +127,12 @@ export async function evaluateSeasonalMessages(): Promise<
     return results
   }
 
-  // Limit to major events (二十四節気の主要なもの + 祝日)
-  const majorEvents = [
-    '立春',
-    '春分',
-    '立夏',
-    '夏至',
-    '立秋',
-    '秋分',
-    '立冬',
-    '冬至',
-    '元日',
-    '節分',
-    '七夕',
-    'クリスマス',
-    '大晦日',
-  ]
-  const event = events.find(({ name }) => majorEvents.includes(name))
+  // Find first major event (skip minor events like minor 二十四節気)
+  const event = events.find(({ name }) =>
+    MAJOR_SEASONAL_EVENTS.includes(
+      name as (typeof MAJOR_SEASONAL_EVENTS)[number],
+    ),
+  )
   if (!event) {
     return results
   }
