@@ -193,7 +193,15 @@ async function processEventFollowups(
       const followupWithEntry = await getFollowupWithEntry(followup.id)
       const originalEntry = followupWithEntry?.entryDetail ?? null
 
-      const characterInfo = await getCharacterPersonaInfo(followup.userId)
+      const characterInfo = await getCharacterPersonaInfo(
+        followup.userId,
+      ).catch((error) => {
+        console.warn(
+          `Failed to load character info for ${followup.userId}; continuing with default persona`,
+          error,
+        )
+        return null
+      })
       const followupText = await generateFollowupMessage({
         characterInfo,
         userId: followup.userId,

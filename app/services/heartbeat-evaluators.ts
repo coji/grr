@@ -110,9 +110,6 @@ export async function evaluateSeasonalMessages(): Promise<
     return results
   }
 
-  const event = events[0]
-  const messageKey = `seasonal:${todayStr}:${event.name}`
-
   // Limit to major events (二十四節気の主要なもの + 祝日)
   const majorEvents = [
     '立春',
@@ -129,9 +126,11 @@ export async function evaluateSeasonalMessages(): Promise<
     'クリスマス',
     '大晦日',
   ]
-  if (!majorEvents.includes(event.name)) {
+  const event = events.find(({ name }) => majorEvents.includes(name))
+  if (!event) {
     return results
   }
+  const messageKey = `seasonal:${todayStr}:${event.name}`
 
   const users = await getActiveUsers()
 

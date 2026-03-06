@@ -93,11 +93,18 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
         },
       },
       async (): Promise<string> => {
-        // Fetch character info for persona (may be null for new users)
-        const character = await getCharacter(params.userId)
-        const characterInfo = character
-          ? characterToPersonaInfo(character)
-          : null
+        // Fetch character info for persona (best-effort, fallback to default persona)
+        const characterInfo = await getCharacter(params.userId)
+          .then((character) =>
+            character ? characterToPersonaInfo(character) : null,
+          )
+          .catch((error) => {
+            console.warn(
+              `Failed to load character info for ${params.userId}; continuing with default persona`,
+              error,
+            )
+            return null
+          })
 
         let imageAttachments: ImageAttachment[] | undefined
         try {

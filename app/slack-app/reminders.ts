@@ -259,8 +259,16 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       // Get context for reminder variations
       const reminderContext = await getReminderContext(userId, userNow)
 
-      // Get character info for personalized reminder
-      const characterInfo = await getCharacterPersonaInfo(userId)
+      // Get character info for personalized reminder (best-effort, fallback to default persona)
+      const characterInfo = await getCharacterPersonaInfo(userId).catch(
+        (error) => {
+          console.warn(
+            `Failed to load character info for ${userId}; continuing with default persona`,
+            error,
+          )
+          return null
+        },
+      )
 
       const reminderText = await generateDiaryReminder({
         characterInfo,

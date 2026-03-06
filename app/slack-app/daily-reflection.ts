@@ -8,7 +8,7 @@ import {
   updateUserPersonality,
   type DailyReflectionEntry,
 } from '~/services/ai'
-import { getCharacterPersonaInfo } from '~/services/character'
+import { getCharacterPersonaInfoBatch } from '~/services/character'
 import { db } from '~/services/db'
 import { TOKYO_TZ } from './handlers/diary/utils'
 
@@ -38,6 +38,11 @@ export const generateDailyDiaryReflections = async () => {
     list.push(entry)
     entriesByUser.set(entry.userId, list)
   }
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch([
+    ...entriesByUser.keys(),
+  ])
 
   for (const [userId, entries] of entriesByUser) {
     const existing = await db
@@ -91,7 +96,7 @@ export const generateDailyDiaryReflections = async () => {
       const personalityChangeNote = await getPersonalityChangeNote(userId)
 
       // Get character info for personalized reflection
-      const characterInfo = await getCharacterPersonaInfo(userId)
+      const characterInfo = characterInfoMap.get(userId) ?? null
 
       const reflection = await generateDailyReflection({
         characterInfo,
