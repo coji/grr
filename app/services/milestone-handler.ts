@@ -9,6 +9,7 @@ import { env } from 'cloudflare:workers'
 import { SlackAPIClient } from 'slack-edge'
 import { buildCharacterImageBlockFromPoolId } from '~/slack-app/character-blocks'
 import { generateMilestoneMessage } from './ai'
+import type { CharacterPersonaInfo } from './ai/persona'
 import { getCharacter } from './character'
 import { extractImageId, pickRandomPoolKey } from './character-image'
 import { checkMilestones } from './heartbeat-evaluators'
@@ -29,7 +30,7 @@ export async function handleDiaryEntryMilestone(
   userId: string,
   channelId: string,
   entryDate: string,
-  personaName: string,
+  characterInfo: CharacterPersonaInfo | null,
 ): Promise<void> {
   try {
     // Update milestone stats
@@ -67,7 +68,7 @@ export async function handleDiaryEntryMilestone(
     // because milestones are special occasions.
 
     const message = await generateMilestoneMessage({
-      personaName,
+      characterInfo,
       milestoneType: milestone.type,
       value: milestone.value,
     })

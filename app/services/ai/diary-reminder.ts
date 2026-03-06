@@ -1,5 +1,9 @@
 import { generateText } from './genai'
-import { getPersonaBackground } from './persona'
+import {
+  getPersonaBackground,
+  getPersonaWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 
 export interface DiaryReminderMoodOption {
   emoji: string
@@ -7,7 +11,10 @@ export interface DiaryReminderMoodOption {
 }
 
 export interface DiaryReminderContext {
-  personaName: string
+  /** @deprecated Use characterInfo instead */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   moodOptions: readonly DiaryReminderMoodOption[]
   // Optional context for variations
@@ -22,10 +29,18 @@ export interface DiaryReminderContext {
 
 export async function generateDiaryReminder({
   personaName,
+  characterInfo,
   userId,
   moodOptions,
   context,
 }: DiaryReminderContext): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
+
   const moodList = moodOptions
     .map((option) => `${option.emoji} ${option.label}`)
     .join(' / ')
@@ -63,7 +78,7 @@ export async function generateDiaryReminder({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackground(personaName)}
+${personaPrompt}
 
 ## 今回のタスク
 SlackのDMで日記のリマインダーを送ってください。

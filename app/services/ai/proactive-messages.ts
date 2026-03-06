@@ -3,20 +3,34 @@
  */
 
 import { generateText } from './genai'
-import { getPersonaBackgroundShort } from './persona'
+import {
+  getPersonaBackgroundShort,
+  getPersonaShortWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 
 /**
  * Generate a message for 1-year anniversary reminder
  */
 export async function generateAnniversaryMessage({
   personaName,
+  characterInfo,
   oneYearAgoEntry,
   oneYearAgoDate,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   oneYearAgoEntry: string
   oneYearAgoDate: string
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
   const fallback = `1年前の今日、こんなことを書いていたよ。\n\n> ${oneYearAgoEntry.slice(0, 100)}${oneYearAgoEntry.length > 100 ? '...' : ''}\n\nあれから1年経ったんだね。`
 
   try {
@@ -24,7 +38,7 @@ export async function generateAnniversaryMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 1年前の日記を思い出させるメッセージを生成する。
@@ -58,13 +72,23 @@ ${oneYearAgoEntry}
  */
 export async function generateMilestoneMessage({
   personaName,
+  characterInfo,
   milestoneType,
   value,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   milestoneType: 'total_entries' | 'streak' | 'anniversary'
   value: number
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
   const milestoneDescriptions: Record<string, string> = {
     total_entries: `${value}回目の日記投稿`,
     streak: `${value}日連続投稿`,
@@ -78,7 +102,7 @@ export async function generateMilestoneMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 マイルストーン到達を祝うメッセージを生成する。
@@ -110,15 +134,25 @@ ${getPersonaBackgroundShort(personaName)}
  */
 export async function generateWeeklyInsightMessage({
   personaName,
+  characterInfo,
   weekEntries,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   weekEntries: Array<{
     entryDate: string
     detail: string | null
     moodLabel: string | null
   }>
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
   const fallback =
     '今週も日記を書いてくれてありがとう。来週も穏やかに過ごせますように。'
 
@@ -138,7 +172,7 @@ export async function generateWeeklyInsightMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 今週の日記から「気づいたこと」を共有するメッセージを生成する。
@@ -172,13 +206,24 @@ ${entrySummary}
  */
 export async function generateSeasonalMessage({
   personaName,
+  characterInfo,
   seasonalEvent,
   date,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   seasonalEvent: string
   date: string
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
+
   const fallback = `今日は${seasonalEvent}だね。体調には気をつけてね。`
 
   try {
@@ -186,7 +231,7 @@ export async function generateSeasonalMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 季節の節目に合わせた挨拶メッセージを生成する。
@@ -219,9 +264,20 @@ ${getPersonaBackgroundShort(personaName)}
  */
 export async function generateRandomCheckinMessage({
   personaName,
+  characterInfo,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
+
   const fallbacks = [
     'ふと思い出して声をかけてみたよ。元気にしてる？',
     '元気かな？なんとなく気になったよ。',
@@ -234,7 +290,7 @@ export async function generateRandomCheckinMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 ふと思い出して声をかけるメッセージを生成する。
@@ -263,13 +319,24 @@ ${getPersonaBackgroundShort(personaName)}
  */
 export async function generateQuestionMessage({
   personaName,
+  characterInfo,
   pattern,
   recentEntries,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   pattern: string // e.g., "「忙しい」が多い", "「疲れた」が続いている"
   recentEntries: Array<{ detail: string | null }>
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
+
   const fallback = `最近の日記を読んでいて気になったんだけど、大丈夫？無理しないでね。`
 
   try {
@@ -282,7 +349,7 @@ export async function generateQuestionMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 日記のパターンに基づいて優しく問いかけるメッセージを生成する。
@@ -318,13 +385,24 @@ ${entrySummary}
  */
 export async function generateBriefFollowupMessage({
   personaName,
+  characterInfo,
   briefEntry,
   entryDate,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   briefEntry: string
   entryDate: string
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
+
   const fallback = `この前「${briefEntry}」って書いてたけど、もしよかったら詳しく聞かせてくれる？`
 
   try {
@@ -332,7 +410,7 @@ export async function generateBriefFollowupMessage({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 短い日記についてもう少し詳しく聞くメッセージを生成する。

@@ -3,11 +3,12 @@ import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateSupportiveReaction } from '~/services/ai'
 import { storeAttachments } from '~/services/attachments'
+import { getCharacterPersonaInfo } from '~/services/character'
 import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { detectAndStoreFutureEvents } from '~/services/pending-followups'
-import { DIARY_PERSONA_NAME, SUPPORTIVE_REACTIONS } from '../diary-constants'
+import { SUPPORTIVE_REACTIONS } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { sanitizeText, TOKYO_TZ } from './utils'
 
@@ -152,8 +153,9 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
     // リアクションを追加（35%の確率）
     if (Math.random() < 0.35) {
+      const characterInfo = await getCharacterPersonaInfo(entry.userId)
       const reaction = await generateSupportiveReaction({
-        personaName: DIARY_PERSONA_NAME,
+        characterInfo,
         userId: entry.userId,
         messageText: text,
         moodLabel: entry.moodLabel,

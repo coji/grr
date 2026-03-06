@@ -1,5 +1,10 @@
 import dayjs from '~/lib/dayjs'
 import { generateText } from './genai'
+import {
+  getPersonaBackground,
+  getPersonaWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 import type { Personality } from './personality'
 
 const TOKYO_TZ = 'Asia/Tokyo'
@@ -13,7 +18,10 @@ export interface DailyReflectionEntry {
 }
 
 export interface GenerateDailyReflectionOptions {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   targetDate: string
   entries: DailyReflectionEntry[]
@@ -28,12 +36,20 @@ export async function generateDailyReflection(
 ): Promise<string> {
   const {
     personaName,
+    characterInfo,
     userId,
     targetDate,
     entries,
     personality,
     personalityChangeNote,
   } = options
+
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
 
   const entriesText = entries
     .map((entry, index) => {
@@ -69,7 +85,7 @@ ${personality.summary}
 ただし、「変わりました」と直接言うのではなく、「気づいたらこうなってた」という感覚で。`
     : ''
 
-  const systemPrompt = `あなたは「${personaName}」という観察力のあるAIアシスタントです。
+  const systemPrompt = `${personaPrompt}
 ${personalityContext}
 
 ## タスク

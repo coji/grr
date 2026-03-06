@@ -301,6 +301,69 @@ export function characterToConcept(character: UserCharacter): CharacterConcept {
   }
 }
 
+/**
+ * Convert UserCharacter to CharacterPersonaInfo for persona functions
+ */
+export function characterToPersonaInfo(
+  character: UserCharacter,
+): import('./ai/persona').CharacterPersonaInfo {
+  return {
+    name: character.characterName,
+    species: character.characterSpecies,
+    personality: character.characterPersonality,
+    catchphrase: character.characterCatchphrase,
+  }
+}
+
+/**
+ * Get persona info for a user (returns null if no character exists)
+ */
+export async function getCharacterPersonaInfo(
+  userId: string,
+): Promise<import('./ai/persona').CharacterPersonaInfo | null> {
+  const character = await getCharacter(userId)
+  if (!character) return null
+  return characterToPersonaInfo(character)
+}
+
+/**
+ * Get character persona info with graceful error handling.
+ * Returns null on failure (e.g., database errors) instead of throwing.
+ */
+export async function getCharacterPersonaInfoSafe(
+  userId: string,
+): Promise<import('./ai/persona').CharacterPersonaInfo | null> {
+  return getCharacterPersonaInfo(userId).catch((error) => {
+    console.warn(
+      `Failed to load character info for ${userId}; continuing with default persona`,
+      error,
+    )
+    return null
+  })
+}
+
+/**
+ * Batch-fetch persona info for multiple users
+ * Returns a Map keyed by userId
+ */
+export async function getCharacterPersonaInfoBatch(
+  userIds: string[],
+): Promise<Map<string, import('./ai/persona').CharacterPersonaInfo>> {
+  if (userIds.length === 0) return new Map()
+
+  const characters = await db
+    .selectFrom('userCharacters')
+    .selectAll()
+    .where('userId', 'in', userIds)
+    .execute()
+
+  const result = new Map<string, import('./ai/persona').CharacterPersonaInfo>()
+  for (const character of characters) {
+    result.set(character.userId, characterToPersonaInfo(character))
+  }
+  return result
+}
+
 // ============================================
 // Character Lifecycle (Diary Integration)
 // ============================================

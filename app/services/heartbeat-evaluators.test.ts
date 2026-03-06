@@ -15,6 +15,22 @@ vi.mock('./db', () => ({
   },
 }))
 
+vi.mock('./character', () => ({
+  getCharacterPersonaInfoBatch: vi.fn().mockResolvedValue(
+    new Map([
+      [
+        'U1',
+        {
+          name: 'テストキャラ',
+          species: 'テスト',
+          personality: 'テスト性格',
+          catchphrase: 'テストフレーズ',
+        },
+      ],
+    ]),
+  ),
+}))
+
 vi.mock('./proactive-messages', () => ({
   getActiveUsers: vi.fn(),
   hasEverWrittenDiary: vi.fn(),
@@ -47,8 +63,6 @@ import {
 } from './proactive-messages'
 
 describe('evaluateGentleReengagementMessages', () => {
-  const personaName = 'ほたる'
-
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(generateGentleReengagementMessage).mockResolvedValue(
@@ -66,7 +80,7 @@ describe('evaluateGentleReengagementMessages', () => {
     vi.mocked(getLastMessageOfType).mockResolvedValue(undefined)
     vi.mocked(wasMessageSent).mockResolvedValue(false)
 
-    const results = await evaluateGentleReengagementMessages(personaName)
+    const results = await evaluateGentleReengagementMessages()
 
     expect(results).toHaveLength(1)
     expect(results[0].userId).toBe('U1')
@@ -80,7 +94,7 @@ describe('evaluateGentleReengagementMessages', () => {
     ])
     vi.mocked(hasEverWrittenDiary).mockResolvedValue(false)
 
-    const results = await evaluateGentleReengagementMessages(personaName)
+    const results = await evaluateGentleReengagementMessages()
 
     expect(results).toHaveLength(0)
     expect(countConsecutiveNoResponseDays).not.toHaveBeenCalled()
@@ -93,7 +107,7 @@ describe('evaluateGentleReengagementMessages', () => {
     vi.mocked(hasEverWrittenDiary).mockResolvedValue(true)
     vi.mocked(countConsecutiveNoResponseDays).mockResolvedValue(3)
 
-    const results = await evaluateGentleReengagementMessages(personaName)
+    const results = await evaluateGentleReengagementMessages()
 
     expect(results).toHaveLength(0)
   })
@@ -106,7 +120,7 @@ describe('evaluateGentleReengagementMessages', () => {
     vi.mocked(countConsecutiveNoResponseDays).mockResolvedValue(10)
     vi.mocked(getReengagementCount).mockResolvedValue(3)
 
-    const results = await evaluateGentleReengagementMessages(personaName)
+    const results = await evaluateGentleReengagementMessages()
 
     expect(results).toHaveLength(0)
   })
@@ -131,7 +145,7 @@ describe('evaluateGentleReengagementMessages', () => {
       createdAt: new Date().toISOString(),
     })
 
-    const results = await evaluateGentleReengagementMessages(personaName)
+    const results = await evaluateGentleReengagementMessages()
 
     expect(results).toHaveLength(0)
   })
@@ -157,7 +171,7 @@ describe('evaluateGentleReengagementMessages', () => {
     })
     vi.mocked(wasMessageSent).mockResolvedValue(false)
 
-    const results = await evaluateGentleReengagementMessages(personaName)
+    const results = await evaluateGentleReengagementMessages()
 
     expect(results).toHaveLength(1)
     expect(results[0].metadata).toEqual({
@@ -186,7 +200,7 @@ describe('evaluateGentleReengagementMessages', () => {
     })
     vi.mocked(wasMessageSent).mockResolvedValue(false)
 
-    const results = await evaluateGentleReengagementMessages(personaName)
+    const results = await evaluateGentleReengagementMessages()
 
     expect(results).toHaveLength(1)
     expect(results[0].metadata?.attemptNumber).toBe(3)
@@ -194,8 +208,6 @@ describe('evaluateGentleReengagementMessages', () => {
 })
 
 describe('evaluateAutoPauseReminders', () => {
-  const personaName = 'ほたる'
-
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(generateAutoPauseMessage).mockResolvedValue(
@@ -232,7 +244,7 @@ describe('evaluateAutoPauseReminders', () => {
     )
     vi.mocked(countConsecutiveNoResponseDays).mockResolvedValue(50)
 
-    const results = await evaluateAutoPauseReminders(personaName)
+    const results = await evaluateAutoPauseReminders()
 
     expect(results).toHaveLength(1)
     expect(results[0].messageType).toBe('auto_pause')
@@ -244,7 +256,7 @@ describe('evaluateAutoPauseReminders', () => {
     ])
     vi.mocked(getReengagementCount).mockResolvedValue(2)
 
-    const results = await evaluateAutoPauseReminders(personaName)
+    const results = await evaluateAutoPauseReminders()
 
     expect(results).toHaveLength(0)
   })
@@ -273,7 +285,7 @@ describe('evaluateAutoPauseReminders', () => {
       },
     )
 
-    const results = await evaluateAutoPauseReminders(personaName)
+    const results = await evaluateAutoPauseReminders()
 
     expect(results).toHaveLength(0)
   })
@@ -307,7 +319,7 @@ describe('evaluateAutoPauseReminders', () => {
     // User responded recently
     vi.mocked(countConsecutiveNoResponseDays).mockResolvedValue(2)
 
-    const results = await evaluateAutoPauseReminders(personaName)
+    const results = await evaluateAutoPauseReminders()
 
     expect(results).toHaveLength(0)
   })

@@ -1,9 +1,16 @@
 import { z } from 'zod'
 import { generateObject } from './genai'
-import { getPersonaBackground } from './persona'
+import {
+  getPersonaBackground,
+  getPersonaWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 
 export interface SupportiveReactionContext {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   messageText: string
   moodLabel?: string | null
@@ -12,11 +19,19 @@ export interface SupportiveReactionContext {
 
 export async function generateSupportiveReaction({
   personaName,
+  characterInfo,
   userId,
   messageText,
   moodLabel,
   availableReactions,
 }: SupportiveReactionContext): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
+
   const reactionSchema = z.object({
     reaction: z
       .enum(availableReactions as [string, ...string[]])
@@ -29,7 +44,7 @@ export async function generateSupportiveReaction({
       thinkingLevel: 'minimal',
       schema: reactionSchema,
       system: `
-${getPersonaBackground(personaName)}
+${personaPrompt}
 
 ## 今回のタスク
 ユーザーのメッセージに対して、最適なサポートリアクションを1つ選んでください。

@@ -5,6 +5,7 @@ import type {
   SlackEdgeAppEnv,
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
+import { pickRandom } from '~/lib/utils'
 import type {
   CharacterAction,
   CharacterEmotion,
@@ -810,10 +811,6 @@ function pickReactionTier(): ReactionTier {
     if (roll < cumulative) return tier
   }
   return REACTION_TIERS[0]
-}
-
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]
 }
 
 interface SlackClient {

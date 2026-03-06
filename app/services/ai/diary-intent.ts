@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { generateObject } from './genai'
-import { getPersonaBackgroundShort } from './persona'
+import {
+  getPersonaBackgroundShort,
+  getPersonaShortWithCharacter,
+  type CharacterPersonaInfo,
+} from './persona'
 
 type DiaryReplyIntentType =
   | 'comfort'
@@ -14,7 +18,10 @@ export interface DiaryReplyIntentResult {
 }
 
 export interface DiaryReplyIntentContext {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   latestEntry?: string | null
   mentionMessage?: string | null
@@ -41,10 +48,18 @@ const fallbackResult: DiaryReplyIntentResult = {
 
 export async function inferDiaryReplyIntent({
   personaName,
+  characterInfo,
   userId,
   latestEntry,
   mentionMessage,
 }: DiaryReplyIntentContext): Promise<DiaryReplyIntentResult> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
+
   const contextLines = [
     latestEntry ? `日記の本文: """${latestEntry}"""` : undefined,
     mentionMessage ? `最新のメッセージ: """${mentionMessage}"""` : undefined,
@@ -58,7 +73,7 @@ export async function inferDiaryReplyIntent({
       thinkingLevel: 'minimal',
       schema: intentSchema,
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 ユーザーがどのような返答を望んでいるかを分類する。

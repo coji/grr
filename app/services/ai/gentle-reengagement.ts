@@ -6,7 +6,11 @@
  */
 
 import { generateText } from '~/services/ai/genai'
-import { getPersonaBackgroundShort } from '~/services/ai/persona'
+import {
+  getPersonaBackgroundShort,
+  getPersonaShortWithCharacter,
+  type CharacterPersonaInfo,
+} from '~/services/ai/persona'
 
 /**
  * Generate a gentle re-engagement message for users who haven't responded to reminders.
@@ -16,9 +20,19 @@ import { getPersonaBackgroundShort } from '~/services/ai/persona'
  */
 export async function generateGentleReengagementMessage({
   personaName,
+  characterInfo,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
   const fallbacks = [
     '最近顔を見てないけど、元気にしてる？一言だけでも嬉しいな。',
     'ふと気になって声をかけてみたよ。忙しかったりするのかな？',
@@ -31,7 +45,7 @@ export async function generateGentleReengagementMessage({
       model: 'gemini-3-flash-preview',
       thinkingLevel: 'low',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 しばらく日記を書いていない相手に、そっと声をかけるメッセージを生成する。
@@ -60,9 +74,19 @@ ${getPersonaBackgroundShort(personaName)}
  */
 export async function generateAutoPauseMessage({
   personaName,
+  characterInfo,
 }: {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
 }): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaShortWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaShortWithCharacter(null)
   const fallbacks = [
     'しばらく日記がないみたい。忙しい時期なのかな。\nリマインダーはいったんお休みにしておくね。\n\nまた書きたくなったらいつでも戻ってきてね。',
     '最近お休みが続いているね。無理しないでね。\nリマインダーは止めておくね。\n\nまた気が向いたときに会えるのを楽しみにしてるよ。',
@@ -74,7 +98,7 @@ export async function generateAutoPauseMessage({
       model: 'gemini-3-flash-preview',
       thinkingLevel: 'low',
       system: `
-${getPersonaBackgroundShort(personaName)}
+${personaPrompt}
 
 ## タスク
 長期間反応がないユーザーへ、リマインダーを自動停止することを伝えるメッセージを生成する。

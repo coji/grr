@@ -16,6 +16,7 @@ import {
   generateSeasonalMessage,
   generateWeeklyInsightMessage,
 } from './ai'
+import { getCharacterPersonaInfoBatch } from './character'
 import {
   countConsecutiveNoResponseDays,
   getActiveUsers,
@@ -33,6 +34,23 @@ import { getSeasonalEventsForDate } from './seasonal-events'
 
 const TOKYO_TZ = 'Asia/Tokyo'
 
+// Major seasonal events that trigger greetings (subset of all events)
+const MAJOR_SEASONAL_EVENTS = [
+  '立春',
+  '春分',
+  '立夏',
+  '夏至',
+  '立秋',
+  '秋分',
+  '立冬',
+  '冬至',
+  '元日',
+  '節分',
+  '七夕',
+  'クリスマス',
+  '大晦日',
+] as const
+
 export interface ProactiveMessageResult {
   userId: string
   channelId: string
@@ -45,15 +63,20 @@ export interface ProactiveMessageResult {
 /**
  * Evaluate and generate anniversary messages (1年前リマインド)
  */
-export async function evaluateAnniversaryMessages(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateAnniversaryMessages(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
   const oneYearAgo = today.subtract(1, 'year').format('YYYY-MM-DD')
   const messageKey = `anniversary:${oneYearAgo}`
 
   const users = await getActiveUsers()
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
 
   for (const { userId, channelId } of users) {
     // Check if already sent
@@ -67,8 +90,9 @@ export async function evaluateAnniversaryMessages(
       continue
     }
 
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateAnniversaryMessage({
-      personaName,
+      characterInfo,
       oneYearAgoEntry: entry.detail,
       oneYearAgoDate: oneYearAgo,
     })
@@ -89,9 +113,9 @@ export async function evaluateAnniversaryMessages(
 /**
  * Evaluate and generate seasonal greeting messages (季節の挨拶)
  */
-export async function evaluateSeasonalMessages(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateSeasonalMessages(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
   const month = today.month() + 1
@@ -103,10 +127,23 @@ export async function evaluateSeasonalMessages(
     return results
   }
 
-  const event = events[0]
+  // Find first major event (skip minor events like minor 二十四節気)
+  const event = events.find(({ name }) =>
+    MAJOR_SEASONAL_EVENTS.includes(
+      name as (typeof MAJOR_SEASONAL_EVENTS)[number],
+    ),
+  )
+  if (!event) {
+    return results
+  }
   const messageKey = `seasonal:${todayStr}:${event.name}`
 
   const users = await getActiveUsers()
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
 
   for (const { userId, channelId } of users) {
     // Check if already sent
@@ -114,28 +151,9 @@ export async function evaluateSeasonalMessages(
       continue
     }
 
-    // Limit to major events (二十四節気の主要なもの + 祝日)
-    const majorEvents = [
-      '立春',
-      '春分',
-      '立夏',
-      '夏至',
-      '立秋',
-      '秋分',
-      '立冬',
-      '冬至',
-      '元日',
-      '節分',
-      '七夕',
-      'クリスマス',
-      '大晦日',
-    ]
-    if (!majorEvents.includes(event.name)) {
-      continue
-    }
-
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateSeasonalMessage({
-      personaName,
+      characterInfo,
       seasonalEvent: event.name,
       date: todayStr,
     })
@@ -156,9 +174,9 @@ export async function evaluateSeasonalMessages(
 /**
  * Evaluate and generate weekly insight messages (週イチ気づき)
  */
-export async function evaluateWeeklyInsightMessages(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateWeeklyInsightMessages(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
 
@@ -173,6 +191,11 @@ export async function evaluateWeeklyInsightMessages(
 
   const users = await getActiveUsers()
 
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
+
   for (const { userId, channelId } of users) {
     // Check if already sent this week
     if (await wasMessageSent(userId, 'weekly_insight', messageKey)) {
@@ -186,8 +209,9 @@ export async function evaluateWeeklyInsightMessages(
       continue
     }
 
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateWeeklyInsightMessage({
-      personaName,
+      characterInfo,
       weekEntries: entries,
     })
 
@@ -207,9 +231,9 @@ export async function evaluateWeeklyInsightMessages(
 /**
  * Evaluate and generate random check-in messages (ランダムな一言)
  */
-export async function evaluateRandomCheckinMessages(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateRandomCheckinMessages(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
   const todayStr = today.format('YYYY-MM-DD')
@@ -223,6 +247,11 @@ export async function evaluateRandomCheckinMessages(
   }
 
   const users = await getActiveUsers()
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
 
   for (const { userId, channelId } of users) {
     // Check if sent recently (within 14 days)
@@ -241,8 +270,9 @@ export async function evaluateRandomCheckinMessages(
       continue
     }
 
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateRandomCheckinMessage({
-      personaName,
+      characterInfo,
     })
 
     results.push({
@@ -263,9 +293,9 @@ export async function evaluateRandomCheckinMessages(
 /**
  * Evaluate and generate question-based intervention messages (問いかけ型介入)
  */
-export async function evaluateQuestionMessages(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateQuestionMessages(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
   const weekNumber = today.week()
@@ -277,6 +307,11 @@ export async function evaluateQuestionMessages(
   }
 
   const users = await getActiveUsers()
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
 
   for (const { userId, channelId } of users) {
     const messageKey = `question:${year}-W${weekNumber}`
@@ -325,8 +360,9 @@ export async function evaluateQuestionMessages(
       continue
     }
 
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateQuestionMessage({
-      personaName,
+      characterInfo,
       pattern,
       recentEntries: entries,
     })
@@ -347,13 +383,18 @@ export async function evaluateQuestionMessages(
 /**
  * Evaluate and generate brief entry follow-up messages (続きを聞かせて)
  */
-export async function evaluateBriefFollowupMessages(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateBriefFollowupMessages(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
 
   const users = await getActiveUsers()
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
 
   for (const { userId, channelId } of users) {
     // Check if sent recently (within 7 days)
@@ -380,8 +421,9 @@ export async function evaluateBriefFollowupMessages(
       continue
     }
 
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateBriefFollowupMessage({
-      personaName,
+      characterInfo,
       briefEntry: entry.detail,
       entryDate: entry.entryDate,
     })
@@ -457,14 +499,19 @@ export function checkMilestones(
  * - Haven't sent gentle_reengagement in the last 14 days
  * - Haven't sent 3 or more gentle_reengagement messages total
  */
-export async function evaluateGentleReengagementMessages(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateGentleReengagementMessages(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
   const todayStr = today.format('YYYY-MM-DD')
 
   const users = await getActiveUsers()
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
 
   for (const { userId, channelId } of users) {
     // Check if user has ever written a diary (not a brand new user)
@@ -504,8 +551,9 @@ export async function evaluateGentleReengagementMessages(
       continue
     }
 
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateGentleReengagementMessage({
-      personaName,
+      characterInfo,
     })
 
     results.push({
@@ -531,14 +579,19 @@ export async function evaluateGentleReengagementMessages(
  * - User still has reminderEnabled = 1
  * - User still has not responded (no mood recorded since last re-engagement)
  */
-export async function evaluateAutoPauseReminders(
-  personaName: string,
-): Promise<ProactiveMessageResult[]> {
+export async function evaluateAutoPauseReminders(): Promise<
+  ProactiveMessageResult[]
+> {
   const results: ProactiveMessageResult[] = []
   const today = dayjs().tz(TOKYO_TZ)
   const todayStr = today.format('YYYY-MM-DD')
 
   const users = await getActiveUsers()
+
+  // Batch-fetch character info for all users
+  const characterInfoMap = await getCharacterPersonaInfoBatch(
+    users.map((u) => u.userId),
+  )
 
   for (const { userId, channelId } of users) {
     // Check if user has exactly 3 re-engagement messages
@@ -575,8 +628,9 @@ export async function evaluateAutoPauseReminders(
 
     const messageKey = `auto_pause:${todayStr}`
 
+    const characterInfo = characterInfoMap.get(userId) ?? null
     const text = await generateAutoPauseMessage({
-      personaName,
+      characterInfo,
     })
 
     // Note: DB update to disable reminders is deferred to sender

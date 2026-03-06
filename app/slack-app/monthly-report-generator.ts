@@ -3,10 +3,17 @@
  */
 
 import { generateText } from '~/services/ai/genai'
-import { getPersonaBackground } from '~/services/ai/persona'
+import {
+  getPersonaBackground,
+  getPersonaWithCharacter,
+  type CharacterPersonaInfo,
+} from '~/services/ai/persona'
 
 interface MonthlyReportContext {
-  personaName: string
+  /** @deprecated Use characterInfo instead for character-integrated persona */
+  personaName?: string
+  /** Character info for integrated persona (preferred) */
+  characterInfo?: CharacterPersonaInfo | null
   userId: string
   entries: Array<{
     date: string
@@ -28,10 +35,18 @@ interface MonthlyReportContext {
  */
 export async function generateMonthlyReport({
   personaName,
+  characterInfo,
   entries,
   stats,
   monthLabel,
 }: MonthlyReportContext): Promise<string> {
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
+
   const fallback = `${monthLabel}も日記を書いてくれてありがとう。来月も穏やかに過ごせますように。`
 
   try {
@@ -47,7 +62,7 @@ export async function generateMonthlyReport({
       model: 'gemini-3.1-flash-lite-preview',
       thinkingLevel: 'minimal',
       system: `
-${getPersonaBackground(personaName)}
+${personaPrompt}
 
 ## 今回のタスク
 ユーザーの1ヶ月分の日記を振り返って、まとめのメッセージを生成してください。

@@ -3,13 +3,15 @@ import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { storeAttachments } from '~/services/attachments'
-import { updateCharacterOnDiaryEntry } from '~/services/character'
+import {
+  getCharacterPersonaInfo,
+  updateCharacterOnDiaryEntry,
+} from '~/services/character'
 import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { handleDiaryEntryMilestone } from '~/services/milestone-handler'
 import { detectAndStoreFutureEvents } from '~/services/pending-followups'
-import { DIARY_PERSONA_NAME } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { detectReferralPattern } from './onboarding-utils'
 import { TOKYO_TZ, sanitizeText } from './utils'
@@ -362,14 +364,19 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
 
     // マイルストーン追跡と祝いメッセージ (非同期で実行)
     if (entry) {
-      handleDiaryEntryMilestone(
-        event.user,
-        event.channel,
-        entryDate,
-        DIARY_PERSONA_NAME,
-      ).catch((error) => {
-        console.error('Failed to handle milestone:', error)
-      })
+      const userId = event.user
+      getCharacterPersonaInfo(userId)
+        .then((characterInfo) =>
+          handleDiaryEntryMilestone(
+            userId,
+            event.channel,
+            entryDate,
+            characterInfo,
+          ),
+        )
+        .catch((error) => {
+          console.error('Failed to handle milestone:', error)
+        })
     }
 
     // キャラクター状態更新 (同期で実行)
