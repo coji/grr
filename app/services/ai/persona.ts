@@ -230,3 +230,31 @@ export function getPersonaWithCharacter(
   }
   return getPersonaBackground(DEFAULT_PERSONA_NAME)
 }
+
+/**
+ * ペルソナプロンプトを解決するヘルパー
+ * キャラ情報優先、なければレガシーpersonaName、両方なければデフォルト
+ *
+ * @param characterInfo - キャラクター情報（優先）
+ * @param personaName - 旧式のペルソナ名（後方互換用）
+ * @param useShort - 簡潔版を使うかどうか
+ */
+export function resolvePersonaPrompt(
+  characterInfo: CharacterPersonaInfo | null | undefined,
+  personaName?: string,
+  useShort = false,
+): string {
+  if (characterInfo) {
+    return useShort
+      ? getCharacterPersonaShort(characterInfo)
+      : getCharacterPersona(characterInfo)
+  }
+  if (personaName) {
+    return useShort
+      ? getPersonaBackgroundShort(personaName)
+      : getPersonaBackground(personaName)
+  }
+  return useShort
+    ? getPersonaShortWithCharacter(null)
+    : getPersonaWithCharacter(null)
+}

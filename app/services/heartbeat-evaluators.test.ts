@@ -16,12 +16,19 @@ vi.mock('./db', () => ({
 }))
 
 vi.mock('./character', () => ({
-  getCharacterPersonaInfo: vi.fn().mockResolvedValue({
-    name: 'テストキャラ',
-    species: 'テスト',
-    personality: 'テスト性格',
-    catchphrase: 'テストフレーズ',
-  }),
+  getCharacterPersonaInfoBatch: vi.fn().mockResolvedValue(
+    new Map([
+      [
+        'U1',
+        {
+          name: 'テストキャラ',
+          species: 'テスト',
+          personality: 'テスト性格',
+          catchphrase: 'テストフレーズ',
+        },
+      ],
+    ]),
+  ),
 }))
 
 vi.mock('./proactive-messages', () => ({

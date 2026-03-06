@@ -326,6 +326,28 @@ export async function getCharacterPersonaInfo(
   return characterToPersonaInfo(character)
 }
 
+/**
+ * Batch-fetch persona info for multiple users
+ * Returns a Map keyed by userId
+ */
+export async function getCharacterPersonaInfoBatch(
+  userIds: string[],
+): Promise<Map<string, import('./ai/persona').CharacterPersonaInfo>> {
+  if (userIds.length === 0) return new Map()
+
+  const characters = await db
+    .selectFrom('userCharacters')
+    .selectAll()
+    .where('userId', 'in', userIds)
+    .execute()
+
+  const result = new Map<string, import('./ai/persona').CharacterPersonaInfo>()
+  for (const character of characters) {
+    result.set(character.userId, characterToPersonaInfo(character))
+  }
+  return result
+}
+
 // ============================================
 // Character Lifecycle (Diary Integration)
 // ============================================

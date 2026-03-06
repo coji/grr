@@ -1,5 +1,6 @@
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
+import { DEFAULT_PERSONA_NAME } from '~/services/ai/persona'
 import { getCharacterPersonaInfo } from '~/services/character'
 import { db } from '~/services/db'
 import { DIARY_MOOD_CHOICES } from '../diary-constants'
@@ -44,7 +45,7 @@ export function registerReactionAddedHandler(app: SlackApp<SlackEdgeAppEnv>) {
     if (!entry.moodRecordedAt) {
       const label = choice ? `「${choice.label}」` : `「:${event.reaction}:」`
       const characterInfo = await getCharacterPersonaInfo(entry.userId)
-      const characterName = characterInfo?.name ?? '日記アシスタント'
+      const characterName = characterInfo?.name ?? DEFAULT_PERSONA_NAME
       await context.client.chat
         .postMessage({
           channel: channelId,
