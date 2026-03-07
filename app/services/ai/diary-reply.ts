@@ -1,4 +1,10 @@
 import dayjs from '~/lib/dayjs'
+import {
+  extractSearchKeywords,
+  formatSearchContextForPrompt,
+  getSearchContextForAI,
+  isFtsAvailable,
+} from '~/services/diary-search'
 import { getMemoryContextForReply } from '~/services/memory-retrieval'
 import {
   inferDiaryReplyIntent,
@@ -26,22 +32,28 @@ export interface DiaryReplyContext {
   /** Character info for integrated persona (preferred) */
   characterInfo?: CharacterPersonaInfo | null
   userId: string
+  /** Entry date (YYYY-MM-DD) to exclude from search context */
+  entryDate?: string
   moodLabel?: string | null
   latestEntry?: string | null
   previousEntry?: string | null
   mentionMessage?: string | null
   imageAttachments?: ImageAttachment[]
+  /** Enable search context from past diary entries (default: true) */
+  enableSearchContext?: boolean
 }
 
 export async function generateDiaryReply({
   personaName,
   characterInfo,
   userId,
+  entryDate,
   moodLabel,
   latestEntry,
   previousEntry,
   mentionMessage,
   imageAttachments,
+  enableSearchContext = true,
 }: DiaryReplyContext): Promise<string> {
   // Build persona: prefer character info, fall back to persona name
   const personaPrompt = characterInfo
@@ -114,6 +126,37 @@ export async function generateDiaryReply({
     // Continue without personality context
   }
 
+  // Retrieve search context from past diary entries
+  let searchContext = ''
+  if (enableSearchContext) {
+    try {
+      const ftsAvailable = await isFtsAvailable()
+      if (ftsAvailable) {
+        // Extract keywords from current entry/mention
+        const textToAnalyze = [latestEntry, mentionMessage]
+          .filter(Boolean)
+          .join(' ')
+        const keywords = extractSearchKeywords(textToAnalyze, 5)
+
+        if (keywords.length > 0) {
+          const searchEntries = await getSearchContextForAI(
+            userId,
+            keywords,
+            3, // Limit to 3 entries to keep context concise
+            entryDate, // Exclude today's entry
+          )
+
+          if (searchEntries.length > 0) {
+            searchContext = formatSearchContextForPrompt(searchEntries)
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to retrieve search context:', error)
+      // Continue without search context
+    }
+  }
+
   const detailSummary = [
     dateInfo,
     moodLabel ? `最近のきもち: ${moodLabel}` : undefined,
@@ -159,6 +202,7 @@ export async function generateDiaryReply({
 ${personaPrompt}
 ${personalityContext ? `\n${personalityContext}\n` : ''}
 ${memoryContext ? `\n${memoryContext}\n` : ''}
+${searchContext ? `\n${searchContext}\n` : ''}
 ## タスク
 日記を書いた相手に寄り添って返信する。
 
