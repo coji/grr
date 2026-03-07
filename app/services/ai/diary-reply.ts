@@ -1,6 +1,5 @@
 import dayjs from '~/lib/dayjs'
 import {
-  extractSearchKeywords,
   formatSearchContextForPrompt,
   getSearchContextForAI,
 } from '~/services/diary-search'
@@ -10,6 +9,7 @@ import {
   type DiaryReplyIntentType,
 } from './diary-intent'
 import { generateText } from './genai'
+import { extractKeywordsWithAI } from './keyword-extraction'
 import {
   getPersonaBackground,
   getPersonaWithCharacter,
@@ -129,11 +129,11 @@ export async function generateDiaryReply({
   let searchContext = ''
   if (enableSearchContext) {
     try {
-      // Extract keywords from current entry/mention
+      // Extract keywords from current entry/mention using LLM
       const textToAnalyze = [latestEntry, mentionMessage]
         .filter(Boolean)
         .join(' ')
-      const keywords = extractSearchKeywords(textToAnalyze, 5)
+      const keywords = await extractKeywordsWithAI(textToAnalyze, 5)
 
       if (keywords.length > 0) {
         const searchEntries = await getSearchContextForAI(
