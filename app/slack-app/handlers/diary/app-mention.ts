@@ -9,6 +9,7 @@ import {
 } from '~/services/character'
 import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
+import { indexDiaryEntry, updateDiaryEntryIndex } from '~/services/diary-search'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
 import { handleDiaryEntryMilestone } from '~/services/milestone-handler'
 import { detectAndStoreFutureEvents } from '~/services/pending-followups'
@@ -266,6 +267,14 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
         }
 
         await db.insertInto('diaryEntries').values(baseEntry).execute()
+        if (cleaned) {
+          await indexDiaryEntry(
+            baseEntry.id,
+            baseEntry.userId,
+            baseEntry.entryDate,
+            cleaned,
+          )
+        }
         entry = baseEntry
       } else if (cleaned && !entry.detail) {
         await db
@@ -277,6 +286,7 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
           })
           .where('id', '=', entry.id)
           .execute()
+        await indexDiaryEntry(entry.id, entry.userId, entry.entryDate, cleaned)
         entry = {
           ...entry,
           detail: cleaned,
@@ -297,6 +307,12 @@ export function registerAppMentionHandler(app: SlackApp<SlackEdgeAppEnv>) {
         })
         .where('id', '=', entry.id)
         .execute()
+      await updateDiaryEntryIndex(
+        entry.id,
+        entry.userId,
+        entry.entryDate,
+        combined,
+      )
       entry = {
         ...entry,
         detail: combined,

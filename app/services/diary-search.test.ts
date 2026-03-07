@@ -7,14 +7,81 @@ vi.mock('./db', () => ({
 }))
 
 import {
+  buildMatchQuery,
   extractSearchKeywords,
   formatSearchContextForPrompt,
+  tokenize,
   type SearchContextEntry,
 } from './diary-search'
 
 describe('diary-search', () => {
+  describe('tokenize', () => {
+    it('should tokenize Japanese text into space-separated words', () => {
+      const text = 'コメダでモーニングを食べた'
+      const tokens = tokenize(text)
+
+      // Should contain word-like tokens separated by spaces
+      expect(tokens).toContain('コメダ')
+      expect(tokens).toContain('モーニング')
+      // Intl.Segmenter may segment 食べた as 食 + べた or differently
+      expect(tokens.length).toBeGreaterThan(0)
+    })
+
+    it('should handle mixed Japanese and English text', () => {
+      const text = 'Reactでアプリを作った'
+      const tokens = tokenize(text)
+
+      expect(tokens).toContain('React')
+      expect(tokens).toContain('アプリ')
+    })
+
+    it('should return space-separated string', () => {
+      const text = 'テスト文章です'
+      const tokens = tokenize(text)
+
+      // Result should be space-separated
+      expect(tokens.includes(' ')).toBe(true)
+    })
+
+    it('should filter non-word-like segments', () => {
+      const text = '今日は、天気が良い。'
+      const tokens = tokenize(text)
+
+      // Punctuation should be filtered out
+      expect(tokens).not.toContain('、')
+      expect(tokens).not.toContain('。')
+    })
+  })
+
+  describe('buildMatchQuery', () => {
+    it('should wrap tokens in double quotes', () => {
+      const query = 'コメダ モーニング'
+      const matchQuery = buildMatchQuery(query)
+
+      expect(matchQuery).toContain('"コメダ"')
+      expect(matchQuery).toContain('"モーニング"')
+    })
+
+    it('should tokenize input before quoting', () => {
+      const query = 'コメダでモーニング'
+      const matchQuery = buildMatchQuery(query)
+
+      // Should be tokenized and quoted
+      expect(matchQuery).toContain('"コメダ"')
+    })
+
+    it('should produce non-empty result for valid input', () => {
+      const query = 'テスト検索'
+      const matchQuery = buildMatchQuery(query)
+
+      expect(matchQuery.length).toBeGreaterThan(0)
+      // Should have quotes
+      expect(matchQuery).toContain('"')
+    })
+  })
+
   describe('extractSearchKeywords', () => {
-    it('should extract katakana words', () => {
+    it('should extract meaningful words using Intl.Segmenter', () => {
       const text = 'コメダでモーニングを食べた。パスタも美味しかった。'
       const keywords = extractSearchKeywords(text)
 
@@ -23,22 +90,17 @@ describe('diary-search', () => {
       expect(keywords).toContain('パスタ')
     })
 
-    it('should extract quoted phrases', () => {
-      const text = '「水沢うどん」を食べに行った'
-      const keywords = extractSearchKeywords(text)
-
-      expect(keywords).toContain('水沢うどん')
-    })
-
-    it('should extract capitalized words', () => {
+    it('should extract English and Japanese words', () => {
       const text = 'GoogleのAPIを使ってReactアプリを作った'
       const keywords = extractSearchKeywords(text)
 
       expect(keywords).toContain('Google')
+      expect(keywords).toContain('API')
       expect(keywords).toContain('React')
+      expect(keywords).toContain('アプリ')
     })
 
-    it('should extract kanji compounds', () => {
+    it('should extract kanji words', () => {
       const text = '整体に行って腰痛が楽になった。開発も順調。'
       const keywords = extractSearchKeywords(text)
 
@@ -46,14 +108,6 @@ describe('diary-search', () => {
       expect(keywords).toContain('腰痛')
       expect(keywords).toContain('開発')
       expect(keywords).toContain('順調')
-    })
-
-    it('should extract numbers with context', () => {
-      const text = '2024年3月15日に面接があった'
-      const keywords = extractSearchKeywords(text)
-
-      // Numbers with context should be included
-      expect(keywords.some((k) => k.includes('2024年'))).toBe(true)
     })
 
     it('should respect maxKeywords limit', () => {
@@ -79,11 +133,19 @@ describe('diary-search', () => {
       expect(extractSearchKeywords('   ')).toEqual([])
     })
 
-    it('should skip short keywords', () => {
-      const text = 'a は の を'
+    it('should skip stop words', () => {
+      const text = 'の は を に'
       const keywords = extractSearchKeywords(text)
 
-      // These are too short
+      // These are stop words and should be filtered
+      expect(keywords.length).toBe(0)
+    })
+
+    it('should skip short keywords', () => {
+      const text = 'a b c'
+      const keywords = extractSearchKeywords(text)
+
+      // Single characters should be filtered
       expect(keywords.length).toBe(0)
     })
   })

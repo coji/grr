@@ -7,6 +7,7 @@ import type {
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
+import { indexDiaryEntry, updateDiaryEntryIndex } from '~/services/diary-search'
 import { TOKYO_TZ } from './utils'
 
 export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
@@ -42,14 +43,17 @@ export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
         })
         .where('id', '=', entry.id)
         .execute()
+      await updateDiaryEntryIndex(entry.id, userId, today, newDetail)
     } else {
       // 新規エントリを作成
       const channelId = shortcut.channel.id
+      const entryId = nanoid()
+      const detail = `[引用]\n${messageText}`
 
       await db
         .insertInto('diaryEntries')
         .values({
-          id: nanoid(),
+          id: entryId,
           userId,
           channelId,
           messageTs: `shortcut_${Date.now()}`,
@@ -57,7 +61,7 @@ export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
           moodEmoji: null,
           moodValue: null,
           moodLabel: null,
-          detail: `[引用]\n${messageText}`,
+          detail,
           reminderSentAt: now,
           moodRecordedAt: null,
           detailRecordedAt: now,
@@ -65,6 +69,7 @@ export function registerShortcutsHandler(app: SlackApp<SlackEdgeAppEnv>) {
           updatedAt: now,
         })
         .execute()
+      await indexDiaryEntry(entryId, userId, today, detail)
     }
 
     // 完了メッセージを表示

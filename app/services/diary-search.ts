@@ -366,3 +366,93 @@ function getRelevanceLevel(
   if (index < total / 2) return 'medium'
   return 'low'
 }
+
+// ============================================
+// FTS Index Management
+// ============================================
+
+/**
+ * Index a diary entry in FTS
+ * Call this when a diary entry is created
+ */
+export async function indexDiaryEntry(
+  entryId: string,
+  userId: string,
+  entryDate: string,
+  detail: string,
+): Promise<void> {
+  if (!detail.trim()) return
+
+  const tokenizedDetail = tokenize(detail)
+  await sql`
+    INSERT INTO diary_entries_fts (entry_id, user_id, entry_date, detail)
+    VALUES (${entryId}, ${userId}, ${entryDate}, ${tokenizedDetail})
+  `.execute(db)
+}
+
+/**
+ * Update a diary entry in FTS
+ * Call this when a diary entry's detail is updated
+ */
+export async function updateDiaryEntryIndex(
+  entryId: string,
+  userId: string,
+  entryDate: string,
+  detail: string | null,
+): Promise<void> {
+  // Delete existing entry first
+  await sql`
+    DELETE FROM diary_entries_fts WHERE entry_id = ${entryId}
+  `.execute(db)
+
+  // Re-insert if detail is not empty
+  if (detail?.trim()) {
+    const tokenizedDetail = tokenize(detail)
+    await sql`
+      INSERT INTO diary_entries_fts (entry_id, user_id, entry_date, detail)
+      VALUES (${entryId}, ${userId}, ${entryDate}, ${tokenizedDetail})
+    `.execute(db)
+  }
+}
+
+/**
+ * Remove a diary entry from FTS
+ * Call this when a diary entry is deleted
+ */
+export async function removeDiaryEntryIndex(entryId: string): Promise<void> {
+  await sql`
+    DELETE FROM diary_entries_fts WHERE entry_id = ${entryId}
+  `.execute(db)
+}
+
+/**
+ * Rebuild FTS index for all diary entries
+ * Use this to populate FTS after migration or to repair the index
+ */
+export async function rebuildFtsIndex(): Promise<number> {
+  // Clear existing index
+  await sql`DELETE FROM diary_entries_fts`.execute(db)
+
+  // Get all diary entries with detail
+  const entries = await db
+    .selectFrom('diaryEntries')
+    .select(['id', 'userId', 'entryDate', 'detail'])
+    .where('detail', 'is not', null)
+    .where('detail', '!=', '')
+    .execute()
+
+  // Insert tokenized entries
+  let indexed = 0
+  for (const entry of entries) {
+    if (entry.detail) {
+      const tokenizedDetail = tokenize(entry.detail)
+      await sql`
+        INSERT INTO diary_entries_fts (entry_id, user_id, entry_date, detail)
+        VALUES (${entry.id}, ${entry.userId}, ${entry.entryDate}, ${tokenizedDetail})
+      `.execute(db)
+      indexed++
+    }
+  }
+
+  return indexed
+}

@@ -5,6 +5,7 @@ import dayjs from '~/lib/dayjs'
 import { createDb } from './db'
 import {
   getSearchContextForAI,
+  indexDiaryEntry,
   isFtsAvailable,
   searchDiaryEntries,
   searchDiaryEntriesFallback,
@@ -13,7 +14,7 @@ import {
 describe('diary-search (integration)', () => {
   const db = createDb(env.DB)
 
-  // Helper to create a test diary entry
+  // Helper to create a test diary entry (with FTS indexing)
   const createTestEntry = async (
     userId: string,
     entryDate: string,
@@ -40,6 +41,8 @@ describe('diary-search (integration)', () => {
         updatedAt: now,
       })
       .execute()
+    // Index in FTS (no triggers, must be done manually)
+    await indexDiaryEntry(entryId, userId, entryDate, detail)
     return entryId
   }
 

@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
+import { indexDiaryEntry, updateDiaryEntryIndex } from '~/services/diary-search'
 import { DIARY_MOOD_CHOICES } from '../diary-constants'
 
 export function registerModalSubmissionHandlers(
@@ -65,6 +66,13 @@ export function registerModalSubmissionHandlers(
         })
         .where('id', '=', existingEntry.id)
         .execute()
+      // Update FTS index
+      await updateDiaryEntryIndex(
+        existingEntry.id,
+        userId,
+        existingEntry.entryDate,
+        detail || null,
+      )
     } else {
       // 新規エントリを作成
       const channelId = await getUserDiaryChannel(userId)
@@ -73,10 +81,11 @@ export function registerModalSubmissionHandlers(
         throw new Error('Entry date is required')
       }
 
+      const entryId = nanoid()
       await db
         .insertInto('diaryEntries')
         .values({
-          id: nanoid(),
+          id: entryId,
           userId,
           channelId,
           messageTs: `home_tab_${Date.now()}`,
@@ -92,6 +101,10 @@ export function registerModalSubmissionHandlers(
           updatedAt: now,
         })
         .execute()
+      // Index in FTS
+      if (detail) {
+        await indexDiaryEntry(entryId, userId, entryDate, detail)
+      }
     }
 
     // Home Tab を更新するために app_home_opened イベントをトリガー

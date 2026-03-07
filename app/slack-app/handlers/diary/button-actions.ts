@@ -8,6 +8,7 @@ import type {
 } from 'slack-cloudflare-workers'
 import dayjs from '~/lib/dayjs'
 import { db } from '~/services/db'
+import { removeDiaryEntryIndex } from '~/services/diary-search'
 import { clearReengagementHistory } from '~/services/proactive-messages'
 import { DIARY_MOOD_CHOICES } from '../diary-constants'
 
@@ -45,12 +46,25 @@ export function registerButtonActionHandlers(app: SlackApp<SlackEdgeAppEnv>) {
     const userId = action.user.id
     const entryDate = action.actions[0].value
 
+    // Get entry ID for FTS cleanup
+    const entry = await db
+      .selectFrom('diaryEntries')
+      .select(['id'])
+      .where('userId', '=', userId)
+      .where('entryDate', '=', entryDate)
+      .executeTakeFirst()
+
     // エントリを削除（スキップマーク）
     await db
       .deleteFrom('diaryEntries')
       .where('userId', '=', userId)
       .where('entryDate', '=', entryDate)
       .execute()
+
+    // Remove from FTS index
+    if (entry) {
+      await removeDiaryEntryIndex(entry.id)
+    }
 
     // メッセージを更新してボタンを削除
     await context.client.chat.update({
