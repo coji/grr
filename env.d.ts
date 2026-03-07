@@ -15,6 +15,7 @@ declare global {
       SLACK_SIGNING_SECRET: string
       SLACK_BOT_TOKEN: string
       GOOGLE_GENERATIVE_AI_API_KEY: string
+      ADMIN_API_TOKEN: string
     }
   }
 }

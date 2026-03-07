@@ -8,6 +8,11 @@ import { getAttachmentStats } from '~/services/attachments'
 import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
 import {
+  isFtsAvailable,
+  searchDiaryEntries,
+  searchDiaryEntriesFallback,
+} from '~/services/diary-search'
+import {
   CATEGORY_LABELS,
   clearAllMemories,
   deleteMemory,
@@ -115,16 +120,13 @@ async function handleSearchCommand(
     return
   }
 
-  const entries = await db
-    .selectFrom('diaryEntries')
-    .selectAll()
-    .where('userId', '=', userId)
-    .where('detail', 'like', `%${keyword}%`)
-    .orderBy('entryDate', 'desc')
-    .limit(10)
-    .execute()
+  // Use FTS5 search if available, fallback to LIKE search
+  const ftsEnabled = await isFtsAvailable()
+  const searchResults = ftsEnabled
+    ? await searchDiaryEntries(userId, keyword, 10)
+    : await searchDiaryEntriesFallback(userId, keyword, 10)
 
-  if (entries.length === 0) {
+  if (searchResults.length === 0) {
     await context.respond?.({
       text: `「${keyword}」を含むエントリは見つかりませんでした。`,
       response_type: 'ephemeral',
@@ -133,15 +135,14 @@ async function handleSearchCommand(
   }
 
   // Get attachment stats for all entries
-  const entryIds = entries.map((e) => e.id)
+  const entryIds = searchResults.map((e) => e.entryId)
   const attachmentStats = await Promise.all(
     entryIds.map((id) => getAttachmentStats(id)),
   )
 
-  const results = entries
+  const results = searchResults
     .map((entry, index) => {
       const date = dayjs(entry.entryDate).format('M月D日(ddd)')
-      const mood = entry.moodEmoji || '😶'
       const preview =
         entry.detail && entry.detail.length > 80
           ? `${entry.detail.slice(0, 80)}...`
@@ -149,12 +150,13 @@ async function handleSearchCommand(
       const stats = attachmentStats[index]
       const attachmentIndicator =
         stats && stats.total > 0 ? ` 📎${stats.total}` : ''
-      return `• *${date} ${mood}*${attachmentIndicator}\n  ${preview}`
+      return `• *${date}*${attachmentIndicator}\n  ${preview}`
     })
     .join('\n\n')
 
+  const searchMethodNote = ftsEnabled ? '' : '\n_（基本検索モード）_'
   await context.respond?.({
-    text: `*「${keyword}」の検索結果 (${entries.length}件)*\n\n${results}`,
+    text: `*「${keyword}」の検索結果 (${searchResults.length}件)*${searchMethodNote}\n\n${results}`,
     response_type: 'ephemeral',
   })
 }
