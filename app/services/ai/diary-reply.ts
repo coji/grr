@@ -3,7 +3,6 @@ import {
   extractSearchKeywords,
   formatSearchContextForPrompt,
   getSearchContextForAI,
-  isFtsAvailable,
 } from '~/services/diary-search'
 import { getMemoryContextForReply } from '~/services/memory-retrieval'
 import {
@@ -130,25 +129,22 @@ export async function generateDiaryReply({
   let searchContext = ''
   if (enableSearchContext) {
     try {
-      const ftsAvailable = await isFtsAvailable()
-      if (ftsAvailable) {
-        // Extract keywords from current entry/mention
-        const textToAnalyze = [latestEntry, mentionMessage]
-          .filter(Boolean)
-          .join(' ')
-        const keywords = extractSearchKeywords(textToAnalyze, 5)
+      // Extract keywords from current entry/mention
+      const textToAnalyze = [latestEntry, mentionMessage]
+        .filter(Boolean)
+        .join(' ')
+      const keywords = extractSearchKeywords(textToAnalyze, 5)
 
-        if (keywords.length > 0) {
-          const searchEntries = await getSearchContextForAI(
-            userId,
-            keywords,
-            3, // Limit to 3 entries to keep context concise
-            entryDate, // Exclude today's entry
-          )
+      if (keywords.length > 0) {
+        const searchEntries = await getSearchContextForAI(
+          userId,
+          keywords,
+          3, // Limit to 3 entries to keep context concise
+          entryDate, // Exclude today's entry
+        )
 
-          if (searchEntries.length > 0) {
-            searchContext = formatSearchContextForPrompt(searchEntries)
-          }
+        if (searchEntries.length > 0) {
+          searchContext = formatSearchContextForPrompt(searchEntries)
         }
       }
     } catch (error) {

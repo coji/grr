@@ -8,6 +8,76 @@
 import { sql } from 'kysely'
 import { db } from './db'
 
+// ============================================
+// Module-level Constants
+// ============================================
+
+/** Cached FTS availability status (null = not checked yet) */
+let ftsAvailableCache: boolean | null = null
+
+/** Common Japanese and English stop words for keyword extraction */
+const STOP_WORDS = new Set([
+  // Japanese particles and conjunctions
+  'の',
+  'に',
+  'は',
+  'を',
+  'が',
+  'と',
+  'で',
+  'た',
+  'て',
+  'も',
+  'です',
+  'ます',
+  'した',
+  'する',
+  'ない',
+  'いる',
+  'ある',
+  'これ',
+  'それ',
+  'あれ',
+  'この',
+  'その',
+  'あの',
+  'から',
+  'まで',
+  'より',
+  'など',
+  'けど',
+  'でも',
+  'だけ',
+  'ので',
+  'という',
+  'って',
+  'ちょっと',
+  'すごく',
+  'とても',
+  'かなり',
+  'やっぱり',
+  'なんか',
+  'ちゃんと',
+  'しっかり',
+  'きちんと',
+  // English common words
+  'the',
+  'a',
+  'an',
+  'is',
+  'are',
+  'was',
+  'were',
+  'and',
+  'or',
+  'but',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+])
+
 export interface DiarySearchResult {
   entryId: string
   userId: string
@@ -77,17 +147,27 @@ export async function getSearchContextForAI(
   maxEntries: number = 5,
   excludeDate?: string,
 ): Promise<SearchContextEntry[]> {
-  if (searchTerms.length === 0) {
+  // Filter valid terms first
+  const validTerms = searchTerms.filter((term) => term.length >= 2)
+  if (validTerms.length === 0) {
     return []
   }
 
-  // Search for each term and collect results
+  // Check FTS availability (uses cache)
+  const ftsAvailable = await isFtsAvailable()
+  if (!ftsAvailable) {
+    return []
+  }
+
+  // Search for all terms in parallel
+  const searchPromises = validTerms.map((term) =>
+    searchDiaryEntries(userId, term, maxEntries * 2),
+  )
+  const resultsArrays = await Promise.all(searchPromises)
+
+  // Collect and deduplicate results, keeping best rank for each entry
   const allResults: Map<string, DiarySearchResult> = new Map()
-
-  for (const term of searchTerms) {
-    if (term.length < 2) continue // Skip very short terms
-
-    const results = await searchDiaryEntries(userId, term, maxEntries * 2)
+  for (const results of resultsArrays) {
     for (const result of results) {
       // Skip excluded date
       if (excludeDate && result.entryDate === excludeDate) continue
@@ -129,67 +209,6 @@ export function extractSearchKeywords(
 ): string[] {
   if (!text.trim()) return []
 
-  // Remove common Japanese particles, conjunctions, and filler words
-  const stopWords = new Set([
-    'の',
-    'に',
-    'は',
-    'を',
-    'が',
-    'と',
-    'で',
-    'た',
-    'て',
-    'も',
-    'です',
-    'ます',
-    'した',
-    'する',
-    'ない',
-    'いる',
-    'ある',
-    'これ',
-    'それ',
-    'あれ',
-    'この',
-    'その',
-    'あの',
-    'から',
-    'まで',
-    'より',
-    'など',
-    'けど',
-    'でも',
-    'だけ',
-    'ので',
-    'という',
-    'って',
-    'ちょっと',
-    'すごく',
-    'とても',
-    'かなり',
-    'やっぱり',
-    'なんか',
-    'ちゃんと',
-    'しっかり',
-    'きちんと',
-    'the',
-    'a',
-    'an',
-    'is',
-    'are',
-    'was',
-    'were',
-    'and',
-    'or',
-    'but',
-    'in',
-    'on',
-    'at',
-    'to',
-    'for',
-  ])
-
   // Extract potential keywords
   // 1. Quoted phrases (「」or "")
   const quotedPhrases =
@@ -210,7 +229,7 @@ export function extractSearchKeywords(
 
   // 5. Compound nouns (sequences of kanji)
   const kanjiCompounds =
-    text.match(/[一-龯]{2,}/g)?.filter((w) => !stopWords.has(w)) || []
+    text.match(/[一-龯]{2,}/g)?.filter((w) => !STOP_WORDS.has(w)) || []
 
   // Combine and deduplicate
   const allKeywords = [
@@ -266,16 +285,23 @@ export function formatSearchContextForPrompt(
 /**
  * Check if FTS table is available
  *
+ * Uses cached result to avoid repeated DB queries.
  * This can be used to gracefully fall back to LIKE search
  * if FTS is not available.
  */
 export async function isFtsAvailable(): Promise<boolean> {
+  if (ftsAvailableCache !== null) {
+    return ftsAvailableCache
+  }
+
   try {
     await sql`SELECT 1 FROM diary_entries_fts LIMIT 1`.execute(db)
-    return true
+    ftsAvailableCache = true
   } catch {
-    return false
+    ftsAvailableCache = false
   }
+
+  return ftsAvailableCache
 }
 
 /**
