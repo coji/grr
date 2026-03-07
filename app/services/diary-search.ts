@@ -1,19 +1,46 @@
 /**
  * Full-text search service for diary entries
  *
- * Uses FTS5 with trigram tokenizer for Japanese text search.
- * Provides search functions for both user-facing search and AI context retrieval.
+ * Uses FTS5 with Intl.Segmenter for Japanese text search.
+ * Based on: https://zenn.dev/coji/articles/cloudflare-d1-fts5-japanese-search-api
  */
 
 import { sql } from 'kysely'
 import { db } from './db'
 
 // ============================================
-// Module-level Constants
+// Module-level Constants & Segmenter
 // ============================================
 
 /** Cached FTS availability status (null = not checked yet) */
 let ftsAvailableCache: boolean | null = null
+
+/** Japanese word segmenter using V8's built-in Intl.Segmenter */
+const segmenter = new Intl.Segmenter('ja', { granularity: 'word' })
+
+/**
+ * Tokenize text for FTS5 storage and search
+ * Uses Intl.Segmenter for accurate Japanese word segmentation
+ */
+export function tokenize(text: string): string {
+  return [...segmenter.segment(text)]
+    .filter((s) => s.isWordLike)
+    .map((s) => s.segment)
+    .join(' ')
+}
+
+/**
+ * Build FTS5 MATCH query from tokenized text
+ * Wraps each token in double quotes for exact matching
+ */
+export function buildMatchQuery(text: string): string {
+  const tokens = tokenize(text)
+  return tokens
+    .split(' ')
+    .filter(Boolean)
+    .map((t) => `"${t.replaceAll('"', '""')}"`)
+    .join(' ')
+}
 
 /** Common Japanese and English stop words for keyword extraction */
 const STOP_WORDS = new Set([
@@ -110,8 +137,13 @@ export async function searchDiaryEntries(
     return []
   }
 
+  // Build match query with tokenized and quoted terms
+  const matchQuery = buildMatchQuery(query)
+  if (!matchQuery) {
+    return []
+  }
+
   // FTS5 search with BM25 ranking using raw SQL
-  // FTS5 virtual tables require special MATCH syntax that Kysely doesn't natively support
   const results = await sql<DiarySearchResult>`
     SELECT
       entry_id as "entryId",
@@ -121,7 +153,7 @@ export async function searchDiaryEntries(
       bm25(diary_entries_fts) as rank
     FROM diary_entries_fts
     WHERE user_id = ${userId}
-      AND diary_entries_fts MATCH ${query}
+      AND diary_entries_fts MATCH ${matchQuery}
     ORDER BY bm25(diary_entries_fts)
     LIMIT ${limit}
   `.execute(db)
@@ -194,10 +226,10 @@ export async function getSearchContextForAI(
 }
 
 /**
- * Extract search keywords from text
+ * Extract search keywords from text using Intl.Segmenter
  *
- * Extracts meaningful keywords from diary text or mentions for search.
- * Focuses on nouns, proper nouns, and meaningful phrases.
+ * Uses V8's built-in word segmentation for accurate Japanese tokenization.
+ * Filters out stop words and short tokens.
  *
  * @param text - Input text to extract keywords from
  * @param maxKeywords - Maximum number of keywords to extract
@@ -209,48 +241,31 @@ export function extractSearchKeywords(
 ): string[] {
   if (!text.trim()) return []
 
-  // Extract potential keywords
-  // 1. Quoted phrases (「」or "")
-  const quotedPhrases =
-    text.match(/[「『""]([^」』""]+)[」』""]/g)?.map((m) => m.slice(1, -1)) ||
-    []
+  // Use Intl.Segmenter for word segmentation
+  const segments = [...segmenter.segment(text)]
+    .filter((s) => s.isWordLike)
+    .map((s) => s.segment)
 
-  // 2. Capitalized words (likely proper nouns)
-  const capitalizedWords =
-    text.match(/[A-Z][a-zA-Z0-9]+/g)?.filter((w) => w.length > 2) || []
-
-  // 3. Japanese katakana words (often proper nouns or technical terms)
-  const katakanaWords =
-    text.match(/[ァ-ヴー]{3,}/g)?.filter((w) => w.length >= 3) || []
-
-  // 4. Numbers with context (dates, amounts)
-  const numbersWithContext =
-    text.match(/\d+[年月日時分秒円個回%％]/g)?.slice(0, 2) || []
-
-  // 5. Compound nouns (sequences of kanji)
-  const kanjiCompounds =
-    text.match(/[一-龯]{2,}/g)?.filter((w) => !STOP_WORDS.has(w)) || []
-
-  // Combine and deduplicate
-  const allKeywords = [
-    ...quotedPhrases,
-    ...capitalizedWords,
-    ...katakanaWords,
-    ...numbersWithContext,
-    ...kanjiCompounds,
-  ]
-
-  // Deduplicate and limit
+  // Filter and deduplicate
   const seen = new Set<string>()
   const keywords: string[] = []
 
-  for (const keyword of allKeywords) {
-    const normalized = keyword.toLowerCase()
-    if (!seen.has(normalized) && keyword.length >= 2) {
-      seen.add(normalized)
-      keywords.push(keyword)
-      if (keywords.length >= maxKeywords) break
+  for (const word of segments) {
+    const normalized = word.toLowerCase()
+    // Skip stop words, short words, and duplicates
+    if (
+      STOP_WORDS.has(word) ||
+      STOP_WORDS.has(normalized) ||
+      word.length < 2 ||
+      seen.has(normalized)
+    ) {
+      continue
     }
+
+    seen.add(normalized)
+    keywords.push(word)
+
+    if (keywords.length >= maxKeywords) break
   }
 
   return keywords
