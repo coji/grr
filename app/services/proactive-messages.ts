@@ -55,6 +55,19 @@ export async function recordProactiveMessage(input: {
 }
 
 /**
+ * Get proactive message by Slack message timestamp (to detect replies)
+ */
+export async function getProactiveMessageByMessageTs(
+  messageTs: string,
+): Promise<ProactiveMessage | undefined> {
+  return db
+    .selectFrom('proactiveMessages')
+    .selectAll()
+    .where('messageTs', '=', messageTs)
+    .executeTakeFirst()
+}
+
+/**
  * Check if a proactive message with this key was already sent
  */
 export async function wasMessageSent(
