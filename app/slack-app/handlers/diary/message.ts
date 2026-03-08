@@ -1,13 +1,24 @@
+import { env } from 'cloudflare:workers'
+import { nanoid } from 'nanoid'
 import type { SlackApp, SlackEdgeAppEnv } from 'slack-cloudflare-workers'
 import { SlackAPIError } from 'slack-edge'
 import dayjs from '~/lib/dayjs'
 import { generateSupportiveReaction } from '~/services/ai'
 import { storeAttachments } from '~/services/attachments'
-import { getCharacterPersonaInfo } from '~/services/character'
+import {
+  getCharacterPersonaInfo,
+  updateCharacterOnDiaryEntry,
+} from '~/services/character'
 import { ensureWorkspaceId } from '~/services/character-social'
 import { db } from '~/services/db'
+import { indexDiaryEntry } from '~/services/diary-search'
 import { triggerImmediateMemoryExtraction } from '~/services/memory'
-import { detectAndStoreFutureEvents } from '~/services/pending-followups'
+import {
+  detectAndStoreFutureEvents,
+  getFollowupByMessageTs,
+  markFollowupAsAnswered,
+} from '~/services/pending-followups'
+import { getProactiveMessageByMessageTs } from '~/services/proactive-messages'
 import { SUPPORTIVE_REACTIONS } from '../diary-constants'
 import { filterSupportedFiles, type SlackFile } from './file-utils'
 import { sanitizeText, TOKYO_TZ } from './utils'
@@ -46,20 +57,52 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
       )
     }
 
-    const entry = await db
+    let entry = await db
       .selectFrom('diaryEntries')
       .selectAll()
       .where('messageTs', '=', event.thread_ts)
       .executeTakeFirst()
 
+    // If no diary entry found, check if this is a reply to a bot-initiated message
+    // (proactive message or pending followup)
+    let isReplyToBotMessage = false
+    let proactiveMessage: Awaited<
+      ReturnType<typeof getProactiveMessageByMessageTs>
+    >
+    let pendingFollowup: Awaited<ReturnType<typeof getFollowupByMessageTs>>
+
     if (!entry) {
-      console.log(
-        `[message] No diary entry found for thread_ts: ${event.thread_ts}`,
-      )
-      return
+      // Check proactive_messages table
+      proactiveMessage = await getProactiveMessageByMessageTs(event.thread_ts)
+      if (proactiveMessage && proactiveMessage.userId === event.user) {
+        isReplyToBotMessage = true
+        console.log(
+          `[message] Reply to proactive message (${proactiveMessage.messageType}) from user ${event.user}`,
+        )
+      }
+
+      // Check pending_followups table
+      if (!isReplyToBotMessage) {
+        pendingFollowup = await getFollowupByMessageTs(event.thread_ts)
+        if (pendingFollowup && pendingFollowup.userId === event.user) {
+          isReplyToBotMessage = true
+          console.log(
+            `[message] Reply to pending followup from user ${event.user}`,
+          )
+        }
+      }
+
+      // If not a bot message reply, skip processing
+      if (!isReplyToBotMessage) {
+        console.log(
+          `[message] No diary entry or bot message found for thread_ts: ${event.thread_ts}`,
+        )
+        return
+      }
     }
 
-    if (entry.userId !== event.user) {
+    // For existing diary entries, verify user ownership
+    if (entry && entry.userId !== event.user) {
       console.log(
         `[message] User mismatch: entry.userId=${entry.userId}, event.user=${event.user}`,
       )
@@ -73,9 +116,48 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
     if (!text && !hasFiles) return
 
     const now = dayjs().utc().toISOString()
+    const entryDate = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
 
-    // Update diary entry text if present
-    if (text) {
+    // If this is a reply to a bot message and no entry exists, create one
+    if (isReplyToBotMessage && !entry) {
+      const channelId =
+        proactiveMessage?.channelId || pendingFollowup?.channelId || ''
+      const newEntry = {
+        id: nanoid(),
+        userId: event.user,
+        channelId,
+        messageTs: event.thread_ts,
+        entryDate,
+        moodEmoji: null,
+        moodValue: null,
+        moodLabel: null,
+        detail: text || null,
+        reminderSentAt: now, // Bot message was the reminder
+        moodRecordedAt: null,
+        detailRecordedAt: text ? now : null,
+        createdAt: now,
+        updatedAt: now,
+      }
+
+      await db.insertInto('diaryEntries').values(newEntry).execute()
+      if (text) {
+        await indexDiaryEntry(newEntry.id, newEntry.userId, entryDate, text)
+      }
+      entry = newEntry
+
+      console.log(
+        `[message] Created new diary entry ${entry.id} for bot message reply`,
+      )
+
+      // Mark pending followup as answered if applicable
+      if (pendingFollowup) {
+        await markFollowupAsAnswered(pendingFollowup.id)
+        console.log(
+          `[message] Marked followup ${pendingFollowup.id} as answered`,
+        )
+      }
+    } else if (entry && text) {
+      // Update existing diary entry text
       const combined = entry.detail ? `${entry.detail}\n\n---\n${text}` : text
 
       await db
@@ -87,10 +169,23 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
         })
         .where('id', '=', entry.id)
         .execute()
+      entry = {
+        ...entry,
+        detail: combined,
+        detailRecordedAt: now,
+        updatedAt: now,
+      }
+    }
 
-      // 未来のイベントを検出してフォローアップをスケジュール (Heartbeat機能)
-      // Note: This runs async but we don't await it to avoid blocking the response
-      const entryDate = dayjs().tz(TOKYO_TZ).format('YYYY-MM-DD')
+    // Sanity check: entry should exist at this point
+    if (!entry) {
+      console.error('[message] Unexpected: entry is null after processing')
+      return
+    }
+
+    // 未来のイベントを検出してフォローアップをスケジュール (Heartbeat機能)
+    // Note: This runs async but we don't await it to avoid blocking the response
+    if (text) {
       detectAndStoreFutureEvents(
         entry.id,
         event.user,
@@ -151,27 +246,77 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
       }
     }
 
-    // リアクションを追加（35%の確率）
-    if (Math.random() < 0.35) {
-      const characterInfo = await getCharacterPersonaInfo(entry.userId)
-      const reaction = await generateSupportiveReaction({
-        characterInfo,
-        userId: entry.userId,
-        messageText: text,
-        moodLabel: entry.moodLabel,
-        availableReactions: SUPPORTIVE_REACTIONS,
-      })
-      await context.client.reactions
-        .add({ channel: entry.channelId, timestamp: event.ts, name: reaction })
-        .catch((error) => {
-          if (
-            error instanceof SlackAPIError &&
-            error.error === 'already_reacted'
-          ) {
-            return
-          }
-          console.error('Failed to add supportive reaction', error)
+    // For replies to bot messages, trigger AI reply workflow
+    // For regular diary replies, just add a reaction (existing behavior)
+    if (isReplyToBotMessage) {
+      // Update character state (diary entry interaction)
+      const teamId = (payload as unknown as { team_id?: string }).team_id
+      try {
+        await updateCharacterOnDiaryEntry(event.user, null, teamId)
+      } catch (error) {
+        console.error('Failed to update character:', error)
+      }
+
+      // Get previous entry for context
+      const previousEntry = await db
+        .selectFrom('diaryEntries')
+        .selectAll()
+        .where('userId', '=', event.user)
+        .where('entryDate', '<', entry.entryDate)
+        .orderBy('entryDate', 'desc')
+        .limit(1)
+        .executeTakeFirst()
+
+      // Start AI reply workflow
+      try {
+        const instance = await env.AI_DIARY_REPLY_WORKFLOW.create({
+          params: {
+            entryId: entry.id,
+            userId: event.user,
+            channel: entry.channelId,
+            messageTs: event.ts,
+            threadTs: event.thread_ts,
+            moodLabel: entry.moodLabel,
+            latestEntry: entry.detail,
+            previousEntry: previousEntry?.detail ?? null,
+            mentionMessage: text || null,
+            mention: `<@${event.user}> さん`,
+            isFirstDiary: false,
+          },
         })
+        console.log(
+          `[message] Started AI reply workflow for bot message reply: ${instance.id}`,
+        )
+      } catch (error) {
+        console.error('[message] Failed to start AI reply workflow:', error)
+      }
+    } else {
+      // Existing behavior: add supportive reaction (35% chance)
+      if (Math.random() < 0.35) {
+        const characterInfo = await getCharacterPersonaInfo(entry.userId)
+        const reaction = await generateSupportiveReaction({
+          characterInfo,
+          userId: entry.userId,
+          messageText: text,
+          moodLabel: entry.moodLabel,
+          availableReactions: SUPPORTIVE_REACTIONS,
+        })
+        await context.client.reactions
+          .add({
+            channel: entry.channelId,
+            timestamp: event.ts,
+            name: reaction,
+          })
+          .catch((error) => {
+            if (
+              error instanceof SlackAPIError &&
+              error.error === 'already_reacted'
+            ) {
+              return
+            }
+            console.error('Failed to add supportive reaction', error)
+          })
+      }
     }
   })
 }
