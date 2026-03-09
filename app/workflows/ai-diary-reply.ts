@@ -296,7 +296,10 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
         },
       },
       async (): Promise<void> => {
-        const message = `${params.mention} ${aiReply}`.trim()
+        // Skip mention for followup replies to avoid excessive notifications
+        const message = params.isFollowupReply
+          ? aiReply.trim()
+          : `${params.mention} ${aiReply}`.trim()
 
         // biome-ignore lint/suspicious/noExplicitAny: Slack Block Kit dynamic types
         const blocks: any[] = []
