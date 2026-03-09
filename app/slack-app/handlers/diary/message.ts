@@ -63,40 +63,37 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
       .where('messageTs', '=', event.thread_ts)
       .executeTakeFirst()
 
-    // If no diary entry found, check if this is a reply to a bot-initiated message
-    // (proactive message or pending followup)
+    // Always check if this is a reply to a bot-initiated message
+    // (proactive message or pending followup), even if diary entry exists.
+    // This ensures subsequent replies to bot messages also get AI responses.
     let proactiveMessage: Awaited<
       ReturnType<typeof getProactiveMessageByMessageTs>
     >
     let pendingFollowup: Awaited<ReturnType<typeof getFollowupByMessageTs>>
 
-    if (!entry) {
-      // Check both tables in parallel since they are independent lookups
-      const [proactiveResult, followupResult] = await Promise.all([
-        getProactiveMessageByMessageTs(event.thread_ts),
-        getFollowupByMessageTs(event.thread_ts),
-      ])
+    // Check both tables in parallel since they are independent lookups
+    const [proactiveResult, followupResult] = await Promise.all([
+      getProactiveMessageByMessageTs(event.thread_ts),
+      getFollowupByMessageTs(event.thread_ts),
+    ])
 
-      // Only accept results that belong to this user
-      if (proactiveResult?.userId === event.user) {
-        proactiveMessage = proactiveResult
-        console.log(
-          `[message] Reply to proactive message (${proactiveMessage.messageType}) from user ${event.user}`,
-        )
-      } else if (followupResult?.userId === event.user) {
-        pendingFollowup = followupResult
-        console.log(
-          `[message] Reply to pending followup from user ${event.user}`,
-        )
-      }
+    // Only accept results that belong to this user
+    if (proactiveResult?.userId === event.user) {
+      proactiveMessage = proactiveResult
+      console.log(
+        `[message] Reply to proactive message (${proactiveMessage.messageType}) from user ${event.user}`,
+      )
+    } else if (followupResult?.userId === event.user) {
+      pendingFollowup = followupResult
+      console.log(`[message] Reply to pending followup from user ${event.user}`)
+    }
 
-      // If not a bot message reply, skip processing
-      if (!proactiveMessage && !pendingFollowup) {
-        console.log(
-          `[message] No diary entry or bot message found for thread_ts: ${event.thread_ts}`,
-        )
-        return
-      }
+    // If no diary entry and no bot message found, skip processing
+    if (!entry && !proactiveMessage && !pendingFollowup) {
+      console.log(
+        `[message] No diary entry or bot message found for thread_ts: ${event.thread_ts}`,
+      )
+      return
     }
 
     // For existing diary entries, verify user ownership
@@ -287,8 +284,9 @@ export function registerMessageHandler(app: SlackApp<SlackEdgeAppEnv>) {
             latestEntry: entry.detail,
             previousEntry: previousEntry?.detail ?? null,
             mentionMessage: text || null,
-            mention: `<@${event.user}> さん`,
+            mention: `<@${event.user}>`,
             isFirstDiary: false,
+            isFollowupReply: true, // Skip image generation, lighter tone
           },
         })
         console.log(

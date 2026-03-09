@@ -40,6 +40,8 @@ export interface DiaryReplyContext {
   imageAttachments?: ImageAttachment[]
   /** Enable search context from past diary entries (default: true) */
   enableSearchContext?: boolean
+  /** When true, generates shorter, more casual responses (for followup/proactive message replies) */
+  isFollowupReply?: boolean
 }
 
 export async function generateDiaryReply({
@@ -53,6 +55,7 @@ export async function generateDiaryReply({
   mentionMessage,
   imageAttachments,
   enableSearchContext = true,
+  isFollowupReply = false,
 }: DiaryReplyContext): Promise<string> {
   // Build persona: prefer character info, fall back to persona name
   const personaPrompt = characterInfo
@@ -150,6 +153,57 @@ export async function generateDiaryReply({
     } catch (error) {
       console.warn('Failed to retrieve search context:', error)
       // Continue without search context
+    }
+  }
+
+  // For followup replies, use a simpler, more casual prompt
+  if (isFollowupReply) {
+    const followupSummary = [
+      mentionMessage ? `返信メッセージ: """${mentionMessage}"""` : undefined,
+      latestEntry ? `これまでの会話: """${latestEntry}"""` : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    try {
+      const { text } = await generateText({
+        model: 'gemini-3-flash-preview',
+        thinkingLevel: 'low', // Faster, simpler reasoning for casual replies
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: [
+                  `ユーザーID: <@${userId}>`,
+                  followupSummary,
+                  '上記の返信に対して、軽く会話してください。',
+                ].join('\n'),
+              },
+            ],
+          },
+        ],
+        system: `
+${personaPrompt}
+${memoryContext ? `\n${memoryContext}\n` : ''}
+## タスク
+フォローアップメッセージへの返信に、友達のように軽く返事する。
+
+## ガイドライン
+- 相手の話を聞いて、素直なリアクションを返す
+- 深い分析や共感よりも、軽快な会話を心がける
+- 「そうなんだ！」「いいね」「お疲れ様」など気軽な相槌OK
+
+## 出力フォーマット
+- 形式: 日本語の散文（改行なし）
+- 長さ: 1-2文、50-80文字程度
+- トーン: 友達との気軽な会話
+        `.trim(),
+      })
+      return text
+    } catch (error) {
+      console.error('generateDiaryReply (followup mode) failed', error)
+      return String(error)
     }
   }
 

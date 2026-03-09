@@ -70,6 +70,7 @@ export interface AiDiaryReplyParams {
   mentionMessage: string | null
   mention: string
   isFirstDiary?: boolean // True when this is the user's first diary entry (onboarding)
+  isFollowupReply?: boolean // True when replying to a followup/proactive message (lighter interaction)
 }
 
 export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
@@ -204,6 +205,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
           previousEntry: params.previousEntry,
           mentionMessage: params.mentionMessage,
           imageAttachments,
+          isFollowupReply: params.isFollowupReply,
         })
       },
     )
@@ -212,6 +214,7 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
     // Pre-generates the image so the PNG route can serve it instantly
     // when Slack fetches the image_url from the block.
     // Returns a URL pointing to the specific generated image (not random pool).
+    // Skip image generation for followup replies (lighter interaction).
     const characterImageUrl = await step.do(
       'generate-character-image',
       {
@@ -221,6 +224,12 @@ export class AiDiaryReplyWorkflow extends WorkflowEntrypoint<
         },
       },
       async (): Promise<string | null> => {
+        // Skip image generation for followup replies (lighter, more conversational)
+        if (params.isFollowupReply) {
+          console.log('Skipping image generation for followup reply')
+          return null
+        }
+
         const character = await getCharacter(params.userId)
         if (!character) return null
 
