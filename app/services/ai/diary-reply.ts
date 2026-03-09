@@ -64,6 +64,69 @@ export async function generateDiaryReply({
       ? getPersonaBackground(personaName)
       : getPersonaWithCharacter(null)
 
+  // For followup replies, use a simpler, more casual prompt
+  // Early return to avoid expensive intent/search/personality operations
+  if (isFollowupReply) {
+    // Only fetch memory context (lightweight, useful for conversational continuity)
+    let memoryContext = ''
+    try {
+      const memoryResult = await getMemoryContextForReply(userId, 500)
+      if (memoryResult.summary) {
+        memoryContext = memoryResult.summary
+      }
+    } catch (error) {
+      console.warn('Failed to retrieve memory context:', error)
+    }
+
+    const followupSummary = [
+      mentionMessage ? `返信メッセージ: """${mentionMessage}"""` : undefined,
+      latestEntry ? `これまでの会話: """${latestEntry}"""` : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    try {
+      const { text } = await generateText({
+        model: 'gemini-3-flash-preview',
+        thinkingLevel: 'low', // Faster, simpler reasoning for casual replies
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: [
+                  `ユーザーID: <@${userId}>`,
+                  followupSummary,
+                  '上記の返信に対して、軽く会話してください。',
+                ].join('\n'),
+              },
+            ],
+          },
+        ],
+        system: `
+${personaPrompt}
+${memoryContext ? `\n${memoryContext}\n` : ''}
+## タスク
+フォローアップメッセージへの返信に、友達のように軽く返事する。
+
+## ガイドライン
+- 相手の話を聞いて、素直なリアクションを返す
+- 深い分析や共感よりも、軽快な会話を心がける
+- 「そうなんだ！」「いいね」「お疲れ様」など気軽な相槌OK
+
+## 出力フォーマット
+- 形式: 日本語の散文（改行なし）
+- 長さ: 1-2文、50-80文字程度
+- トーン: 友達との気軽な会話
+        `.trim(),
+      })
+      return text
+    } catch (error) {
+      console.error('generateDiaryReply (followup mode) failed', error)
+      return String(error)
+    }
+  }
+
   // Get display name for intent analysis (character name or persona name)
   const displayName = characterInfo?.name ?? personaName ?? '日記アシスタント'
 
@@ -153,57 +216,6 @@ export async function generateDiaryReply({
     } catch (error) {
       console.warn('Failed to retrieve search context:', error)
       // Continue without search context
-    }
-  }
-
-  // For followup replies, use a simpler, more casual prompt
-  if (isFollowupReply) {
-    const followupSummary = [
-      mentionMessage ? `返信メッセージ: """${mentionMessage}"""` : undefined,
-      latestEntry ? `これまでの会話: """${latestEntry}"""` : undefined,
-    ]
-      .filter(Boolean)
-      .join('\n')
-
-    try {
-      const { text } = await generateText({
-        model: 'gemini-3-flash-preview',
-        thinkingLevel: 'low', // Faster, simpler reasoning for casual replies
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: [
-                  `ユーザーID: <@${userId}>`,
-                  followupSummary,
-                  '上記の返信に対して、軽く会話してください。',
-                ].join('\n'),
-              },
-            ],
-          },
-        ],
-        system: `
-${personaPrompt}
-${memoryContext ? `\n${memoryContext}\n` : ''}
-## タスク
-フォローアップメッセージへの返信に、友達のように軽く返事する。
-
-## ガイドライン
-- 相手の話を聞いて、素直なリアクションを返す
-- 深い分析や共感よりも、軽快な会話を心がける
-- 「そうなんだ！」「いいね」「お疲れ様」など気軽な相槌OK
-
-## 出力フォーマット
-- 形式: 日本語の散文（改行なし）
-- 長さ: 1-2文、50-80文字程度
-- トーン: 友達との気軽な会話
-        `.trim(),
-      })
-      return text
-    } catch (error) {
-      console.error('generateDiaryReply (followup mode) failed', error)
-      return String(error)
     }
   }
 
