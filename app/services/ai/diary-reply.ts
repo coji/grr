@@ -84,24 +84,34 @@ export async function generateDiaryReply({
       .filter(Boolean)
       .join('\n')
 
+    // Build parts array with text and optional images
+    const parts: Array<
+      { text: string } | { inlineData: { data: string; mimeType: string } }
+    > = [
+      {
+        text: [
+          `ユーザーID: <@${userId}>`,
+          followupSummary,
+          '上記の返信に対して、軽く会話してください。',
+        ].join('\n'),
+      },
+    ]
+
+    // Add image attachments if present
+    if (imageAttachments && imageAttachments.length > 0) {
+      for (const attachment of imageAttachments) {
+        const base64 = Buffer.from(attachment.buffer).toString('base64')
+        parts.push({
+          inlineData: { data: base64, mimeType: attachment.mimeType },
+        })
+      }
+    }
+
     try {
       const { text } = await generateText({
         model: 'gemini-3-flash-preview',
         thinkingLevel: 'low', // Faster, simpler reasoning for casual replies
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: [
-                  `ユーザーID: <@${userId}>`,
-                  followupSummary,
-                  '上記の返信に対して、軽く会話してください。',
-                ].join('\n'),
-              },
-            ],
-          },
-        ],
+        contents: [{ role: 'user', parts }],
         system: `
 ${shortPersona}
 ${memoryContext ? `\n${memoryContext}\n` : ''}
@@ -122,7 +132,7 @@ ${memoryContext ? `\n${memoryContext}\n` : ''}
       return text
     } catch (error) {
       console.error('generateDiaryReply (followup mode) failed', error)
-      return String(error)
+      throw error
     }
   }
 
@@ -314,7 +324,7 @@ ${intentGuidelines[intentAnalysis.intent]}
     return text
   } catch (error) {
     console.error('generateDiaryReply failed', error)
-    return String(error)
+    throw error
   }
 }
 

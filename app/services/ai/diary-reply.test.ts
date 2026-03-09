@@ -136,6 +136,43 @@ describe('generateDiaryReply', () => {
 
       expect(result).toBe('充実した時間だったんだね！')
     })
+
+    it('should include imageAttachments in contents when provided', async () => {
+      vi.mocked(generateText).mockResolvedValue({
+        text: 'いい写真だね！',
+        usage: { inputTokens: 100, outputTokens: 10, thinkingTokens: 5 },
+      })
+
+      const testImage = {
+        buffer: Buffer.from('fake-image-data'),
+        mimeType: 'image/png',
+        fileName: 'test.png',
+      }
+
+      await generateDiaryReply({
+        userId: 'U123',
+        mentionMessage: '写真送るね',
+        isFollowupReply: true,
+        imageAttachments: [testImage],
+      })
+
+      // Should include image in contents parts
+      expect(generateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          contents: expect.arrayContaining([
+            expect.objectContaining({
+              parts: expect.arrayContaining([
+                expect.objectContaining({
+                  inlineData: expect.objectContaining({
+                    mimeType: 'image/png',
+                  }),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      )
+    })
   })
 
   describe('isFollowupReply = false (default)', () => {
