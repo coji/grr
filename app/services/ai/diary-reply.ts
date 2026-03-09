@@ -12,6 +12,7 @@ import { generateText } from './genai'
 import { extractKeywordsWithAI } from './keyword-extraction'
 import {
   getPersonaBackground,
+  getPersonaShortWithCharacter,
   getPersonaWithCharacter,
   type CharacterPersonaInfo,
 } from './persona'
@@ -40,6 +41,8 @@ export interface DiaryReplyContext {
   imageAttachments?: ImageAttachment[]
   /** Enable search context from past diary entries (default: true) */
   enableSearchContext?: boolean
+  /** When true, generates shorter, more casual responses (for followup/proactive message replies) */
+  isFollowupReply?: boolean
 }
 
 export async function generateDiaryReply({
@@ -53,7 +56,86 @@ export async function generateDiaryReply({
   mentionMessage,
   imageAttachments,
   enableSearchContext = true,
+  isFollowupReply = false,
 }: DiaryReplyContext): Promise<string> {
+  // For followup replies, use a simpler, more casual prompt
+  // Early return to avoid expensive intent/search/personality operations
+  if (isFollowupReply) {
+    // Use short persona for lightweight interactions (per prompting guide)
+    const shortPersona = characterInfo
+      ? getPersonaShortWithCharacter(characterInfo)
+      : getPersonaShortWithCharacter(null)
+
+    // Only fetch memory context (lightweight, useful for conversational continuity)
+    let memoryContext = ''
+    try {
+      const memoryResult = await getMemoryContextForReply(userId, 500)
+      if (memoryResult.summary) {
+        memoryContext = memoryResult.summary
+      }
+    } catch (error) {
+      console.warn('Failed to retrieve memory context:', error)
+    }
+
+    const followupSummary = [
+      mentionMessage ? `返信メッセージ: """${mentionMessage}"""` : undefined,
+      latestEntry ? `これまでの会話: """${latestEntry}"""` : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    // Build parts array with text and optional images
+    const parts: Array<
+      { text: string } | { inlineData: { data: string; mimeType: string } }
+    > = [
+      {
+        text: [
+          `ユーザーID: <@${userId}>`,
+          followupSummary,
+          '上記の返信に対して、軽く会話してください。',
+        ].join('\n'),
+      },
+    ]
+
+    // Add image attachments if present
+    if (imageAttachments && imageAttachments.length > 0) {
+      for (const attachment of imageAttachments) {
+        const base64 = Buffer.from(attachment.buffer).toString('base64')
+        parts.push({
+          inlineData: { data: base64, mimeType: attachment.mimeType },
+        })
+      }
+    }
+
+    try {
+      const { text } = await generateText({
+        model: 'gemini-3-flash-preview',
+        thinkingLevel: 'low', // Faster, simpler reasoning for casual replies
+        contents: [{ role: 'user', parts }],
+        system: `
+${shortPersona}
+${memoryContext ? `\n${memoryContext}\n` : ''}
+## タスク
+フォローアップメッセージへの返信に、友達のように軽く返事する。
+
+## ガイドライン
+- 相手の話を聞いて、素直なリアクションを返す
+- 軽快な会話のテンポを保つ
+- 「そうなんだ！」「いいね」「お疲れ様」など気軽な相槌OK
+
+## 出力フォーマット
+- 形式: 日本語の散文（改行なし）
+- 長さ: 1-2文、50-80文字程度
+- トーン: 友達との気軽な会話
+        `.trim(),
+      })
+      return text
+    } catch (error) {
+      console.error('generateDiaryReply (followup mode) failed', error)
+      throw error
+    }
+  }
+
   // Build persona: prefer character info, fall back to persona name
   const personaPrompt = characterInfo
     ? getPersonaWithCharacter(characterInfo)
@@ -242,7 +324,7 @@ ${intentGuidelines[intentAnalysis.intent]}
     return text
   } catch (error) {
     console.error('generateDiaryReply failed', error)
-    return String(error)
+    throw error
   }
 }
 
