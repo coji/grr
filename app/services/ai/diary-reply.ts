@@ -12,6 +12,7 @@ import { generateText } from './genai'
 import { extractKeywordsWithAI } from './keyword-extraction'
 import {
   getPersonaBackground,
+  getPersonaShortWithCharacter,
   getPersonaWithCharacter,
   type CharacterPersonaInfo,
 } from './persona'
@@ -57,16 +58,14 @@ export async function generateDiaryReply({
   enableSearchContext = true,
   isFollowupReply = false,
 }: DiaryReplyContext): Promise<string> {
-  // Build persona: prefer character info, fall back to persona name
-  const personaPrompt = characterInfo
-    ? getPersonaWithCharacter(characterInfo)
-    : personaName
-      ? getPersonaBackground(personaName)
-      : getPersonaWithCharacter(null)
-
   // For followup replies, use a simpler, more casual prompt
   // Early return to avoid expensive intent/search/personality operations
   if (isFollowupReply) {
+    // Use short persona for lightweight interactions (per prompting guide)
+    const shortPersona = characterInfo
+      ? getPersonaShortWithCharacter(characterInfo)
+      : getPersonaShortWithCharacter(null)
+
     // Only fetch memory context (lightweight, useful for conversational continuity)
     let memoryContext = ''
     try {
@@ -104,14 +103,14 @@ export async function generateDiaryReply({
           },
         ],
         system: `
-${personaPrompt}
+${shortPersona}
 ${memoryContext ? `\n${memoryContext}\n` : ''}
 ## タスク
 フォローアップメッセージへの返信に、友達のように軽く返事する。
 
 ## ガイドライン
 - 相手の話を聞いて、素直なリアクションを返す
-- 深い分析や共感よりも、軽快な会話を心がける
+- 軽快な会話のテンポを保つ
 - 「そうなんだ！」「いいね」「お疲れ様」など気軽な相槌OK
 
 ## 出力フォーマット
@@ -126,6 +125,13 @@ ${memoryContext ? `\n${memoryContext}\n` : ''}
       return String(error)
     }
   }
+
+  // Build persona: prefer character info, fall back to persona name
+  const personaPrompt = characterInfo
+    ? getPersonaWithCharacter(characterInfo)
+    : personaName
+      ? getPersonaBackground(personaName)
+      : getPersonaWithCharacter(null)
 
   // Get display name for intent analysis (character name or persona name)
   const displayName = characterInfo?.name ?? personaName ?? '日記アシスタント'
