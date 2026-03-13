@@ -20,6 +20,7 @@ import {
   type MemoryCategory,
 } from '~/services/memory'
 import { getMemoryStats } from '~/services/memory-retrieval'
+import { handleMusicCommand } from './music-command'
 import { TOKYO_TZ } from './utils'
 
 export function registerSlashCommandHandler(app: SlackApp<SlackEdgeAppEnv>) {
@@ -56,6 +57,14 @@ export function registerSlashCommandHandler(app: SlackApp<SlackEdgeAppEnv>) {
           return await handleReflectionCommand(userId, args.slice(1), context)
         case 'memory':
           return await handleMemoryCommand(userId, args.slice(1), context)
+        case 'music':
+          return await handleMusicCommand(
+            userId,
+            args.slice(1),
+            context,
+            undefined,
+            context.client,
+          )
         default:
           return await handleHelpCommand(context)
       }
@@ -538,6 +547,7 @@ async function handleHelpCommand(context: SlackAppContextWithOptionalRespond) {
 \`/diary export\` - CSVエクスポート
 \`/diary reflection [日付]\` - AIふりかえりメモを表示
 \`/diary memory\` - メモリー管理 (list/delete/clear/stats)
+\`/diary music\` - 振り返りBGM生成 (generate/status/list)
 \`/diary help\` - このヘルプを表示
 `
 
