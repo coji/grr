@@ -1,10 +1,10 @@
 /**
  * Suno API クライアント
  *
- * Suno AI の音楽生成 API と連携するクライアント。
- * サードパーティプロバイダ (sunoapi.org など) を使用。
+ * gcui-art/suno-api (self-hosted on Vercel) と連携するクライアント。
+ * Cookie ベースの認証はサーバー側で処理されるため、APIキーは不要。
  *
- * 参考: https://docs.sunoapi.org/
+ * 参考: https://github.com/gcui-art/suno-api
  */
 
 import { env } from 'cloudflare:workers'
@@ -14,7 +14,7 @@ import { env } from 'cloudflare:workers'
 // ============================================
 
 export interface SunoGenerateOptions {
-  /** 歌詞（custom mode）または説明文（description mode） */
+  /** 歌詞（custom mode） */
   prompt: string
   /** 音楽スタイル（例: "japanese pop, warm acoustic"） */
   style: string
@@ -23,7 +23,7 @@ export interface SunoGenerateOptions {
   /** インストゥルメンタルかどうか */
   instrumental?: boolean
   /** モデルバージョン（デフォルト: v4） */
-  model?: 'v3.5' | 'v4' | 'v4.5'
+  model?: string
 }
 
 export type SunoTaskStatus =
@@ -47,23 +47,21 @@ export interface SunoGenerateResult {
 }
 
 // ============================================
-// API Response Types
+// API Response Types (gcui-art/suno-api)
 // ============================================
 
-interface SunoApiGenerateResponse {
-  task_id: string
+interface SunoAudioInfo {
+  id: string
+  title?: string
+  audio_url?: string
+  video_url?: string
   status: string
-}
-
-interface SunoApiStatusResponse {
-  task_id: string
-  status: string
-  output?: {
-    audio_url?: string
-    video_url?: string
-    duration?: number
-  }
-  error?: string
+  error_message?: string
+  duration?: string
+  tags?: string
+  lyric?: string
+  created_at: string
+  model_name: string
 }
 
 // ============================================
@@ -74,50 +72,37 @@ interface SunoApiStatusResponse {
  * Suno API のベース URL を取得
  */
 function getBaseUrl(): string {
-  return (
-    (env as unknown as Record<string, string | undefined>).SUNO_API_URL ??
-    'https://api.sunoapi.org/v1'
-  )
-}
-
-/**
- * Suno API キーを取得
- */
-function getApiKey(): string {
-  const apiKey = (env as unknown as Record<string, string | undefined>)
-    .SUNO_API_KEY
-  if (!apiKey) {
-    throw new Error('SUNO_API_KEY is not configured')
+  const url = (env as unknown as Record<string, string | undefined>)
+    .SUNO_API_URL
+  if (!url) {
+    throw new Error('SUNO_API_URL is not configured')
   }
-  return apiKey
+  return url.replace(/\/$/, '') // Remove trailing slash
 }
 
 /**
  * 音楽生成をリクエスト
  *
- * カスタムモード（歌詞指定）で音楽を生成する。
- * 生成は非同期で行われ、タスクIDが返される。
+ * gcui-art/suno-api の /api/custom_generate エンドポイントを使用。
+ * 2曲生成されるが、最初の1曲のIDを返す。
  */
 export async function generateMusic(
   options: SunoGenerateOptions,
 ): Promise<SunoGenerateResult> {
   const baseUrl = getBaseUrl()
-  const apiKey = getApiKey()
 
-  const response = await fetch(`${baseUrl}/generate`, {
+  const response = await fetch(`${baseUrl}/api/custom_generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      // Custom mode: provide lyrics directly
-      custom_mode: true,
       prompt: options.prompt,
       tags: options.style,
       title: options.title,
       make_instrumental: options.instrumental ?? false,
       model: options.model ?? 'v4',
+      wait_audio: false,
     }),
   })
 
@@ -126,45 +111,60 @@ export async function generateMusic(
     throw new Error(`Suno API error: ${response.status} - ${errorText}`)
   }
 
-  const data = (await response.json()) as SunoApiGenerateResponse
+  const data = (await response.json()) as SunoAudioInfo[]
+
+  if (!data || data.length === 0) {
+    throw new Error('Suno API returned no audio data')
+  }
+
+  // 最初の曲を使用
+  const audio = data[0]
 
   return {
-    taskId: data.task_id,
-    status: normalizeStatus(data.status),
+    taskId: audio.id,
+    status: normalizeStatus(audio.status),
+    audioUrl: audio.audio_url || undefined,
+    videoUrl: audio.video_url || undefined,
+    errorMessage: audio.error_message || undefined,
   }
 }
 
 /**
  * タスクステータスを確認
  *
- * 生成中のタスクの状態を確認し、完了時には音楽URLを返す。
+ * gcui-art/suno-api の /api/get?ids= エンドポイントを使用。
  */
 export async function checkMusicStatus(
   taskId: string,
 ): Promise<SunoGenerateResult> {
   const baseUrl = getBaseUrl()
-  const apiKey = getApiKey()
 
-  const response = await fetch(`${baseUrl}/task/${taskId}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
+  const response = await fetch(
+    `${baseUrl}/api/get?ids=${encodeURIComponent(taskId)}`,
+    {
+      method: 'GET',
     },
-  })
+  )
 
   if (!response.ok) {
     const errorText = await response.text()
     throw new Error(`Suno API error: ${response.status} - ${errorText}`)
   }
 
-  const data = (await response.json()) as SunoApiStatusResponse
+  const data = (await response.json()) as SunoAudioInfo[]
+
+  if (!data || data.length === 0) {
+    throw new Error(`No audio found for task: ${taskId}`)
+  }
+
+  const audio = data[0]
 
   return {
-    taskId: data.task_id,
-    status: normalizeStatus(data.status),
-    audioUrl: data.output?.audio_url,
-    videoUrl: data.output?.video_url,
-    errorMessage: data.error,
+    taskId: audio.id,
+    status: normalizeStatus(audio.status),
+    audioUrl: audio.audio_url || undefined,
+    videoUrl: audio.video_url || undefined,
+    errorMessage: audio.error_message || undefined,
   }
 }
 
@@ -190,7 +190,6 @@ function normalizeStatus(status: string): SunoTaskStatus {
     case 'error':
       return 'failed'
     default:
-      // Unknown status, treat as processing
       return 'processing'
   }
 }
@@ -199,7 +198,7 @@ function normalizeStatus(status: string): SunoTaskStatus {
  * Suno API が設定されているかどうかを確認
  */
 export function isSunoConfigured(): boolean {
-  const apiKey = (env as unknown as Record<string, string | undefined>)
-    .SUNO_API_KEY
-  return !!apiKey
+  const url = (env as unknown as Record<string, string | undefined>)
+    .SUNO_API_URL
+  return !!url
 }
