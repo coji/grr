@@ -287,6 +287,26 @@ export interface Database {
     metadata: string | null // JSON
     createdAt: string
   }
+
+  diaryMusicGenerations: {
+    id: string
+    userId: string
+    periodStart: string // YYYY-MM-DD
+    periodEnd: string // YYYY-MM-DD
+    periodLabel: string // "2026年2月" etc
+    theme: string
+    moodSummary: string
+    lyrics: string
+    musicStyle: string
+    musicTitle: string
+    sunoTaskId: string | null
+    sunoAudioUrl: string | null
+    sunoVideoUrl: string | null
+    status: 'pending' | 'generating' | 'completed' | 'failed'
+    errorMessage: string | null
+    createdAt: string
+    completedAt: string | null
+  }
 }
 
 export const createDb = (database: D1Database) =>
