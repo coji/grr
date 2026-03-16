@@ -43,6 +43,10 @@ vi.mock('~/services/proactive-messages', () => ({
   getUserMilestones: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock('~/services/character', () => ({
+  getCharacterPersonaInfoSafe: vi.fn().mockResolvedValue(null),
+}))
+
 import { db } from '~/services/db'
 import { countConsecutiveNoResponseDays } from '~/services/proactive-messages'
 import { sendDailyDiaryReminders } from './reminders'
