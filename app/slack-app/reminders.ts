@@ -226,15 +226,8 @@ export const sendDailyDiaryReminders = async (env: Env) => {
 
       if (existing) continue
 
-      // 3日以上連続で無反応ならリマインダーを送らない
-      // （HEARTBEAT の gentle_reengagement が Day 5 からフォローする）
+      // 無反応日数を取得（リマインダーに「お休み」ボタンを出すかの判定に使用）
       const noResponseDays = await countConsecutiveNoResponseDays(userId)
-      if (noResponseDays >= 3) {
-        console.log(
-          `Skipping reminder for user ${userId}: ${noResponseDays} consecutive no-response days`,
-        )
-        continue
-      }
 
       // ユーザーの過去のエントリから最新のチャンネルIDを取得
       const previousEntry = await db
@@ -330,6 +323,20 @@ export const sendDailyDiaryReminders = async (env: Env) => {
                 action_id: 'diary_skip_today',
                 value: entryDate,
               },
+              // 3日以上無反応なら「しばらくお休み」ボタンを表示
+              ...(noResponseDays >= 3
+                ? [
+                    {
+                      type: 'button' as const,
+                      text: {
+                        type: 'plain_text' as const,
+                        text: '💤 しばらくお休み',
+                        emoji: true,
+                      },
+                      action_id: 'diary_pause_reminders',
+                    },
+                  ]
+                : []),
             ],
           },
         ],

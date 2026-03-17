@@ -116,7 +116,7 @@ function setupUserWhoShouldReceiveReminder() {
   vi.mocked(db.insertInto).mockReturnValue(mockInsertChain as never)
 }
 
-describe('sendDailyDiaryReminders - throttling', () => {
+describe('sendDailyDiaryReminders', () => {
   const env = { SLACK_BOT_TOKEN: 'xoxb-test' } as Env
 
   beforeEach(() => {
@@ -124,26 +124,64 @@ describe('sendDailyDiaryReminders - throttling', () => {
     vi.useRealTimers()
   })
 
-  it('should skip reminder when user has 3+ consecutive no-response days', async () => {
+  it('should always send reminder regardless of no-response days', async () => {
+    setupUserWhoShouldReceiveReminder()
+    vi.mocked(countConsecutiveNoResponseDays).mockResolvedValue(5)
+
+    await sendDailyDiaryReminders(env)
+
+    expect(mockChatPostMessage).toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
+
+  it('should include pause button when user has 3+ consecutive no-response days', async () => {
     setupUserWhoShouldReceiveReminder()
     vi.mocked(countConsecutiveNoResponseDays).mockResolvedValue(3)
 
     await sendDailyDiaryReminders(env)
 
-    expect(countConsecutiveNoResponseDays).toHaveBeenCalledWith('U1')
-    expect(mockChatPostMessage).not.toHaveBeenCalled()
+    expect(mockChatPostMessage).toHaveBeenCalled()
+    const callArgs = mockChatPostMessage.mock.calls[0][0]
+    // Find the actions block that contains the skip button
+    const skipActionsBlock = callArgs.blocks.find(
+      // biome-ignore lint/suspicious/noExplicitAny: test code
+      (b: any) =>
+        b.type === 'actions' &&
+        // biome-ignore lint/suspicious/noExplicitAny: test code
+        b.elements.some((e: any) => e.action_id === 'diary_skip_today'),
+    )
+    // Should have pause button alongside skip button
+    const pauseButton = skipActionsBlock.elements.find(
+      // biome-ignore lint/suspicious/noExplicitAny: test code
+      (e: any) => e.action_id === 'diary_pause_reminders',
+    )
+    expect(pauseButton).toBeDefined()
+    expect(pauseButton.text.text).toBe('💤 しばらくお休み')
 
     vi.useRealTimers()
   })
 
-  it('should send reminder when user has fewer than 3 no-response days', async () => {
+  it('should not include pause button when user has fewer than 3 no-response days', async () => {
     setupUserWhoShouldReceiveReminder()
     vi.mocked(countConsecutiveNoResponseDays).mockResolvedValue(2)
 
     await sendDailyDiaryReminders(env)
 
-    expect(countConsecutiveNoResponseDays).toHaveBeenCalledWith('U1')
     expect(mockChatPostMessage).toHaveBeenCalled()
+    const callArgs = mockChatPostMessage.mock.calls[0][0]
+    const skipActionsBlock = callArgs.blocks.find(
+      // biome-ignore lint/suspicious/noExplicitAny: test code
+      (b: any) =>
+        b.type === 'actions' &&
+        // biome-ignore lint/suspicious/noExplicitAny: test code
+        b.elements.some((e: any) => e.action_id === 'diary_skip_today'),
+    )
+    const pauseButton = skipActionsBlock.elements.find(
+      // biome-ignore lint/suspicious/noExplicitAny: test code
+      (e: any) => e.action_id === 'diary_pause_reminders',
+    )
+    expect(pauseButton).toBeUndefined()
 
     vi.useRealTimers()
   })
