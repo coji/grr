@@ -231,7 +231,28 @@ export async function wasMilestoneCelebrated(
 }
 
 /**
- * Get users who have diary settings configured
+ * Resolve a user's diary channel: prefer explicit setting, fall back to most recent entry.
+ */
+export async function resolveUserDiaryChannel(
+  userId: string,
+  diaryChannelId: string | null,
+): Promise<string | null> {
+  if (diaryChannelId) return diaryChannelId
+
+  const entry = await db
+    .selectFrom('diaryEntries')
+    .select('channelId')
+    .where('userId', '=', userId)
+    .orderBy('entryDate', 'desc')
+    .limit(1)
+    .executeTakeFirst()
+
+  return entry?.channelId ?? null
+}
+
+/**
+ * Get users who have diary settings configured with reminder enabled.
+ * Falls back to most recent diary entry channel if diaryChannelId is not set.
  */
 export async function getActiveUsers(): Promise<
   Array<{ userId: string; channelId: string }>
@@ -240,15 +261,21 @@ export async function getActiveUsers(): Promise<
     .selectFrom('userDiarySettings')
     .select(['userId', 'diaryChannelId'])
     .where('reminderEnabled', '=', 1)
-    .where('diaryChannelId', 'is not', null)
     .execute()
 
-  return users
-    .filter((u) => u.diaryChannelId !== null)
-    .map((u) => ({
-      userId: u.userId,
-      channelId: u.diaryChannelId as string,
-    }))
+  const resolved = await Promise.all(
+    users.map(async (user) => {
+      const channelId = await resolveUserDiaryChannel(
+        user.userId,
+        user.diaryChannelId,
+      )
+      return channelId ? { userId: user.userId, channelId } : null
+    }),
+  )
+
+  return resolved.filter(
+    (r): r is { userId: string; channelId: string } => r !== null,
+  )
 }
 
 /**

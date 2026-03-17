@@ -8,6 +8,7 @@ import { db } from '~/services/db'
 import {
   countConsecutiveNoResponseDays,
   getUserMilestones,
+  resolveUserDiaryChannel,
 } from '~/services/proactive-messages'
 import { DIARY_MOOD_CHOICES } from './handlers/diary-constants'
 
@@ -226,35 +227,18 @@ export const sendDailyDiaryReminders = async (env: Env) => {
 
       if (existing) continue
 
-      // 3日以上連続で無反応ならリマインダーを送らない
-      // （HEARTBEAT の gentle_reengagement が Day 5 からフォローする）
+      // 無反応日数を取得（リマインダーに「お休み」ボタンを出すかの判定に使用）
       const noResponseDays = await countConsecutiveNoResponseDays(userId)
-      if (noResponseDays >= 3) {
-        console.log(
-          `Skipping reminder for user ${userId}: ${noResponseDays} consecutive no-response days`,
-        )
+
+      // チャンネル解決: 設定 → 直近の日記エントリ
+      const channelId = await resolveUserDiaryChannel(
+        userId,
+        userSettings?.diaryChannelId ?? null,
+      )
+      if (!channelId) {
+        console.log(`Skipping reminder for user ${userId}: no channel found`)
         continue
       }
-
-      // ユーザーの過去のエントリから最新のチャンネルIDを取得
-      const previousEntry = await db
-        .selectFrom('diaryEntries')
-        .select('channelId')
-        .where('userId', '=', userId)
-        .orderBy('entryDate', 'desc')
-        .limit(1)
-        .executeTakeFirst()
-
-      if (!previousEntry?.channelId) {
-        // 過去のエントリがない場合はスキップ（初回ユーザーは手動で開始する必要がある）
-        console.log(
-          `Skipping reminder for user ${userId}: no previous channel found`,
-        )
-        continue
-      }
-
-      // 設定で指定されたチャンネルがあればそちらを優先
-      const channelId = userSettings?.diaryChannelId ?? previousEntry.channelId
 
       // Get context for reminder variations
       const reminderContext = await getReminderContext(userId, userNow)
@@ -330,6 +314,20 @@ export const sendDailyDiaryReminders = async (env: Env) => {
                 action_id: 'diary_skip_today',
                 value: entryDate,
               },
+              // 3日以上無反応なら「しばらくお休み」ボタンを表示
+              ...(noResponseDays >= 3
+                ? [
+                    {
+                      type: 'button' as const,
+                      text: {
+                        type: 'plain_text' as const,
+                        text: '💤 しばらくお休み',
+                        emoji: true,
+                      },
+                      action_id: 'diary_pause_reminders',
+                    },
+                  ]
+                : []),
             ],
           },
         ],
