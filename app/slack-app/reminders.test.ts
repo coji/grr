@@ -41,6 +41,7 @@ vi.mock('~/services/db', () => ({
 vi.mock('~/services/proactive-messages', () => ({
   countConsecutiveNoResponseDays: vi.fn().mockResolvedValue(0),
   getUserMilestones: vi.fn().mockResolvedValue(null),
+  resolveUserDiaryChannel: vi.fn().mockResolvedValue('C1'),
 }))
 
 vi.mock('~/services/character', () => ({

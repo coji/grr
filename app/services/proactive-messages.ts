@@ -231,43 +231,51 @@ export async function wasMilestoneCelebrated(
 }
 
 /**
+ * Resolve a user's diary channel: prefer explicit setting, fall back to most recent entry.
+ */
+export async function resolveUserDiaryChannel(
+  userId: string,
+  diaryChannelId: string | null,
+): Promise<string | null> {
+  if (diaryChannelId) return diaryChannelId
+
+  const entry = await db
+    .selectFrom('diaryEntries')
+    .select('channelId')
+    .where('userId', '=', userId)
+    .orderBy('entryDate', 'desc')
+    .limit(1)
+    .executeTakeFirst()
+
+  return entry?.channelId ?? null
+}
+
+/**
  * Get users who have diary settings configured with reminder enabled.
  * Falls back to most recent diary entry channel if diaryChannelId is not set.
  */
 export async function getActiveUsers(): Promise<
   Array<{ userId: string; channelId: string }>
 > {
-  // Get all users with reminderEnabled = 1 (regardless of diaryChannelId)
   const users = await db
     .selectFrom('userDiarySettings')
     .select(['userId', 'diaryChannelId'])
     .where('reminderEnabled', '=', 1)
     .execute()
 
-  const results: Array<{ userId: string; channelId: string }> = []
+  const resolved = await Promise.all(
+    users.map(async (user) => {
+      const channelId = await resolveUserDiaryChannel(
+        user.userId,
+        user.diaryChannelId,
+      )
+      return channelId ? { userId: user.userId, channelId } : null
+    }),
+  )
 
-  for (const user of users) {
-    // Use explicit diaryChannelId if set
-    if (user.diaryChannelId) {
-      results.push({ userId: user.userId, channelId: user.diaryChannelId })
-      continue
-    }
-
-    // Fall back to most recent diary entry channel
-    const previousEntry = await db
-      .selectFrom('diaryEntries')
-      .select('channelId')
-      .where('userId', '=', user.userId)
-      .orderBy('entryDate', 'desc')
-      .limit(1)
-      .executeTakeFirst()
-
-    if (previousEntry?.channelId) {
-      results.push({ userId: user.userId, channelId: previousEntry.channelId })
-    }
-  }
-
-  return results
+  return resolved.filter(
+    (r): r is { userId: string; channelId: string } => r !== null,
+  )
 }
 
 /**

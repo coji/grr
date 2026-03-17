@@ -8,6 +8,7 @@ import { db } from '~/services/db'
 import {
   countConsecutiveNoResponseDays,
   getUserMilestones,
+  resolveUserDiaryChannel,
 } from '~/services/proactive-messages'
 import { DIARY_MOOD_CHOICES } from './handlers/diary-constants'
 
@@ -229,25 +230,15 @@ export const sendDailyDiaryReminders = async (env: Env) => {
       // 無反応日数を取得（リマインダーに「お休み」ボタンを出すかの判定に使用）
       const noResponseDays = await countConsecutiveNoResponseDays(userId)
 
-      // ユーザーの過去のエントリから最新のチャンネルIDを取得
-      const previousEntry = await db
-        .selectFrom('diaryEntries')
-        .select('channelId')
-        .where('userId', '=', userId)
-        .orderBy('entryDate', 'desc')
-        .limit(1)
-        .executeTakeFirst()
-
-      if (!previousEntry?.channelId) {
-        // 過去のエントリがない場合はスキップ（初回ユーザーは手動で開始する必要がある）
-        console.log(
-          `Skipping reminder for user ${userId}: no previous channel found`,
-        )
+      // チャンネル解決: 設定 → 直近の日記エントリ
+      const channelId = await resolveUserDiaryChannel(
+        userId,
+        userSettings?.diaryChannelId ?? null,
+      )
+      if (!channelId) {
+        console.log(`Skipping reminder for user ${userId}: no channel found`)
         continue
       }
-
-      // 設定で指定されたチャンネルがあればそちらを優先
-      const channelId = userSettings?.diaryChannelId ?? previousEntry.channelId
 
       // Get context for reminder variations
       const reminderContext = await getReminderContext(userId, userNow)
